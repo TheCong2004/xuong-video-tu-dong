@@ -64,26 +64,25 @@ export interface AppDescriptor {
 
 export const APP_DESCRIPTORS: AppDescriptor[] = [
   {
-    id: "IMAGE",
-    label: "Create Image",
-    icon: faImage,
-  },
-  {
-    id: "VIDEO",
-    label: "Create Video",
-    icon: faFilm,
-  },
-  {
-    id: "AUDIO",
-    label: "Create Audio",
-    icon: faMusic,
+    id: "FLOWORD_STUDIO",
+    label: "Floword Studio",
+    icon: faSparkles,
+    description: "All-in-one automated video production console.",
+    large: true,
   },
   {
     id: "2D",
     label: "Image Editor",
     icon: faPenNib,
     imageSrc: "/resources/gifs/2D_CANVAS_DEMO.webp",
-    description: "Easy edits. Great for graphic design.",
+    description: "Layer-based 2D canvas editor for graphics and thumbnail design.",
+    large: true,
+  },
+  {
+    id: "CAPCUT_AUTOMATION",
+    label: "CapCut Studio",
+    icon: faClapperboardPlay,
+    description: "CapCut draft management, sticker injection, and timeline automation.",
     large: true,
   },
   {
@@ -91,8 +90,8 @@ export const APP_DESCRIPTORS: AppDescriptor[] = [
     label: "3D Stage",
     icon: faCube,
     imageSrc: "/resources/gifs/3D_CANVAS_DEMO.webp",
-    description: "Precision control. Great for AI film.",
-    large: true,
+    description: "Precision control for 3D AI film staging.",
+    large: false,
   },
 ];
 

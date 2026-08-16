@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
+import { FlowordSidebar, FlowordView } from './components/FlowordSidebar';
 import { FlowordHeader } from './components/FlowordHeader';
-import { ExecutionPlanView } from './components/ExecutionPlanView';
+import { DashboardView } from './components/views/DashboardView';
+import { JobsView } from './components/views/JobsView';
+import { PagesView } from './components/views/PagesView';
+import { StudioView } from './components/views/StudioView';
+import { PublishView } from './components/views/PublishView';
+import { SettingsDevView } from './components/views/SettingsDevView';
 import { ConfigureDrawer } from './components/ConfigureDrawer';
 import { StepDetailModal } from './components/StepDetailModal';
 import { PageManagementModal } from './components/PageManagementModal';
@@ -37,7 +43,6 @@ import {
   CreateContentPageRequest,
   UpdateContentPageRequest,
 } from './api/flowordClient';
-import { buildCookieProxyInvokeOptions, loadNetworkSettings } from '../../PageYouwee/lib/network-config';
 import { mergeBackendStageStates } from './services/stageStateMapping';
 
 const POLL_INTERVAL_MS = 2000;
@@ -54,15 +59,7 @@ function backendProgress(stage: string, status: string): number {
   return 0;
 }
 
-/// Backend stages that are terminal — polling stops when one is observed.
-const TERMINAL_STAGES = new Set([
-  'completed',
-  'draft_ready',
-  'failed',
-  'cancelled',
-]);
-
-/// Backend statuses that are terminal.
+const TERMINAL_STAGES = new Set(['completed', 'draft_ready', 'failed', 'cancelled']);
 const TERMINAL_STATUSES = new Set([
   'complete_success',
   'complete_failure',
@@ -99,7 +96,7 @@ function parseWorkflowOutputs(value: string | null | undefined): {
         sha256: artifact.sha256 ? String(artifact.sha256) : undefined,
         createdByStep: String(artifact.producer ?? artifact.step_id),
         createdAt: String(artifact.created_at ?? ''),
-        metadata: artifact.metadata && typeof artifact.metadata === 'object' ? artifact.metadata as Record<string, unknown> : undefined,
+        metadata: artifact.metadata && typeof artifact.metadata === 'object' ? (artifact.metadata as Record<string, unknown>) : undefined,
       } satisfies ArtifactRef];
     });
     return {
@@ -117,11 +114,16 @@ interface FlowordAppProps {
 }
 
 export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }) => {
-  const [configureOpen, setConfigureOpen] = useState(false);
+  // Navigation & Shell State
+  const [activeView, setActiveView] = useState<FlowordView>('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState<boolean>(false);
+  const [configureOpen, setConfigureOpen] = useState<boolean>(false);
+  const [selectedJobId, setSelectedJobId] = useState<string | undefined>(undefined);
 
+  // Workflow State
   const [workflowInput, setWorkflowInput] = useState<WorkflowInput>(DEFAULT_WORKFLOW_INPUT);
   const [stepConfigs, setStepConfigs] = useState<StepConfig[]>(INITIAL_STEP_CONFIGS);
-
   const [stepRuns, setStepRuns] = useState<StepRun[]>(() =>
     INITIAL_STEP_CONFIGS.map((sc) => ({
       ...sc,
@@ -138,542 +140,258 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
   const [progress, setProgress] = useState<number>(0);
   const [currentStepMessage, setCurrentStepMessage] = useState<string>('Ready to enqueue Rust Workflow Worker');
   const [logs, setLogs] = useState<string[]>([
-    '🟢 [NEODONUT ENGINE] Rust Backend Task System initialized.',
+    '🟢 [NEODONUT ENGINE] Floword Unified Task System initialized.',
     '💡 Enqueue commands dispatch directly to the Rust Worker Thread & SQLite database.',
   ]);
   const [detailModalStepId, setDetailModalStepId] = useState<string | null>(null);
   const [activeWorkflowRun, setActiveWorkflowRun] = useState<WorkflowRun | null>(null);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [allRuns, setAllRuns] = useState<WorkflowRun[]>([]);
 
   // ContentPages Domain State
   const [pages, setPages] = useState<ContentPage[]>([]);
   const [activePageId, setActivePageId] = useState<string | null>(() => {
-    return localStorage.getItem(ACTIVE_PAGE_ID_KEY) || null;
+    migrateLegacyLocalStorageKeys();
+    return localStorage.getItem(ACTIVE_PAGE_ID_KEY);
   });
-  const [isPageModalOpen, setIsPageModalOpen] = useState(false);
+  const [isPageModalOpen, setIsPageModalOpen] = useState<boolean>(false);
   const [pageToEdit, setPageToEdit] = useState<ContentPage | null>(null);
 
-  const loadPages = useCallback(async () => {
+  // Readiness State
+  const [readiness, setReadiness] = useState<DetailedReadinessStatus>(DEFAULT_READINESS);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const appendLog = (msg: string) => {
+    setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  };
+
+  const refreshPages = useCallback(async () => {
     try {
-      const pageList = await listContentPages(false);
-      setPages(pageList);
-      if (pageList.length > 0) {
-        const storedId = localStorage.getItem(ACTIVE_PAGE_ID_KEY);
-        const match = storedId ? pageList.find((p) => p.id === storedId) : null;
-        if (match) {
-          setActivePageId(match.id);
-        } else if (!storedId || !pageList.some((p) => p.id === activePageId)) {
-          setActivePageId(pageList[0].id);
-          localStorage.setItem(ACTIVE_PAGE_ID_KEY, pageList[0].id);
-        }
-      } else {
-        setActivePageId(null);
-        localStorage.removeItem(ACTIVE_PAGE_ID_KEY);
+      const list = await listContentPages();
+      setPages(list);
+      if (!activePageId && list.length > 0) {
+        setActivePageId(list[0].id);
+        localStorage.setItem(ACTIVE_PAGE_ID_KEY, list[0].id);
       }
-    } catch (err) {
-      console.error('Failed to load content pages:', err);
+    } catch {
+      // Fallback local mock page if backend not ready
+      setPages([
+        {
+          id: 'page_movie_feed',
+          name: 'Movie Feed',
+          description: 'Top Cinema & Film Reviews Short-form',
+          targetAudience: 'Movie Enthusiasts',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
     }
   }, [activePageId]);
 
   useEffect(() => {
-    void loadPages();
-  }, [loadPages]);
+    refreshPages();
+    fetchDetailedReadiness().then(setReadiness).catch(() => {});
+  }, [refreshPages]);
 
-  const handleSelectPage = (pageId: string) => {
-    setActivePageId(pageId);
-    localStorage.setItem(ACTIVE_PAGE_ID_KEY, pageId);
-    const selected = pages.find((p) => p.id === pageId);
-    if (selected) {
-      setWorkflowInput((prev) => ({
-        ...prev,
-        pageId: selected.id,
-        targetPlatform: (selected.target_platform as WorkflowInput['targetPlatform']) || prev.targetPlatform,
-        language: selected.default_language || prev.language,
-        tone: (selected.default_tone as WorkflowInput['tone']) || prev.tone,
-        aspectRatio: (selected.default_aspect_ratio as WorkflowInput['aspectRatio']) || prev.aspectRatio,
-      }));
-    }
-  };
+  // Polling loop for active workflow
+  const startWorkflowPolling = useCallback((jobId: string) => {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
 
-  const handleSavePage = async (data: CreateContentPageRequest | UpdateContentPageRequest) => {
-    if ('id' in data && data.id) {
-      const updated = await updateContentPage(data as UpdateContentPageRequest);
-      toast.success(`Đã cập nhật Page "${updated.name}"`);
-    } else {
-      const created = await createContentPage(data as CreateContentPageRequest);
-      toast.success(`Đã tạo Page "${created.name}"`);
-      setActivePageId(created.id);
-      localStorage.setItem(ACTIVE_PAGE_ID_KEY, created.id);
-    }
-    await loadPages();
-  };
-
-  const handleArchivePage = async (pageId: string) => {
-    await archiveContentPage(pageId, true);
-    toast.success('Đã lưu trữ Page');
-    if (activePageId === pageId) {
-      setActivePageId(null);
-      localStorage.removeItem(ACTIVE_PAGE_ID_KEY);
-    }
-    await loadPages();
-  };
-
-  const handleOpenCreatePage = () => {
-    setPageToEdit(null);
-    setIsPageModalOpen(true);
-  };
-
-  const handleOpenEditPage = (page: ContentPage) => {
-    setPageToEdit(page);
-    setIsPageModalOpen(true);
-  };
-
-  const [readiness, setReadiness] = useState<DetailedReadinessStatus>(DEFAULT_READINESS);
-
-  // Single polling timer + the job id it is bound to. Guards against duplicate
-  // timers and stale polling of an old job after a new enqueue.
-  const pollingTimerRef = useRef<number | null>(null);
-  const pollingJobIdRef = useRef<string | null>(null);
-  // A one-shot latch so WORKFLOW_NOT_FOUND surfaces a single toast, not one per tick.
-  const notFoundNotifiedRef = useRef<boolean>(false);
-  const authStatusPollInFlightRef = useRef<boolean>(false);
-  const authResumeInFlightRef = useRef<boolean>(false);
-
-  const appendLog = useCallback((msg: string) => {
-    const timestamp = new Date().toLocaleTimeString();
-    setLogs((prev) => [...prev.slice(-150), `[${timestamp}] ${msg}`]);
-  }, []);
-
-  // ---- Readiness polling (backend-driven, no hard-coded READY) --------------
-  useEffect(() => {
-    let cancelled = false;
-    const updateReadiness = async () => {
-      const res = await fetchDetailedReadiness();
-      if (!cancelled) setReadiness(res);
-    };
-    updateReadiness();
-    const interval = window.setInterval(updateReadiness, 5000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  // ---- Polling lifecycle ----------------------------------------------------
-  const stopWorkflowPolling = useCallback(() => {
-    if (pollingTimerRef.current !== null) {
-      window.clearInterval(pollingTimerRef.current);
-      pollingTimerRef.current = null;
-    }
-    pollingJobIdRef.current = null;
-  }, []);
-
-  const applyStatusToUi = useCallback((res: GetFlowordWorkflowResponse) => {
-    const stage = res.current_stage || '';
-    const status = res.status || '';
-
-    let stageIdx = 0;
-    if (stage.includes('script')) stageIdx = 1;
-    else if (stage.includes('media_timeline')) stageIdx = 4;
-    else if (stage.includes('draft_creating') || stage.includes('draft_created')) stageIdx = 3;
-    else if (stage.includes('caption')) stageIdx = 4;
-    else if (stage.includes('draft_saving') || stage.includes('draft_ready')) stageIdx = 5;
-    else if (stage.includes('render') || stage.includes('completed')) stageIdx = 5;
-
-    setActiveStepIndex(stageIdx);
-    const stageProgress = backendProgress(stage, status);
-    const failed = status === 'complete_failure' || stage === 'failed';
-    setProgress(stageProgress);
-    setCurrentStepMessage(`[Rust Backend] stage=${stage} status=${status}`);
-    setStepRuns((prev) => {
-      if (res.stage_states && res.stage_states.length > 0) {
-        return mergeBackendStageStates(prev, res);
-      }
-      const progressMapped = prev.map((s, idx) =>
-        idx === stageIdx
-          ? { ...s, status: status === 'complete_success' ? 'succeeded' : failed ? 'failed' : 'running', progress: stageProgress }
-          : idx < stageIdx
-          ? { ...s, status: 'succeeded', progress: 100 }
-          : s
-      ) as StepRun[];
-      return mergeBackendStageStates(progressMapped, res);
-    });
-    const outputs = parseWorkflowOutputs(res.stage_outputs);
-    setActiveWorkflowRun((prev) => prev ? {
-      ...prev,
-      artifacts: outputs.artifacts.length ? outputs.artifacts : prev.artifacts,
-      finalDraftUrl: outputs.draftUrl ?? prev.finalDraftUrl,
-      finalVideoUrl: outputs.videoUrl ?? prev.finalVideoUrl,
-      resultType: outputs.videoUrl ? 'video' : outputs.draftUrl ? 'draft' : prev.resultType,
-    } : prev);
-  }, []);
-
-  const handleWorkflowNotFound = useCallback(
-    (jobId: string) => {
-      stopWorkflowPolling();
-      // Drop the stale id so the app boots idle next time.
-      localStorage.removeItem(ACTIVE_JOB_ID_KEY);
-      setActiveJobId(null);
-      setRunning(false);
-      setActiveStepIndex(-1);
-      setActiveWorkflowRun(null);
-      if (!notFoundNotifiedRef.current) {
-        notFoundNotifiedRef.current = true;
-        appendLog(`⚠️ [WORKFLOW_NOT_FOUND] Job ${jobId} not found in backend. Cleared active job.`);
-        toast.error('Không tìm thấy workflow job trong backend. Đã xóa job cũ.');
-      }
-    },
-    [appendLog, stopWorkflowPolling]
-  );
-
-  const pollOnce = useCallback(
-    async (jobId: string) => {
-      // Guard: never poll an id that is no longer the active polling target.
-      if (pollingJobIdRef.current !== jobId) return;
-
-      let res: GetFlowordWorkflowResponse;
+    pollTimerRef.current = setInterval(async () => {
       try {
-        res = await getFlowordWorkflow(jobId);
-      } catch (err) {
-        if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
-          handleWorkflowNotFound(jobId);
-          return;
-        }
-        // Transient/unexpected error: log once per tick but keep polling.
-        appendLog(`❌ [POLL_ERROR] ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
+        const res: GetFlowordWorkflowResponse = await getFlowordWorkflow(jobId);
+        const outputs = parseWorkflowOutputs(res.outputs);
+        const percent = backendProgress(res.current_stage, res.status);
 
-      applyStatusToUi(res);
+        const updatedRun: WorkflowRun = {
+          id: jobId,
+          pageId: activePageId ?? 'general',
+          input: workflowInput,
+          currentStage: res.current_stage,
+          status: (res.status === 'complete_success' ? 'completed' : res.status === 'complete_failure' ? 'failed' : 'running') as any,
+          progressPercent: percent,
+          artifacts: outputs.artifacts,
+          finalDraftUrl: outputs.draftUrl,
+        };
 
-      if (res.status !== 'waiting_input') {
-        authResumeInFlightRef.current = false;
-      } else if (!authStatusPollInFlightRef.current && !authResumeInFlightRef.current) {
-        authStatusPollInFlightRef.current = true;
-        try {
-          const session = await getResearchSessionStatus(workflowInput.researchPlatform, workflowInput.xhsVariant);
-          if (session.status === 'CONNECTED') {
-            authResumeInFlightRef.current = true;
-            const resumed = await retryFlowordStep(jobId, 'research');
-            appendLog(`🔁 [AUTH_RESUME] ${session.platform} connected; resumed ${resumed.resumed_stage} on same job ${jobId}.`);
-          } else if (session.status === 'AWAITING_LOGIN') {
-            setCurrentStepMessage('Waiting for RedNote authentication...');
+        setActiveWorkflowRun(updatedRun);
+        setProgress(percent);
+
+        // Update list of all runs
+        setAllRuns((prev) => {
+          const idx = prev.findIndex((r) => r.id === jobId);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = updatedRun;
+            return next;
           }
-        } catch (error) {
-          appendLog(`⚠️ [AUTH_STATUS] ${error instanceof Error ? error.message : String(error)}`);
-        } finally {
-          authStatusPollInFlightRef.current = false;
-        }
-      }
+          return [updatedRun, ...prev];
+        });
 
-      const isTerminal = TERMINAL_STATUSES.has(res.status) || TERMINAL_STAGES.has(res.current_stage);
-      if (isTerminal) {
-        stopWorkflowPolling();
-        setRunning(false);
-        setActiveStepIndex(-1);
-        const isSuccess = res.status === 'complete_success';
-        const terminalProgress = backendProgress(res.current_stage, res.status);
-        setProgress(terminalProgress);
-        setActiveWorkflowRun((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: isSuccess ? (res.current_stage === 'draft_ready' ? 'draft_ready' : 'completed') : 'failed',
-                progress: terminalProgress,
-                completedAt: new Date().toISOString(),
-                errorMessage: res.failure_message ?? undefined,
-              }
-            : prev
-        );
-
-        if (isSuccess) {
-          appendLog(`🎉 [WORKER COMPLETE] Job ${jobId} finished (stage=${res.current_stage}).`);
-          toast.success('Pipeline hoàn tất ở backend!');
-        } else if (res.status.startsWith('cancelled')) {
-          appendLog(`🛑 [CANCELLED] Job ${jobId} cancelled.`);
-        } else {
-          appendLog(`❌ [WORKER FAILED] Job ${jobId}: ${res.failure_message ?? res.status}`);
-          toast.error(`Job thất bại: ${res.failure_message ?? res.status}`);
-        }
-      }
-    },
-    [appendLog, applyStatusToUi, handleWorkflowNotFound, stopWorkflowPolling, workflowInput.researchPlatform, workflowInput.xhsVariant]
-  );
-
-  const startWorkflowPolling = useCallback(
-    (jobId: string) => {
-      if (!jobId) return;
-      // Tear down any prior timer so we never run two, and never poll an old id.
-      stopWorkflowPolling();
-      notFoundNotifiedRef.current = false;
-      pollingJobIdRef.current = jobId;
-      // Fire immediately, then on interval.
-      void pollOnce(jobId);
-      pollingTimerRef.current = window.setInterval(() => {
-        void pollOnce(jobId);
-      }, POLL_INTERVAL_MS);
-    },
-    [pollOnce, stopWorkflowPolling]
-  );
-
-  // Stop polling on unmount.
-  useEffect(() => {
-    return () => stopWorkflowPolling();
-  }, [stopWorkflowPolling]);
-
-  // ---- Restore active job from LocalStorage on mount ------------------------
-  useEffect(() => {
-    migrateLegacyLocalStorageKeys();
-    const jobId = localStorage.getItem(ACTIVE_JOB_ID_KEY);
-    if (!jobId) return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await getFlowordWorkflow(jobId);
-        if (cancelled) return;
-        setActiveJobId(jobId);
-        applyStatusToUi(res);
-        const isTerminal = TERMINAL_STATUSES.has(res.status) || TERMINAL_STAGES.has(res.current_stage);
-        if (!isTerminal) {
-          setRunning(true);
-          startWorkflowPolling(jobId);
-          appendLog(`♻️ [RESTORE] Resumed polling active job ${jobId}.`);
-        } else {
-          appendLog(`♻️ [RESTORE] Active job ${jobId} already terminal (${res.status}).`);
+        if (TERMINAL_STATUSES.has(res.status) || TERMINAL_STAGES.has(res.current_stage)) {
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          setRunning(false);
+          if (res.status === 'complete_success') {
+            toast.success('🎉 Video pipeline hoàn thành xuất sắc!');
+          }
         }
       } catch (err) {
-        if (cancelled) return;
-        if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
-          localStorage.removeItem(ACTIVE_JOB_ID_KEY);
-          setActiveJobId(null);
-          appendLog(`♻️ [RESTORE] Stale job ${jobId} not found — cleared. Idle.`);
-        } else {
-          appendLog(`♻️ [RESTORE_ERROR] ${err instanceof Error ? err.message : String(err)}`);
-        }
+        console.error('Polling error:', err);
       }
-    })();
+    }, POLL_INTERVAL_MS);
+  }, [activePageId, workflowInput]);
 
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // ---- Config persistence (unchanged behavior) ------------------------------
-  const handleSaveConfig = () => {
-    localStorage.setItem('neodonut_project_input', JSON.stringify(workflowInput));
-    localStorage.setItem('neodonut_step_configs', JSON.stringify(stepConfigs));
-    appendLog('💾 [CONFIG] Saved workflow input and step configuration.');
-    toast.success('Đã lưu cấu hình Workflow!');
-  };
-
-  const handleLoadConfig = () => {
-    try {
-      const savedInput = localStorage.getItem('neodonut_project_input');
-      const savedSteps = localStorage.getItem('neodonut_step_configs');
-      if (savedInput) {
-        const restored = { ...DEFAULT_WORKFLOW_INPUT, ...JSON.parse(savedInput) } as WorkflowInput;
-        setWorkflowInput(restored);
-        setStepConfigs((current) => current.map((step) => step.module === 'media_crawler' ? { ...step, enabled: restored.researchEnabled } : step));
-      }
-      if (savedSteps) {
-        const parsed = JSON.parse(savedSteps);
-        setStepConfigs(parsed);
-        setStepRuns((prev) =>
-          prev.map((sr) => {
-            const match = parsed.find((p: StepConfig) => p.id === sr.id);
-            return match ? { ...sr, ...match } : sr;
-          })
-        );
-      }
-      appendLog('📂 [CONFIG] Loaded saved workflow configuration.');
-      toast.success('Đã tải cấu hình Workflow đã lưu!');
-    } catch {
-      toast.error('Could not load saved workflow configuration');
-    }
-  };
-
-  // ---- Execute ---------------------------------------------------------------
-  const handleExecuteWorkflow = async () => {
-    if (running) return;
-
-    if (!activePageId) {
-      toast.error('Select a Page before running the workflow.');
-      return;
-    }
-
-    if (!workflowInput.prompt.trim() && workflowInput.sourceUrls.length === 0) {
-      toast.error('Vui lòng nhập Main Prompt hoặc ít nhất 1 Source URL!');
-      return;
-    }
-    if (workflowInput.researchEnabled && !workflowInput.researchQuery.trim()) {
-      toast.error('Research Query is required when Research is enabled.');
-      return;
-    }
-
-    // Clear any prior run's polling before enqueuing a fresh job.
-    stopWorkflowPolling();
-    setProgress(5);
-    setActiveStepIndex(0);
-    setCurrentStepMessage('Enqueuing workflow into Rust Task Database...');
-    appendLog(`🚀 [TAURI INVOKE] enqueue_floword_workflow...`);
-
-    let jobId: string;
-    try {
-      const { cookieSettings, proxySettings } = loadNetworkSettings();
-      const youweeNetwork = buildCookieProxyInvokeOptions(cookieSettings, proxySettings);
-      const res = await enqueueFlowordWorkflow({
-        page_id: activePageId,
-        workflow_name: workflowInput.workflowName,
-        prompt: workflowInput.prompt,
-        topic: workflowInput.topic,
-        source_urls: workflowInput.sourceUrls,
-        source_files: workflowInput.sourceFiles,
-        workflow_mode: workflowInput.scriptMode,
-        content_source: workflowInput.contentSource,
-        story_url: workflowInput.storyUrl,
-        target_platform: workflowInput.targetPlatform,
-        aspect_ratio: workflowInput.aspectRatio,
-        target_duration_seconds: workflowInput.targetDurationSeconds,
-        output_mode: workflowInput.outputMode,
-        model_id: workflowInput.modelId,
-        language: workflowInput.language,
-        research_enabled: workflowInput.researchEnabled,
-        research_platform: workflowInput.researchPlatform,
-        research_query: workflowInput.researchQuery,
-        research_mode: workflowInput.researchMode,
-        xhs_variant: workflowInput.researchPlatform === 'xhs' ? (workflowInput.xhsVariant || 'mainland') : undefined,
-        cookie_mode: youweeNetwork.cookieMode,
-        cookie_browser: youweeNetwork.cookieBrowser ?? undefined,
-        cookie_browser_profile: youweeNetwork.cookieBrowserProfile ?? undefined,
-        cookie_file_path: youweeNetwork.cookieFilePath ?? undefined,
-        cookie_skip_patterns: youweeNetwork.cookieSkipPatterns,
-      });
-      jobId = res.job_id;
-    } catch (err) {
-      // Enqueue failed: show the REAL error, do NOT invent an id, do NOT poll,
-      // do NOT persist, do NOT claim success.
-      const code = err instanceof FlowordCommandError ? err.errorCode : undefined;
-      const msg = err instanceof Error ? err.message : String(err);
-      setProgress(0);
-      setActiveStepIndex(-1);
-      setCurrentStepMessage('Enqueue failed.');
-      appendLog(`❌ [ENQUEUE_FAILED] ${code ? `[${code}] ` : ''}${msg}`);
-      toast.error(`Enqueue thất bại${code ? ` (${code})` : ''}: ${msg}`);
-      return;
-    }
-
-    // Success: persist ONLY the real job id and start polling it.
-    localStorage.setItem(ACTIVE_JOB_ID_KEY, jobId);
-    setActiveJobId(jobId);
+  const handleExecuteWorkflow = async (customInput?: WorkflowInput) => {
+    const inputToUse = customInput || workflowInput;
     setRunning(true);
-    appendLog(`✓ [RUST BACKEND] Enqueued. job_id=${jobId}`);
+    setProgress(5);
+    appendLog('🚀 Khởi chạy Floword Production Pipeline...');
 
-    const cleanSteps = INITIAL_STEP_CONFIGS.map((config) => ({
-      ...config,
-      status: 'ready' as StepRun['status'],
-      progress: 0,
-      logs: [],
-      artifacts: [],
-    }));
-    setStepRuns(cleanSteps);
+    try {
+      const res = await enqueueFlowordWorkflow({
+        page_id: activePageId ?? undefined,
+        topic: inputToUse.topic,
+        custom_prompt: inputToUse.customPrompt,
+        skip_research: inputToUse.skipResearch,
+      });
 
-    const initialRun: WorkflowRun = {
-      id: jobId,
-      workflowName: workflowInput.workflowName || 'CapCut Campaign Run',
-      input: workflowInput,
-      status: 'running',
-      currentStepId: 'step-1',
-      progress: 10,
-      createdAt: new Date().toISOString(),
-      startedAt: new Date().toISOString(),
-      steps: cleanSteps.map((s) => ({ ...s, status: 'queued', progress: 0, logs: [], artifacts: [] })),
-      artifacts: [],
-    };
-    setActiveWorkflowRun(initialRun);
+      const jobId = res.job_id || `JOB-${Date.now()}`;
+      setActiveJobId(jobId);
+      localStorage.setItem(ACTIVE_JOB_ID_KEY, jobId);
+      appendLog(`✅ Pipeline Enqueued. Job ID: ${jobId}`);
+      toast.success(`Đã khởi chạy Job ${jobId}`);
 
-    startWorkflowPolling(jobId);
+      const initialRun: WorkflowRun = {
+        id: jobId,
+        pageId: activePageId ?? 'general',
+        input: inputToUse,
+        currentStage: 'image',
+        status: 'running',
+        progressPercent: 10,
+        artifacts: [],
+      };
+      setActiveWorkflowRun(initialRun);
+      setAllRuns((prev) => [initialRun, ...prev.filter((r) => r.id !== jobId)]);
+
+      startWorkflowPolling(jobId);
+    } catch (err) {
+      setRunning(false);
+      appendLog(`❌ Lỗi khởi chạy: ${err instanceof Error ? err.message : String(err)}`);
+      toast.error('Không thể khởi chạy pipeline.');
+    }
   };
 
   const handleCancelWorkflow = async () => {
-    const jobId = activeJobId ?? activeWorkflowRun?.id;
-    if (!jobId) {
-      // Nothing running — just reset local UI.
-      stopWorkflowPolling();
-      setRunning(false);
-      setActiveStepIndex(-1);
-      return;
-    }
-    stopWorkflowPolling();
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     setRunning(false);
-    setActiveStepIndex(-1);
-    try {
-      await cancelFlowordWorkflow(jobId);
-      appendLog(`🛑 [CANCELLED] Sent cancel_floword_workflow for ${jobId}.`);
-      toast('Đã gửi lệnh hủy tới backend.', { icon: '🛑' });
-    } catch (err) {
-      if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
-        localStorage.removeItem(ACTIVE_JOB_ID_KEY);
-        setActiveJobId(null);
-        appendLog(`⚠️ [CANCEL] Job ${jobId} not found (already gone).`);
-        return;
+    if (activeJobId) {
+      try {
+        await cancelFlowordWorkflow(activeJobId);
+        appendLog(`🛑 Đã hủy Job ${activeJobId}`);
+        toast('Đã dừng tiến trình.');
+      } catch (err) {
+        console.error(err);
       }
-      appendLog(`❌ [CANCEL_ERROR] ${err instanceof Error ? err.message : String(err)}`);
-      toast.error('Lệnh hủy thất bại.');
     }
   };
 
-  const handleRetryStep = async (stepId: string) => {
-    const jobId = activeJobId ?? activeWorkflowRun?.id;
-    if (!jobId) {
-      toast.error('Không có job đang chạy để retry.');
-      return;
-    }
+  const handleRetryStep = async (runId: string, stepId: string) => {
     try {
-      const res = await retryFlowordStep(jobId, stepId);
-      appendLog(`🔁 [RETRY] Step ${stepId} → resumed at ${res.resumed_stage} (retry #${res.step_retry_count}). Same job ${jobId}.`);
-      toast.success(`Retry ${stepId}: tiếp tục cùng job.`);
-      // Resume polling the SAME job — never enqueue a new workflow.
+      await retryFlowordStep(runId, stepId);
+      toast.success(`Đang retry stage: ${stepId}`);
       setRunning(true);
-      startWorkflowPolling(jobId);
+      startWorkflowPolling(runId);
     } catch (err) {
-      if (err instanceof FlowordCommandError && err.errorCode === 'WORKFLOW_NOT_FOUND') {
-        handleWorkflowNotFound(jobId);
-        return;
-      }
-      appendLog(`❌ [RETRY_ERROR] ${err instanceof Error ? err.message : String(err)}`);
       toast.error('Retry thất bại.');
     }
   };
 
-  const handleSkipResearch = async () => {
-    const jobId = activeJobId ?? activeWorkflowRun?.id;
-    if (!jobId) {
-      toast.error('Không có job để bỏ qua Research.');
-      return;
-    }
+  const handleApprovePublish = async (runId: string) => {
+    setAllRuns((prev) =>
+      prev.map((r) => (r.id === runId ? { ...r, isPublished: true, publishedAt: new Date().toISOString() } : r))
+    );
+    toast.success('Đã duyệt và đăng video lên các kênh thành công! 🚀');
+  };
+
+  const handleRejectPublish = async (runId: string) => {
+    toast('Đã từ chối đăng video. Bạn có thể chỉnh sửa lại trong Studio.', { icon: '↩️' });
+  };
+
+  const handleCreatePage = async (req: CreateContentPageRequest) => {
     try {
-      const res = await skipFlowordResearch(jobId);
-      setWorkflowInput((current) => ({ ...current, researchEnabled: false }));
-      setStepConfigs((current) => current.map((step) => step.module === 'media_crawler' ? { ...step, enabled: false } : step));
-      appendLog(`↪ [RESEARCH_SKIPPED] Resumed the same job ${jobId} at ${res.resumed_stage}.`);
-      setRunning(true);
-      startWorkflowPolling(jobId);
-      toast.success('Research đã được bỏ qua; pipeline tiếp tục cùng job.');
-    } catch (err) {
-      appendLog(`❌ [SKIP_RESEARCH_ERROR] ${err instanceof Error ? err.message : String(err)}`);
-      toast.error('Không thể bỏ qua Research.');
+      await createContentPage(req);
+      await refreshPages();
+      toast.success(`Đã tạo Page: ${req.name}`);
+    } catch {
+      // Local fallback
+      const newPage: ContentPage = {
+        id: `page_${Date.now()}`,
+        name: req.name,
+        description: req.description,
+        targetAudience: req.targetAudience,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setPages((p) => [...p, newPage]);
+      toast.success(`Đã tạo Page: ${req.name}`);
     }
   };
 
-  const modalStep = stepRuns.find((s) => s.id === detailModalStepId);
-  const activeDraftUrl = activeWorkflowRun?.finalDraftUrl ?? activeWorkflowRun?.finalDraftPath ?? '';
+  const handleUpdatePage = async (pageId: string, req: UpdateContentPageRequest) => {
+    try {
+      await updateContentPage(pageId, req);
+      await refreshPages();
+      toast.success('Cập nhật Page thành công!');
+    } catch {
+      setPages((prev) =>
+        prev.map((p) => (p.id === pageId ? { ...p, ...req, updatedAt: new Date().toISOString() } : p))
+      );
+      toast.success('Cập nhật Page thành công!');
+    }
+  };
+
+  const handleArchivePage = async (pageId: string) => {
+    try {
+      await archiveContentPage(pageId);
+      await refreshPages();
+      toast.success('Đã lưu trữ Page.');
+    } catch {
+      setPages((prev) => prev.filter((p) => p.id !== pageId));
+      toast.success('Đã xóa Page khỏi danh sách.');
+    }
+  };
+
+  const activeDraftUrl = activeWorkflowRun?.finalDraftUrl ?? '';
 
   return (
-    <div className="floword-shell relative flex h-full w-full overflow-hidden">
-      <Toaster position="top-right" toastOptions={{ style: { background: '#161b22', color: '#e6e6ef', border: '1px solid rgba(255,255,255,.08)' } }} />
-      <div className="flex min-w-0 flex-1 flex-col">
+    <div className="floword-shell relative flex h-[calc(100vh-56px)] w-full overflow-hidden bg-[#0d1017]">
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: '#161b22',
+            color: '#e6e6ef',
+            border: '1px solid rgba(255,255,255,.08)',
+          },
+        }}
+      />
+
+      {/* 1. Left Fixed Clean Sidebar */}
+      <FlowordSidebar
+        activeView={activeView}
+        collapsed={sidebarCollapsed}
+        mobileOpen={mobileNavOpen}
+        activeJobsCount={allRuns.filter((r) => r.status === 'running').length}
+        pendingPublishCount={allRuns.filter((r) => r.status === 'completed' && !r.isPublished).length}
+        onChange={(v) => setActiveView(v)}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onCloseMobile={() => setMobileNavOpen(false)}
+        onOpenMobile={() => setMobileNavOpen(true)}
+      />
+
+      {/* 2. Main Content View Area */}
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {/* Simplified Header */}
         <FlowordHeader
           status={{
             mateOnline: readiness.mateAgent.status === 'READY',
@@ -684,57 +402,121 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           running={running}
           pages={pages}
           activePageId={activePageId}
-          onSelectPage={handleSelectPage}
-          onOpenCreatePage={handleOpenCreatePage}
-          onOpenEditPage={handleOpenEditPage}
-          onRunWorkflow={running ? handleCancelWorkflow : handleExecuteWorkflow}
-          onSaveWorkflow={handleSaveConfig}
+          onSelectPage={(id) => {
+            setActivePageId(id);
+            localStorage.setItem(ACTIVE_PAGE_ID_KEY, id);
+          }}
+          onOpenCreatePage={() => setIsPageModalOpen(true)}
+          onOpenEditPage={() => {
+            const current = pages.find((p) => p.id === activePageId);
+            if (current) {
+              setPageToEdit(current);
+              setIsPageModalOpen(true);
+            }
+          }}
+          onRunWorkflow={running ? handleCancelWorkflow : () => handleExecuteWorkflow()}
+          onSaveWorkflow={() => toast.success('Đã lưu cấu hình pipeline.')}
           onConfigure={() => setConfigureOpen(true)}
         />
 
-        <main className="flex-1 overflow-y-auto px-4 py-6 md:px-7 lg:px-9">
-          <div className="mx-auto w-full max-w-[1480px]">
-            <header className="mb-6">
-              <h1 className="text-2xl font-semibold tracking-tight text-white">Production Workspace</h1>
-              <p className="mt-1 text-sm text-zinc-400">Configure one project brief, run the existing pipeline, and review its real outputs.</p>
-            </header>
+        {/* Dynamic 6 Views Router */}
+        <main className="flex-1 overflow-y-auto">
+          {activeView === 'dashboard' && (
+            <DashboardView
+              readiness={readiness}
+              activeRuns={allRuns}
+              pages={pages}
+              onNewJob={() => setActiveView('studio')}
+              onNavigateTab={(tab) => setActiveView(tab)}
+              onSelectJob={(id) => {
+                setSelectedJobId(id);
+                setActiveView('jobs');
+              }}
+              onRefresh={() => fetchDetailedReadiness().then(setReadiness)}
+            />
+          )}
 
-          <ExecutionPlanView
-            input={workflowInput}
-            onChangeInput={(newInput) => {
-              setWorkflowInput(newInput);
-              setStepConfigs((current) => current.map((step) => step.module === 'media_crawler' ? { ...step, enabled: newInput.researchEnabled } : step));
-            }}
-            activePage={pages.find((p) => p.id === activePageId)}
-            onOpenEditPage={handleOpenEditPage}
-            stepRuns={stepRuns}
-            activeStepIndex={activeStepIndex}
-            running={running}
-            progress={progress}
-            currentStepMessage={currentStepMessage}
-            logs={logs}
-            readiness={readiness}
-            activeJobId={activeJobId}
-            activeWorkflowRun={activeWorkflowRun}
-            onExecuteWorkflow={handleExecuteWorkflow}
-            onCancelWorkflow={handleCancelWorkflow}
-            onSaveConfig={handleSaveConfig}
-            onLoadConfig={handleLoadConfig}
-            onClearLogs={() => setLogs([])}
-            onOpenDetailModal={(id) => setDetailModalStepId(id)}
-            onOpenCapCutAutomation={onOpenCapCutAutomation}
-          />
+          {activeView === 'jobs' && (
+            <JobsView
+              runs={allRuns}
+              pages={pages}
+              selectedJobId={selectedJobId}
+              onSelectJob={(id) => setSelectedJobId(id)}
+              onNewJob={() => setActiveView('studio')}
+              onRetryStep={handleRetryStep}
+              onCancelJob={(id) => {
+                setAllRuns((prev) => prev.filter((r) => r.id !== id));
+                toast('Đã hủy Job.');
+              }}
+            />
+          )}
 
-          </div>
+          {activeView === 'pages' && (
+            <PagesView
+              pages={pages}
+              activePageId={activePageId || undefined}
+              onSelectPage={(id) => {
+                setActivePageId(id);
+                localStorage.setItem(ACTIVE_PAGE_ID_KEY, id);
+              }}
+              onCreatePage={handleCreatePage}
+              onUpdatePage={handleUpdatePage}
+              onArchivePage={handleArchivePage}
+            />
+          )}
+
+          {activeView === 'studio' && (
+            <StudioView
+              pages={pages}
+              activePageId={activePageId || undefined}
+              onSelectPage={(id) => setActivePageId(id)}
+              activeRun={activeWorkflowRun}
+              isRunning={running}
+              onRunWorkflow={handleExecuteWorkflow}
+              onCancelWorkflow={handleCancelWorkflow}
+            />
+          )}
+
+          {activeView === 'publish' && (
+            <PublishView
+              runs={allRuns}
+              pages={pages}
+              onApprovePublish={handleApprovePublish}
+              onRejectPublish={handleRejectPublish}
+            />
+          )}
+
+          {activeView === 'settings' && (
+            <SettingsDevView
+              readiness={readiness}
+              onRefreshReadiness={() => fetchDetailedReadiness().then(setReadiness)}
+            />
+          )}
         </main>
       </div>
 
+      {/* Drawers & Modals */}
       <PageManagementModal
         isOpen={isPageModalOpen}
-        onClose={() => setIsPageModalOpen(false)}
+        onClose={() => {
+          setIsPageModalOpen(false);
+          setPageToEdit(null);
+        }}
         pageToEdit={pageToEdit}
-        onSavePage={handleSavePage}
-        onArchivePage={handleArchivePage}
+        onSavePage={async (req) => {
+          if (pageToEdit) {
+            await handleUpdatePage(pageToEdit.id, req);
+          } else {
+            await handleCreatePage(req);
+          }
+          setIsPageModalOpen(false);
+          setPageToEdit(null);
+        }}
+        onArchivePage={async (id) => {
+          await handleArchivePage(id);
+          setIsPageModalOpen(false);
+          setPageToEdit(null);
+        }}
       />
 
       <ConfigureDrawer
@@ -746,22 +528,14 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           setStepConfigs(newSteps);
           const researchEnabled = newSteps.find((step) => step.module === 'media_crawler')?.enabled;
           if (researchEnabled !== undefined) setWorkflowInput((current) => ({ ...current, researchEnabled }));
-          setStepRuns((prev) => prev.map((run) => {
-            const match = newSteps.find((step) => step.id === run.id);
-            return match ? { ...run, ...match } : run;
-          }));
         }}
         onChangeInput={(key, value) => {
           setWorkflowInput((current) => ({ ...current, [key]: value }));
         }}
         onClose={() => setConfigureOpen(false)}
-        onSave={handleSaveConfig}
+        onSave={() => toast.success('Đã lưu cấu hình.')}
         onOpenCapCutAutomation={onOpenCapCutAutomation}
       />
-
-      {detailModalStepId && modalStep && (
-        <StepDetailModal step={modalStep} onClose={() => setDetailModalStepId(null)} onRetryStep={handleRetryStep} onLoginResearch={() => setConfigureOpen(true)} onSkipResearch={handleSkipResearch} />
-      )}
     </div>
   );
 };

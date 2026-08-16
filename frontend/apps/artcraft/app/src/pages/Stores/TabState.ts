@@ -30,7 +30,7 @@ export type TabId =
   | "INKOS"
   | "VYNARO";
 
-const DEFAULT_TAB: TabId = "APPS";
+const DEFAULT_TAB: TabId = "FLOWORD_STUDIO";
 
 interface TabState {
   // Current active tab
