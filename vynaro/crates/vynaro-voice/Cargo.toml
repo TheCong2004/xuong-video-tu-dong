@@ -1,0 +1,23 @@
+[package]
+name = "vynaro-voice"
+version = "1.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Agions"]
+repository = "https://github.com/agions/vynaro"
+homepage = "https://vynaro.dev"
+description = "TTS 引擎 (Edge-TTS / OpenAI-TTS / GPT-SoVITS)"
+
+[dependencies]
+vynaro-core = { path = "../vynaro-core" }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+thiserror = "2"
+futures = "0.3"
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-webpki-roots"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"

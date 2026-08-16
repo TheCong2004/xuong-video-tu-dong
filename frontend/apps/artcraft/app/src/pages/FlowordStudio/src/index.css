@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.floword-shell {
+  --flow-bg: #0b0e14;
+  --flow-bg-alt: #111520;
+  --flow-surface: #161b22;
+  --flow-surface-2: #1c2230;
+  --flow-sidebar: #10141e;
+  --flow-border: rgba(255, 255, 255, 0.08);
+  --flow-text: #e6e6ef;
+  --flow-muted: #a1a1aa;
+  --flow-primary: #e54d5e;
+  --flow-primary-hover: #c93d4e;
+  --flow-accent: #6366f1;
+  --flow-success: #22c55e;
+  --flow-warning: #f59e0b;
+  --flow-error: #ef4444;
+  --flow-radius-card: 14px;
+  --flow-radius-control: 9px;
+  background: var(--flow-bg);
+  color: var(--flow-text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.floword-shell::before {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 32px 32px;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.floword-shell > * {
+  position: relative;
+}
+
+.floword-card {
+  background: var(--flow-surface);
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius-card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+}
+
+.floword-control {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--flow-border);
+  border-radius: var(--flow-radius-control);
+  color: var(--flow-text);
+  min-height: 38px;
+}
+
+.floword-control:focus {
+  border-color: rgba(99, 102, 241, 0.65);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16);
+  outline: none;
+}
+
+.floword-button {
+  align-items: center;
+  border-radius: var(--flow-radius-control);
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  gap: 0.5rem;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0.5rem 0.875rem;
+}
+
+.floword-button-primary {
+  background: linear-gradient(135deg, var(--flow-primary), #a855f7);
+  color: white;
+}
+
+.floword-button-primary:hover { filter: brightness(1.06); }
+.floword-button-secondary { background: rgba(255, 255, 255, 0.06); border: 1px solid var(--flow-border); }
+.floword-button-secondary:hover { background: rgba(255, 255, 255, 0.1); }
+
+.floword-shell :focus-visible {
+  outline: 2px solid var(--flow-accent);
+  outline-offset: 2px;
+}
+
+.floword-shell ::-webkit-scrollbar { height: 7px; width: 7px; }
+.floword-shell ::-webkit-scrollbar-track { background: transparent; }
+.floword-shell ::-webkit-scrollbar-thumb { background: #303746; border-radius: 999px; }
+
+.log-terminal {
+  background: #080b11;
+  border: 1px solid var(--flow-border);
+  font-family: ui-monospace, "JetBrains Mono", "SFMono-Regular", monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floword-shell *,
+  .floword-shell *::before,
+  .floword-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

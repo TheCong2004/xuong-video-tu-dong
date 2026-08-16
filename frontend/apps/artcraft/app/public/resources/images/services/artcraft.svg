@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="artcraftGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00F2FE"/>
+      <stop offset="50%" stop-color="#4FACFE"/>
+      <stop offset="100%" stop-color="#00C6FF"/>
+    </linearGradient>
+    <linearGradient id="sparkGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF0844"/>
+      <stop offset="100%" stop-color="#FFB199"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <!-- Outer glowing hexagon -->
+  <polygon points="50,5 90,27.5 90,72.5 50,95 10,72.5 10,27.5" fill="url(#artcraftGrad)" opacity="0.95" />
+  <!-- Inner stylized 'A' Craft spark -->
+  <path d="M50,18 L75,70 L62,70 L50,45 L38,70 L25,70 Z" fill="#FFFFFF" />
+  <!-- Glowing core accent -->
+  <polygon points="50,28 62,56 38,56" fill="url(#sparkGrad)" />
+  <circle cx="50" cy="40" r="5" fill="#FFFFFF" filter="url(#glow)" />
+</svg>

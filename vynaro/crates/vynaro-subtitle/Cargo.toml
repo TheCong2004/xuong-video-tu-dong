@@ -1,0 +1,19 @@
+[package]
+name = "vynaro-subtitle"
+description = "Vynaro Step 5 · 字幕合成：VAD端点检测·SRT/VTT/ASS·动态字幕·双语对齐"
+version = "1.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Agions"]
+
+[dependencies]
+vynaro-core = { path = "../vynaro-core" }
+vynaro-domain = { path = "../vynaro-domain" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+tracing = "0.1"

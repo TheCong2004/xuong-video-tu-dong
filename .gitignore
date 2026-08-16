@@ -1,0 +1,110 @@
+# Secrets & Environment Variables
+*secret*sh
+.env
+.env*
+*-secrets*
+*.secrets*
+pubkeys.txt
+secrets/
+*.toml.secrets
+
+# Python & Virtual Environments
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.pytest-*/
+.codex-*/
+
+# Rust Build Outputs
+target/
+Cargo.lock.dist
+
+# Node / Frontend Build Outputs & Caches
+node_modules/
+dist/
+out/
+build/
+.next/
+.build/
+.turbo/
+.nx/cache/
+bundle-report.html
+
+# CapCut Mate & Sidecar Artifacts
+/OpenMontage/
+/capcut-mate/build/
+/capcut-mate/config/sticker.json
+/capcut-mate/tools/ffprobe
+/build/pyinstaller-work/
+/build/pyinstaller-spec/
+/crates/desktop/artcraft/resources/
+/artifacts/
+/crates/desktop/artcraft/artifacts/
+.runtime/
+crates/desktop/artcraft/resources/ffmpeg/
+crates/desktop/artcraft/resources/capcut-mate/
+crates/desktop/artcraft/resources/artcraft-server.exe
+
+# Database Journals & Temporary DBs
+*.sqlite-shm
+*.sqlite-wal
+*.db-shm
+*.db-wal
+freeapi.db-shm
+freeapi.db-wal
+crates/programs/aichatbot-sidecar/database.db
+.diesel_lock
+
+# Heavy Media & Assets
+old_assets/
+test_data/
+*.glb
+*.fbx
+*.bin
+*.ttf
+*.mp4
+*.webm
+*.mkv
+*.mov
+*.avi
+*.flac
+*.wav
+*.mp3
+*.aac
+**/public/images/blog/
+**/public/videos/
+**/public/resources/videos/
+**/public/images/forest-trees.png
+**/public/images/digital-mountains.png
+**/public/images/video-thumbnails/
+**/cutlass-2.9-implicit-gemm-performance.png
+
+# Logs & Temporary Files
+*.log
+tmp/
+temp/
+scratch/
+scraps/
+
+# IDE & OS Noise
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+*.swo
+*.swp
+*~
+.DS_Store
+Thumbs.db
+*.lnk
+
+# Windows DLLs & Native Binaries
+windows/sqlite/sqlite3.exp
+windows/sqlite/sqlite3.lib
+crates/desktop/src-tauri/*.dll
+windows_dlls/

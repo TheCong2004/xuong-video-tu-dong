@@ -1,0 +1,22 @@
+[package]
+name = "vynaro-intake"
+version = "1.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Agions"]
+repository = "https://github.com/agions/vynaro"
+homepage = "https://vynaro.dev"
+description = "视频元数据提取 (probe + chapter + scene)"
+
+[[bin]]
+name = "vynaro-bridge"
+path = "src/bin/vynaro_bridge.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+vynaro-detect = { path = "../vynaro-detect" }
+vynaro-domain = { path = "../vynaro-domain" }

@@ -1,0 +1,26 @@
+[package]
+name = "vynaro-core"
+version = "1.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Agions"]
+repository = "https://github.com/agions/vynaro"
+homepage = "https://vynaro.dev"
+description = "服务容器 / 统一类型 / 错误 / Tracing 初始化 — 全应用基础设施"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+chrono = { version = "0.4", features = ["serde"] }
+semver = { version = "1", features = ["serde"] }
+dirs = "5"
+
+[dependencies.vynaro-domain]
+path = "../vynaro-domain"

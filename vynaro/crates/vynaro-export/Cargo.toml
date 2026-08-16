@@ -1,0 +1,15 @@
+[package]
+name = "vynaro-export"
+version = "1.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Agions"]
+repository = "https://github.com/agions/vynaro"
+homepage = "https://vynaro.dev"
+description = "4 策略导出 (single/concat/batch/series)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+vynaro-domain = { path = "../vynaro-domain" }

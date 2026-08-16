@@ -1,0 +1,18 @@
+[package]
+name = "vynaro-detect"
+version = "1.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Agions"]
+repository = "https://github.com/agions/vynaro"
+homepage = "https://vynaro.dev"
+description = "FFmpeg 包装: 命令行调用 + 进度解析 + 探针"
+
+[dependencies]
+vynaro-core = { path = "../vynaro-core" }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"

@@ -1,0 +1,10 @@
+[package]
+name = "vynaro-plugin"
+version = "1.0.1"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Agions"]
+repository = "https://github.com/agions/vynaro"
+homepage = "https://vynaro.dev"
+description = "wasmtime 插件宿主 + Rust SDK + WASM 沙箱"
