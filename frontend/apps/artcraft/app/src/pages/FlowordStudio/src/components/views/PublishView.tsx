@@ -101,7 +101,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
                   <div className="w-full flex items-center justify-between text-white">
                     <span className="font-mono text-xs font-bold">{run.id.slice(0, 8)}</span>
                     <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white/20 backdrop-blur">
-                      0:45 • 9:16 HD
+                      {run.input?.targetDurationSeconds ? `${run.input.targetDurationSeconds}s` : '30s'} • {run.input?.aspectRatio || '9:16'}
                     </span>
                   </div>
                 </div>
@@ -111,26 +111,25 @@ export const PublishView: React.FC<PublishViewProps> = ({
               <div className="p-4 space-y-3 text-xs flex-1">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-white text-sm">{getPageName(run.pageId)}</span>
-                  <span className="text-[11px] text-zinc-400 flex items-center gap-1">
-                    <Clock className="h-3 w-3" /> Scheduled: 19:30
+                  <span className="text-[11px] text-amber-400 flex items-center gap-1 font-medium">
+                    <Clock className="h-3 w-3" /> Awaiting Approval
                   </span>
                 </div>
 
                 <p className="text-zinc-300 line-clamp-3 bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04]">
-                  {run.input?.topic || 'Review caption and hashtags for upcoming video post.'}
+                  {run.input?.topic || run.input?.prompt || run.input?.customPrompt || 'Generated Video Post'}
                 </p>
 
-                {/* Target Channels */}
+                {/* Target Channel */}
                 <div className="flex items-center gap-1.5 pt-1">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    Facebook
+                  <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-rose-500/10 text-rose-300 border border-rose-500/20 uppercase">
+                    Target: {run.input?.targetPlatform || 'TikTok'}
                   </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-500/10 text-pink-400 border border-pink-500/20">
-                    TikTok
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
-                    YouTube Shorts
-                  </span>
+                  {run.finalDraftUrl ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Draft Ready
+                    </span>
+                  ) : null}
                 </div>
               </div>
 

@@ -29,6 +29,7 @@ import {
   fetchDetailedReadiness,
   enqueueFlowordWorkflow,
   getFlowordWorkflow,
+  listFlowordWorkflows,
   cancelFlowordWorkflow,
   retryFlowordStep,
   skipFlowordResearch,
@@ -165,6 +166,40 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
     setLogs((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
 
+  const refreshJobs = useCallback(async () => {
+    try {
+      const workflows = await listFlowordWorkflows();
+      const hydratedRuns: WorkflowRun[] = workflows.map((wf) => {
+        const outputs = parseWorkflowOutputs(wf.stage_outputs);
+        const percent = backendProgress(wf.current_stage, wf.status);
+        const isSuccess = wf.status === 'complete_success';
+        const isFailure = wf.status === 'complete_failure';
+        const isCancelled = wf.status.includes('cancelled');
+        const statusStr: WorkflowRun['status'] = isSuccess
+          ? 'completed'
+          : isFailure
+          ? 'failed'
+          : isCancelled
+          ? 'cancelled'
+          : 'running';
+
+        return {
+          id: wf.job_id,
+          pageId: activePageId ?? 'general',
+          input: workflowInput,
+          currentStage: wf.current_stage,
+          status: statusStr,
+          progressPercent: percent,
+          artifacts: outputs.artifacts,
+          finalDraftUrl: outputs.draftUrl,
+        };
+      });
+      setAllRuns(hydratedRuns);
+    } catch (err) {
+      console.error('[Floword] Failed to hydrate jobs from SQLite DB:', err);
+    }
+  }, [activePageId, workflowInput]);
+
   const refreshPages = useCallback(async () => {
     try {
       const list = await listContentPages();
@@ -173,25 +208,17 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         setActivePageId(list[0].id);
         localStorage.setItem(ACTIVE_PAGE_ID_KEY, list[0].id);
       }
-    } catch {
-      // Fallback local mock page if backend not ready
-      setPages([
-        {
-          id: 'page_movie_feed',
-          name: 'Movie Feed',
-          description: 'Top Cinema & Film Reviews Short-form',
-          targetAudience: 'Movie Enthusiasts',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ]);
+    } catch (err) {
+      console.error('[Floword] Failed to load ContentPages from database:', err);
+      setPages([]);
     }
   }, [activePageId]);
 
   useEffect(() => {
     refreshPages();
+    refreshJobs();
     fetchDetailedReadiness().then(setReadiness).catch(() => {});
-  }, [refreshPages]);
+  }, [refreshPages, refreshJobs]);
 
   // Polling loop for active workflow
   const startWorkflowPolling = useCallback((jobId: string) => {
@@ -200,15 +227,25 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
     pollTimerRef.current = setInterval(async () => {
       try {
         const res: GetFlowordWorkflowResponse = await getFlowordWorkflow(jobId);
-        const outputs = parseWorkflowOutputs(res.outputs);
+        const outputs = parseWorkflowOutputs(res.stage_outputs);
         const percent = backendProgress(res.current_stage, res.status);
+        const isSuccess = res.status === 'complete_success';
+        const isFailure = res.status === 'complete_failure';
+        const isCancelled = res.status.includes('cancelled');
+        const statusStr: WorkflowRun['status'] = isSuccess
+          ? 'completed'
+          : isFailure
+          ? 'failed'
+          : isCancelled
+          ? 'cancelled'
+          : 'running';
 
         const updatedRun: WorkflowRun = {
           id: jobId,
           pageId: activePageId ?? 'general',
           input: workflowInput,
           currentStage: res.current_stage,
-          status: (res.status === 'complete_success' ? 'completed' : res.status === 'complete_failure' ? 'failed' : 'running') as any,
+          status: statusStr,
           progressPercent: percent,
           artifacts: outputs.artifacts,
           finalDraftUrl: outputs.draftUrl,
@@ -250,12 +287,19 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
     try {
       const res = await enqueueFlowordWorkflow({
         page_id: activePageId ?? undefined,
+        workflow_name: inputToUse.workflowName || 'floword_video_pipeline',
+        prompt: inputToUse.prompt || inputToUse.customPrompt || '',
         topic: inputToUse.topic,
-        custom_prompt: inputToUse.customPrompt,
-        skip_research: inputToUse.skipResearch,
+        source_urls: inputToUse.sourceUrls,
+        source_files: inputToUse.sourceFiles,
+        research_enabled: inputToUse.researchEnabled,
+        target_platform: inputToUse.targetPlatform,
+        aspect_ratio: inputToUse.aspectRatio,
+        target_duration_seconds: inputToUse.targetDurationSeconds,
+        output_mode: inputToUse.outputMode,
       });
 
-      const jobId = res.job_id || `JOB-${Date.now()}`;
+      const jobId = res.job_id;
       setActiveJobId(jobId);
       localStorage.setItem(ACTIVE_JOB_ID_KEY, jobId);
       appendLog(`✅ Pipeline Enqueued. Job ID: ${jobId}`);
@@ -267,7 +311,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         input: inputToUse,
         currentStage: 'image',
         status: 'running',
-        progressPercent: 10,
+        progressPercent: 5,
         artifacts: [],
       };
       setActiveWorkflowRun(initialRun);
@@ -276,8 +320,9 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       startWorkflowPolling(jobId);
     } catch (err) {
       setRunning(false);
-      appendLog(`❌ Lỗi khởi chạy: ${err instanceof Error ? err.message : String(err)}`);
-      toast.error('Không thể khởi chạy pipeline.');
+      const msg = err instanceof Error ? err.message : String(err);
+      appendLog(`❌ Lỗi khởi chạy: ${msg}`);
+      toast.error(`Không thể khởi chạy pipeline: ${msg}`);
     }
   };
 
@@ -287,11 +332,24 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
     if (activeJobId) {
       try {
         await cancelFlowordWorkflow(activeJobId);
-        appendLog(`🛑 Đã hủy Job ${activeJobId}`);
-        toast('Đã dừng tiến trình.');
+        appendLog(`🛑 Đã gửi lệnh dừng Job ${activeJobId}`);
+        toast('Đã dừng tiến trình Job.');
+        await refreshJobs();
       } catch (err) {
         console.error(err);
+        toast.error('Lỗi khi gửi lệnh dừng Job.');
       }
+    }
+  };
+
+  const handleCancelJob = async (jobId: string) => {
+    try {
+      await cancelFlowordWorkflow(jobId);
+      toast('Đã gửi lệnh dừng Job.');
+      await refreshJobs();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Lỗi khi dừng Job: ${msg}`);
     }
   };
 
@@ -302,19 +360,19 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       setRunning(true);
       startWorkflowPolling(runId);
     } catch (err) {
-      toast.error('Retry thất bại.');
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Retry thất bại: ${msg}`);
     }
   };
 
   const handleApprovePublish = async (runId: string) => {
-    setAllRuns((prev) =>
-      prev.map((r) => (r.id === runId ? { ...r, isPublished: true, publishedAt: new Date().toISOString() } : r))
-    );
-    toast.success('Đã duyệt và đăng video lên các kênh thành công! 🚀');
+    toast('Chức năng Publishing Engine tự động đang chờ cấu hình profile mạng xã hội.', {
+      icon: '⏳',
+    });
   };
 
   const handleRejectPublish = async (runId: string) => {
-    toast('Đã từ chối đăng video. Bạn có thể chỉnh sửa lại trong Studio.', { icon: '↩️' });
+    toast('Đã từ chối đăng video. Bạn có thể tinh chỉnh lại trong Studio.', { icon: '↩️' });
   };
 
   const handleCreatePage = async (req: CreateContentPageRequest) => {
@@ -322,31 +380,28 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       await createContentPage(req);
       await refreshPages();
       toast.success(`Đã tạo Page: ${req.name}`);
-    } catch {
-      // Local fallback
-      const newPage: ContentPage = {
-        id: `page_${Date.now()}`,
-        name: req.name,
-        description: req.description,
-        targetAudience: req.targetAudience,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      setPages((p) => [...p, newPage]);
-      toast.success(`Đã tạo Page: ${req.name}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Không thể lưu Page vào database: ${msg}`);
+      throw err;
     }
   };
 
-  const handleUpdatePage = async (pageId: string, req: UpdateContentPageRequest) => {
+  const handleUpdatePage = async (pageId: string, req: Partial<UpdateContentPageRequest> & { name?: string }) => {
     try {
-      await updateContentPage(pageId, req);
+      const current = pages.find((p) => p.id === pageId);
+      await updateContentPage({
+        id: pageId,
+        name: req.name || current?.name || '',
+        output_root: req.output_root || current?.output_root || 'D:\\',
+        ...req,
+      });
       await refreshPages();
       toast.success('Cập nhật Page thành công!');
-    } catch {
-      setPages((prev) =>
-        prev.map((p) => (p.id === pageId ? { ...p, ...req, updatedAt: new Date().toISOString() } : p))
-      );
-      toast.success('Cập nhật Page thành công!');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Không thể cập nhật Page: ${msg}`);
+      throw err;
     }
   };
 
@@ -355,9 +410,10 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       await archiveContentPage(pageId);
       await refreshPages();
       toast.success('Đã lưu trữ Page.');
-    } catch {
-      setPages((prev) => prev.filter((p) => p.id !== pageId));
-      toast.success('Đã xóa Page khỏi danh sách.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      toast.error(`Không thể lưu trữ Page: ${msg}`);
+      throw err;
     }
   };
 
@@ -444,10 +500,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
               onSelectJob={(id) => setSelectedJobId(id)}
               onNewJob={() => setActiveView('studio')}
               onRetryStep={handleRetryStep}
-              onCancelJob={(id) => {
-                setAllRuns((prev) => prev.filter((r) => r.id !== id));
-                toast('Đã hủy Job.');
-              }}
+              onCancelJob={handleCancelJob}
             />
           )}
 

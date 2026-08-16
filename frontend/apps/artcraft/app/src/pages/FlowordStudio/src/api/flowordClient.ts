@@ -168,6 +168,16 @@ export function getFlowordWorkflow(jobId: string): Promise<GetFlowordWorkflowRes
   return invokeCommand<GetFlowordWorkflowResponse>('get_floword_workflow', { request: { job_id: jobId } });
 }
 
+export interface ListFlowordWorkflowsResponse {
+  workflows: GetFlowordWorkflowResponse[];
+}
+
+export function listFlowordWorkflows(): Promise<GetFlowordWorkflowResponse[]> {
+  return invokeCommand<ListFlowordWorkflowsResponse>('list_floword_workflows').then(
+    (res) => res.workflows ?? []
+  );
+}
+
 export function cancelFlowordWorkflow(jobId: string): Promise<CancelFlowordWorkflowResponse> {
   return invokeCommand<CancelFlowordWorkflowResponse>('cancel_floword_workflow', { request: { job_id: jobId } });
 }

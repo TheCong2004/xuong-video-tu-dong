@@ -102,20 +102,25 @@ export const PagesView: React.FC<PagesViewProps> = ({
     e.preventDefault();
     if (!formData.name.trim()) return;
 
-    if (editingPageId) {
-      await onUpdatePage(editingPageId, {
-        name: formData.name,
-        description: formData.description,
-        targetAudience: formData.targetAudience,
-      });
-    } else {
-      await onCreatePage({
-        name: formData.name,
-        description: formData.description,
-        targetAudience: formData.targetAudience,
-      });
+    try {
+      if (editingPageId) {
+        await onUpdatePage(editingPageId, {
+          id: editingPageId,
+          name: formData.name.trim(),
+          output_root: formData.storagePath.trim() || 'D:\\',
+          target_platform: 'tiktok',
+        });
+      } else {
+        await onCreatePage({
+          name: formData.name.trim(),
+          output_root: formData.storagePath.trim() || 'D:\\',
+          target_platform: 'tiktok',
+        });
+      }
+      setIsEditing(false);
+    } catch {
+      // Retain modal open on error so user can retry
     }
-    setIsEditing(false);
   };
 
   return (

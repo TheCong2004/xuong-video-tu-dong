@@ -198,8 +198,22 @@ export const JobsView: React.FC<JobsViewProps> = ({
                     {/* Mini Progress Rail */}
                     <div className="flex items-center gap-1 sm:gap-2">
                       {STAGES.map((s, idx) => {
-                        const isDone = run.status === 'completed' || (run.progressPercent && run.progressPercent >= (idx + 1) * 20);
-                        const isCurrent = run.status === 'running' && run.currentStage?.includes(s.key);
+                        const stageOrder = ['image', 'aspect', 'video', 'download', 'publish'];
+                        const currentStage = (run.currentStage || '').toLowerCase();
+                        let currentIdx = 0;
+                        if (currentStage.includes('aspect') || currentStage.includes('9:16') || currentStage.includes('timeline') || currentStage.includes('converting_9_16')) {
+                          currentIdx = 1;
+                        } else if (currentStage.includes('video') || currentStage.includes('draft') || currentStage.includes('render') || currentStage.includes('generating_video')) {
+                          currentIdx = 2;
+                        } else if (currentStage.includes('download') || currentStage.includes('completed')) {
+                          currentIdx = 3;
+                        } else if (currentStage.includes('publish') || currentStage.includes('post')) {
+                          currentIdx = 4;
+                        }
+
+                        const isDone = run.status === 'completed' || (run.status !== 'cancelled' && idx < currentIdx);
+                        const isCurrent = run.status === 'running' && idx === currentIdx;
+                        const isFailed = run.status === 'failed' && idx === currentIdx;
 
                         return (
                           <div
@@ -207,13 +221,15 @@ export const JobsView: React.FC<JobsViewProps> = ({
                             className={`px-2 py-1 rounded-md text-[10px] font-mono font-bold flex items-center gap-1 ${
                               isDone
                                 ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : isFailed
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                                 : isCurrent
                                 ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 animate-pulse'
                                 : 'bg-white/[0.02] text-zinc-600 border border-white/[0.04]'
                             }`}
                           >
                             <span>{s.label}</span>
-                            <span>{isDone ? '✓' : isCurrent ? '●' : '○'}</span>
+                            <span>{isDone ? '✓' : isFailed ? '✕' : isCurrent ? '●' : '○'}</span>
                           </div>
                         );
                       })}
@@ -321,26 +337,21 @@ export const JobsView: React.FC<JobsViewProps> = ({
             {/* Publishing Channels */}
             <div>
               <div className="text-zinc-400 font-semibold text-[11px] uppercase tracking-wider mb-2">
-                Multi-Channel Publishing
+                Publishing Target
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                  <span className="text-zinc-300 font-medium">Facebook Page</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400">
-                    READY
+              <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-300">Target Channel:</span>
+                  <span className="font-semibold text-white uppercase">{selectedRun.input?.targetPlatform || 'TikTok'}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-300">Publishing Mode:</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    Review Before Post
                   </span>
                 </div>
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                  <span className="text-zinc-300 font-medium">TikTok Channel</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-500/10 text-zinc-400">
-                    NOT STARTED
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                  <span className="text-zinc-300 font-medium">YouTube Shorts</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-500/10 text-zinc-400">
-                    NOT STARTED
-                  </span>
+                <div className="text-[10px] text-zinc-500 pt-1.5 border-t border-white/[0.04]">
+                  Automated posting is triggered via dedicated browser profile upon manual approval in Publish View.
                 </div>
               </div>
             </div>

@@ -488,17 +488,21 @@ export const GENERATE_APPS = ALL_APPS.filter(
 );
 export const EDIT_APPS = ALL_APPS.filter((app) => app.category === "edit");
 
+const CUSTOMER_FACING_APP_ACTIONS = new Set<string>([
+  "FLOWORD_STUDIO",
+  "2D",
+  "CAPCUT_AUTOMATION",
+  "3D",
+]);
+
 export const useVisibleApps = (): FullAppItem[] => {
-  const storyboardEnabled = useStoryboardPageEnabled();
   return useMemo(
     () =>
       ALL_APPS.filter((app) => {
-        // Background Change is hidden in the desktop app for now.
-        if (app.action === "BACKGROUND_CHANGE") return false;
-        if (app.action === "STORYBOARD") return storyboardEnabled;
-        return true;
+        if (!app.action) return false;
+        return CUSTOMER_FACING_APP_ACTIONS.has(app.action);
       }),
-    [storyboardEnabled],
+    [],
   );
 };
 

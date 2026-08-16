@@ -13,4 +13,6 @@ pub mod story_script;
 pub mod voice;
 pub mod state;
 pub mod threads;
+pub mod grok_image_edit_stage;
+pub mod grok_expand_9_16_stage;
 pub mod output_policy;
