@@ -138,14 +138,14 @@ struct ExtensionError {
   retryable: Option<bool>,
 }
 
-fn compute_sha256(bytes: &[u8]) -> String {
+pub fn compute_sha256(bytes: &[u8]) -> String {
   let mut hasher = Sha256::new();
   hasher.update(bytes);
   format!("{:x}", hasher.finalize())
 }
 
 /// Detect image MIME type from raw header magic bytes
-fn detect_image_mime(bytes: &[u8]) -> Result<(&'static str, &'static str), String> {
+pub fn detect_image_mime(bytes: &[u8]) -> Result<(&'static str, &'static str), String> {
   if bytes.len() >= 8 && &bytes[0..8] == b"\x89PNG\r\n\x1a\n" {
     Ok(("image/png", "png"))
   } else if bytes.len() >= 3 && &bytes[0..3] == b"\xFF\xD8\xFF" {
@@ -172,16 +172,19 @@ pub async fn execute_grok_image_edit(
     job_id, attempt_id, input.source_image_artifact.id
   );
 
-  // Read source artifact bytes and compute sha256
+  // Read source artifact bytes and validate MIME BEFORE acquiring worker lease
   let source_path = input.source_image_artifact.path.clone();
-  let (source_bytes, source_sha256, data_url) = if let Ok(bytes) = tokio::fs::read(&source_path).await {
+  let (source_bytes, source_sha256, source_mime, data_url) = if let Ok(bytes) = tokio::fs::read(&source_path).await {
     if bytes.is_empty() {
       return Err("SOURCE_ARTIFACT_INVALID: Source file is 0 bytes".to_string());
     }
+    let (mime, _ext) = detect_image_mime(&bytes)
+      .map_err(|e| format!("SOURCE_ARTIFACT_INVALID_MIME: {e}"))?;
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     let hash = compute_sha256(&bytes);
-    (bytes, hash, Some(format!("data:image/jpeg;base64,{b64}")))
+    let d_url = format!("data:{mime};base64,{b64}");
+    (bytes, hash, mime.to_string(), Some(d_url))
   } else {
     return Err("SOURCE_ARTIFACT_NOT_FOUND: Source artifact file missing on disk".to_string());
   };
@@ -204,9 +207,11 @@ pub async fn execute_grok_image_edit(
   // Initialize RAII lease guard to ensure cleanup on error or early return
   let mut lease_guard = LeaseGuard::new(lease_id.clone());
 
-  // 2. Start background heartbeat loop
+  // 2. Start background heartbeat loop with authoritative failure detection
   let heartbeat_running = Arc::new(AtomicBool::new(true));
+  let heartbeat_lost = Arc::new(AtomicBool::new(false));
   let hb_running_clone = heartbeat_running.clone();
+  let hb_lost_clone = heartbeat_lost.clone();
   let hb_lease_id = lease_id.clone();
   let hb_job_id = job_id.clone();
   let hb_attempt_id = attempt_id.to_string();
@@ -228,6 +233,16 @@ pub async fn execute_grok_image_edit(
       .await;
       if let Err(err) = res {
         warn!("[GrokImageEdit] Heartbeat warning for lease {hb_lease_id}: {err}");
+        // Check for authoritative lease revocation or loss
+        if err.contains("LEASE_NOT_FOUND")
+          || err.contains("LEASE_NOT_ACTIVE")
+          || err.contains("Lease is not active")
+          || err.contains("CORRELATION_MISMATCH")
+        {
+          error!("[GrokImageEdit] Authoritative lease ownership loss detected for {hb_lease_id}: {err}");
+          hb_lost_clone.store(true, Ordering::Relaxed);
+          break;
+        }
       }
     }
   });
@@ -250,7 +265,7 @@ pub async fn execute_grok_image_edit(
           artifact_id: input.source_image_artifact.id.clone(),
           path: source_path,
           data_url,
-          mime_type: "image/jpeg".to_string(),
+          mime_type: source_mime,
         },
         prompt: input.prompt.clone(),
         timeout_ms: input.timeout_ms.unwrap_or(180000),
@@ -294,6 +309,11 @@ pub async fn execute_grok_image_edit(
         retryable: Some(true),
       });
       return Err(format!("{}: {}", err.code, err.message));
+    }
+
+    // Guard: ensure lease ownership was not lost during generation
+    if heartbeat_lost.load(Ordering::Relaxed) {
+      return Err("LEASE_LOST: Authoritative lease loss detected during execution".to_string());
     }
 
     // Materialize artifact from result locator
@@ -400,6 +420,14 @@ mod tests {
     let (mime, ext) = detect_image_mime(jpeg_header).unwrap();
     assert_eq!(mime, "image/jpeg");
     assert_eq!(ext, "jpg");
+  }
+
+  #[test]
+  fn test_detect_image_mime_webp() {
+    let webp_header = b"RIFF\x20\x00\x00\x00WEBPVP8 ";
+    let (mime, ext) = detect_image_mime(webp_header).unwrap();
+    assert_eq!(mime, "image/webp");
+    assert_eq!(ext, "webp");
   }
 
   #[test]
