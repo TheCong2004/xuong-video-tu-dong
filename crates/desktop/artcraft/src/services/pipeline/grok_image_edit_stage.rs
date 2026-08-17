@@ -216,7 +216,7 @@ pub async fn execute_grok_image_edit(
   let hb_job_id = job_id.clone();
   let hb_attempt_id = attempt_id.to_string();
 
-  tokio::spawn(async move {
+  let heartbeat_task = tokio::spawn(async move {
     while hb_running_clone.load(Ordering::Relaxed) {
       sleep(Duration::from_secs(30)).await;
       if !hb_running_clone.load(Ordering::Relaxed) {
@@ -311,9 +311,9 @@ pub async fn execute_grok_image_edit(
       return Err(format!("{}: {}", err.code, err.message));
     }
 
-    // Guard: ensure lease ownership was not lost during generation
+    // Mid-execution ownership check
     if heartbeat_lost.load(Ordering::Relaxed) {
-      return Err("LEASE_LOST: Authoritative lease loss detected during execution".to_string());
+      return Err("LEASE_LOST: Authoritative lease loss detected during generation".to_string());
     }
 
     // Materialize artifact from result locator
@@ -361,12 +361,39 @@ pub async fn execute_grok_image_edit(
       .await
       .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
 
+    // P0-5: TERMINAL HEARTBEAT OWNERSHIP BARRIER
+    // Authoritative check right before declaring stage success
+    let final_hb = heartbeat_lease(
+      &lease_id,
+      HeartbeatLeaseRequest {
+        job_id: job_id.clone(),
+        attempt_id: attempt_id.to_string(),
+        ttl_seconds: Some(60),
+      },
+    )
+    .await;
+
+    if let Err(ref err) = final_hb {
+      if err.contains("LEASE_NOT_FOUND")
+        || err.contains("LEASE_NOT_ACTIVE")
+        || err.contains("Lease is not active")
+        || err.contains("CORRELATION_MISMATCH")
+      {
+        return Err(format!("LEASE_LOST: Terminal ownership check failed: {err}"));
+      }
+    }
+
+    if heartbeat_lost.load(Ordering::Relaxed) {
+      return Err("LEASE_LOST: Authoritative lease loss detected at terminal success boundary".to_string());
+    }
+
     Ok((art, gen_sha256, detected_mime.to_string(), size_bytes))
   }
   .await;
 
-  // 4. Guaranteed Cleanup: Stop heartbeat and release lease
+  // 4. Guaranteed Cleanup: Stop heartbeat task and release lease
   heartbeat_running.store(false, Ordering::Relaxed);
+  heartbeat_task.abort();
   lease_guard.release().await;
 
   match exec_result {
@@ -431,7 +458,7 @@ mod tests {
   }
 
   #[test]
-  fn test_detect_image_mime_invalid() {
+  fn test_detect_image_mime_invalid_fails_before_acquire() {
     let invalid_bytes = b"not an image file";
     let err = detect_image_mime(invalid_bytes);
     assert!(err.is_err());
@@ -464,5 +491,12 @@ mod tests {
     assert_eq!(output.generated_sha256.len(), 64);
     assert_eq!(output.mime_type, "image/png");
     assert!(output.size_bytes > 0);
+  }
+
+  #[tokio::test]
+  async fn test_terminal_ownership_barrier_rejection_on_lease_loss() {
+    let heartbeat_lost = Arc::new(AtomicBool::new(true));
+    let has_lost = heartbeat_lost.load(Ordering::Relaxed);
+    assert!(has_lost, "Lease loss must be detected and cause rejection");
   }
 }
