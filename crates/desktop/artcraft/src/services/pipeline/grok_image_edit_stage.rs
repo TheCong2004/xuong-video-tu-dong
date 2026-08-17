@@ -21,6 +21,8 @@ pub struct GrokImageEditInput {
   pub source_image_artifact: ArtifactRef,
   pub prompt: String,
   pub timeout_ms: Option<u64>,
+  #[serde(default)]
+  pub workflow_root: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +181,16 @@ pub async fn execute_grok_image_edit_stage(
     "[GrokImageEdit] Starting execution: job_id={} attempt_id={} source_art={}",
     job_id, attempt_id, input.source_image_artifact.artifact_id
   );
+
+  // Resolve canonical workflow root
+  let workflow_root_buf = if let Some(ref root_str) = input.workflow_root {
+    std::path::PathBuf::from(root_str)
+  } else {
+    std::path::Path::new(&input.source_image_artifact.location)
+      .parent()
+      .map(|p| p.to_path_buf())
+      .unwrap_or_else(|| std::path::PathBuf::from("."))
+  };
 
   // Read source artifact bytes and validate MIME BEFORE acquiring worker lease
   let source_path = input.source_image_artifact.location.clone();
@@ -363,24 +375,33 @@ pub async fn execute_grok_image_edit_stage(
     let size_bytes = raw_bytes.len();
     let gen_sha256 = compute_sha256(&raw_bytes);
 
-    let tmp_dir = std::env::temp_dir().join("floword_artifacts");
-    let _ = std::fs::create_dir_all(&tmp_dir);
-    let file_path = tmp_dir.join(format!("{file_stem}.{ext}"));
+    // Save physical file directly into workflow artifact root
+    let _ = std::fs::create_dir_all(&workflow_root_buf);
+    let file_path = workflow_root_buf.join(format!("{file_stem}.{ext}"));
     std::fs::write(&file_path, &raw_bytes)
       .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
 
-    let art = ArtifactRef {
-      artifact_id: format!("art_{step_id}_{file_stem}"),
-      kind: ArtifactKind::Story,
-      produced_by_stage: StageId::StoryScript,
-      location: file_path.to_string_lossy().to_string(),
-      mime_type: Some(detected_mime.to_string()),
-      metadata: serde_json::json!({
+    // Canonical ArtifactStore registration as GeneratedImage
+    let stored = ArtifactStore::register_typed_artifact(
+      &workflow_root_buf,
+      &job_id,
+      StageId::StoryScript,
+      "grok",
+      ArtifactKind::GeneratedImage,
+      &file_path,
+      serde_json::json!({
         "sha256": gen_sha256,
-        "sizeBytes": size_bytes,
-        "mimeType": detected_mime
+        "mime_type": detected_mime,
+        "size_bytes": size_bytes,
+        "prompt_hash": prompt_hash,
+        "service": "grok"
       }),
-    };
+    )
+    .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
+
+    let art = stored
+      .to_artifact_ref(StageId::StoryScript)
+      .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
 
     // P0-5: TERMINAL HEARTBEAT OWNERSHIP BARRIER (FAIL-CLOSED)
     // Authoritative check right before declaring stage success
@@ -488,7 +509,7 @@ mod tests {
     let output = GrokImageEditOutput {
       generated_artifact: ArtifactRef {
         artifact_id: "ART_GEN_001".to_string(),
-        kind: ArtifactKind::Story,
+        kind: ArtifactKind::GeneratedImage,
         produced_by_stage: StageId::StoryScript,
         location: "D:/temp/ART_GEN_001.png".to_string(),
         mime_type: Some("image/png".to_string()),
@@ -512,6 +533,7 @@ mod tests {
     assert_eq!(output.source_sha256.len(), 64);
     assert_eq!(output.generated_sha256.len(), 64);
     assert_eq!(output.mime_type, "image/png");
+    assert_eq!(output.generated_artifact.kind, ArtifactKind::GeneratedImage);
     assert!(output.size_bytes > 0);
   }
 
@@ -708,5 +730,40 @@ mod tests {
     assert_eq!(media.locator, "https://grok.com/image/abc.png");
     assert_eq!(media.mime_type.as_deref(), Some("image/png"));
     assert_eq!(media.width, Some(1024));
+  }
+
+  #[test]
+  fn test_f3_artifact_store_materialization_and_registration() {
+    let temp_root = std::env::temp_dir().join(format!("floword_test_root_{}", uuid::Uuid::new_v4().simple()));
+    std::fs::create_dir_all(&temp_root).unwrap();
+
+    let sample_image_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15c4\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82";
+    let file_path = temp_root.join("sample_gen.png");
+    std::fs::write(&file_path, sample_image_bytes).unwrap();
+
+    let stored = ArtifactStore::register_typed_artifact(
+      &temp_root,
+      "JOB_TEST_001",
+      StageId::StoryScript,
+      "grok",
+      ArtifactKind::GeneratedImage,
+      &file_path,
+      serde_json::json!({
+        "sha256": compute_sha256(sample_image_bytes),
+        "mime_type": "image/png",
+        "service": "grok"
+      }),
+    ).expect("ArtifactStore registration must succeed");
+
+    assert_eq!(stored.artifact_type, "generated_image");
+    assert_eq!(stored.producer, "grok");
+
+    let art_ref = stored.to_artifact_ref(StageId::StoryScript).expect("to_artifact_ref must succeed");
+    assert_eq!(art_ref.kind, ArtifactKind::GeneratedImage);
+    assert_eq!(art_ref.produced_by_stage, StageId::StoryScript);
+    assert_eq!(art_ref.mime_type.as_deref(), Some("image/png"));
+    assert!(std::path::Path::new(&art_ref.location).exists());
+
+    let _ = std::fs::remove_dir_all(&temp_root);
   }
 }

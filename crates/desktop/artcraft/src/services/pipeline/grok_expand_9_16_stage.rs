@@ -348,7 +348,7 @@ pub async fn execute_grok_expand_9_16(
 
     let art = ArtifactRef {
       artifact_id: format!("art_{step_id}_{file_stem}"),
-      kind: ArtifactKind::Story,
+      kind: ArtifactKind::GeneratedImage,
       produced_by_stage: StageId::StoryScript,
       location: file_path.to_string_lossy().to_string(),
       mime_type: Some("image/png".to_string()),
