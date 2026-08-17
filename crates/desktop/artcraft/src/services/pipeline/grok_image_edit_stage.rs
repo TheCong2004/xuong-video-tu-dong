@@ -15,14 +15,14 @@ use tokio::time::sleep;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GrokImageEditInput {
   pub job_id: String,
   pub page_id: String,
   pub source_image_artifact: ArtifactRef,
   pub prompt: String,
   pub timeout_ms: Option<u64>,
-  #[serde(default)]
-  pub workflow_root: Option<String>,
+  pub workflow_root: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -182,15 +182,13 @@ pub async fn execute_grok_image_edit_stage(
     job_id, attempt_id, input.source_image_artifact.artifact_id
   );
 
-  // Resolve canonical workflow root
-  let workflow_root_buf = if let Some(ref root_str) = input.workflow_root {
-    std::path::PathBuf::from(root_str)
-  } else {
-    std::path::Path::new(&input.source_image_artifact.location)
-      .parent()
-      .map(|p| p.to_path_buf())
-      .unwrap_or_else(|| std::path::PathBuf::from("."))
-  };
+  // Fail-closed canonical workflow root validation
+  let workflow_root_buf = input.workflow_root.clone();
+  if workflow_root_buf.as_os_str().is_empty() {
+    return Err("WORKFLOW_ROOT_REQUIRED: Canonical workflow artifact root path is required".to_string());
+  }
+  std::fs::create_dir_all(&workflow_root_buf)
+    .map_err(|e| format!("WORKFLOW_ROOT_INVALID: Cannot create canonical workflow artifact root {:?}: {e}", workflow_root_buf))?;
 
   // Read source artifact bytes and validate MIME BEFORE acquiring worker lease
   let source_path = input.source_image_artifact.location.clone();
@@ -765,5 +763,28 @@ mod tests {
     assert!(std::path::Path::new(&art_ref.location).exists());
 
     let _ = std::fs::remove_dir_all(&temp_root);
+  }
+
+  #[tokio::test]
+  async fn test_f4_empty_workflow_root_rejected_fail_closed() {
+    let input = GrokImageEditInput {
+      job_id: "JOB_FAIL_001".to_string(),
+      page_id: "PAGE_01".to_string(),
+      source_image_artifact: ArtifactRef {
+        artifact_id: "ART_SRC".to_string(),
+        kind: ArtifactKind::Story,
+        produced_by_stage: StageId::StoryScript,
+        location: "/tmp/non_existent.png".to_string(),
+        mime_type: Some("image/png".to_string()),
+        metadata: serde_json::json!({}),
+      },
+      prompt: "test".to_string(),
+      timeout_ms: Some(1000),
+      workflow_root: std::path::PathBuf::from(""),
+    };
+
+    let outcome = execute_grok_image_edit_stage(input, "1").await;
+    assert!(outcome.is_err());
+    assert!(outcome.unwrap_err().contains("WORKFLOW_ROOT_REQUIRED"));
   }
 }

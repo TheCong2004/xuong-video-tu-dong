@@ -16,6 +16,7 @@ use crate::services::pipeline::media_timeline::{prepare_media_timeline, run_open
 use crate::services::pipeline::research::{canonical_metadata, prepare_research, research_state_mut, run_mediacrawler, should_retry as should_retry_research, stage_error as research_stage_error, ResearchError, ResearchInput, ResearchOutcome, ResearchPreparation};
 use crate::services::pipeline::story_script::{prepare_story_script, run_story_studio, should_retry as should_retry_story_script, StoryScriptError, StoryScriptInput, StoryStudioOutput};
 use crate::services::pipeline::voice::{prepare_voice, should_retry as should_retry_voice, synthesize_voice_with_runtime, VoiceError, VoiceInput, VoiceTiming};
+use crate::services::pipeline::grok_image_edit_stage::{execute_grok_image_edit_stage, GrokImageEditInput, GrokImageEditOutput};
 use crate::services::pipeline::visual_assets::{build_scene_plan, generate_visual_assets, ScenePlan};
 use crate::services::pipeline::state::cancellation_registry::{clear_job, is_cancelled, register_job};
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
@@ -1320,6 +1321,29 @@ fn parse_input(job: &PipelineJob) -> Value {
 
 fn parse_stage_outputs(job: &PipelineJob) -> Value {
   job.maybe_stage_outputs.as_deref().and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or_else(|| json!({}))
+}
+
+/// Canonical Floword orchestrator runner for Grok image editing stage.
+/// Drives the image edit stage with mandatory canonical per-job artifact root.
+pub async fn run_grok_image_edit_stage(
+  job_id: &str,
+  page_id: &str,
+  source_image_artifact: ArtifactRef,
+  prompt: &str,
+  work_dir: &std::path::Path,
+  attempt_id: &str,
+) -> Result<GrokImageEditOutput, PipelineRunError> {
+  let input = GrokImageEditInput {
+    job_id: job_id.to_string(),
+    page_id: page_id.to_string(),
+    source_image_artifact,
+    prompt: prompt.to_string(),
+    timeout_ms: Some(180000),
+    workflow_root: work_dir.to_path_buf(),
+  };
+  execute_grok_image_edit_stage(input, attempt_id)
+    .await
+    .map_err(|err| PipelineRunError::new(PipelineStage::PreflightCheck, "GROK_IMAGE_EDIT_FAILED", err))
 }
 
 #[cfg(test)]
