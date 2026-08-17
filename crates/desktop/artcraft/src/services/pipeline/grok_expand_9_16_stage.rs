@@ -2,7 +2,7 @@ use crate::services::pipeline::artifact_store::ArtifactStore;
 use crate::services::pipeline::clients::browser_runtime_client::{
   acquire_worker, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest,
 };
-use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef};
+use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -75,6 +75,7 @@ impl Drop for LeaseGuard {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionProductionRequest {
   protocol: &'static str,
   protocol_version: u32,
@@ -91,6 +92,7 @@ struct ExtensionProductionRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionExpandParams {
   source_artifact: ExtensionSourceArtifact,
   prompt: String,
@@ -99,6 +101,7 @@ struct ExtensionExpandParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionSourceArtifact {
   artifact_id: String,
   path: String,
@@ -107,6 +110,7 @@ struct ExtensionSourceArtifact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionProductionResult {
   protocol: String,
   protocol_version: u32,
@@ -122,6 +126,7 @@ struct ExtensionProductionResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionGeneratedMedia {
   media_type: String,
   source: String,
@@ -132,6 +137,7 @@ struct ExtensionGeneratedMedia {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionError {
   code: String,
   message: String,
@@ -141,7 +147,8 @@ struct ExtensionError {
 fn compute_sha256(bytes: &[u8]) -> String {
   let mut hasher = Sha256::new();
   hasher.update(bytes);
-  format!("{:x}", hasher.finalize())
+  let result = hasher.finalize();
+  result.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 /// Validate that the actual pixel dimensions conform to 9:16 aspect ratio (ratio ~ 0.5625)
@@ -174,11 +181,11 @@ pub async fn execute_grok_expand_9_16(
 
   info!(
     "[GrokExpand916] Starting 9:16 expansion: job_id={} attempt_id={} input_art={}",
-    job_id, attempt_id, input.image_done_artifact.id
+    job_id, attempt_id, input.image_done_artifact.artifact_id
   );
 
   // Read input artifact (which MUST be the output of IMAGE_DONE)
-  let source_path = input.image_done_artifact.path.clone();
+  let source_path = input.image_done_artifact.location.clone();
   let (source_bytes, source_sha256, data_url) = if let Ok(bytes) = tokio::fs::read(&source_path).await {
     if bytes.is_empty() {
       return Err("SOURCE_ARTIFACT_INVALID: Source file is 0 bytes".to_string());
@@ -220,7 +227,7 @@ pub async fn execute_grok_expand_9_16(
       if !hb_running_clone.load(Ordering::Relaxed) {
         break;
       }
-      let res = heartbeat_lease(
+      let _ = heartbeat_lease(
         &hb_lease_id,
         HeartbeatLeaseRequest {
           job_id: hb_job_id.clone(),
@@ -229,13 +236,10 @@ pub async fn execute_grok_expand_9_16(
         },
       )
       .await;
-      if let Err(err) = res {
-        warn!("[GrokExpand916] Heartbeat warning for lease {hb_lease_id}: {err}");
-      }
     }
   });
 
-  // 3. Execution block
+  // 3. Primary Execution
   let exec_result: Result<(ArtifactRef, String, u32, u32, f64), String> = async {
     let req_payload = ExtensionProductionRequest {
       protocol: "floword-production",
@@ -250,7 +254,7 @@ pub async fn execute_grok_expand_9_16(
       method: "grok.image.expand_9_16",
       params: ExtensionExpandParams {
         source_artifact: ExtensionSourceArtifact {
-          artifact_id: input.image_done_artifact.id.clone(),
+          artifact_id: input.image_done_artifact.artifact_id.clone(),
           path: source_path,
           data_url,
           mime_type: "image/jpeg".to_string(),
@@ -300,7 +304,6 @@ pub async fn execute_grok_expand_9_16(
     }
 
     let media = prod_result.result.ok_or("No media result in response")?;
-    let store = ArtifactStore::default();
     let file_stem = format!("{}_{}_{}", job_id, step_id, attempt_id);
 
     // Materialize raw bytes
@@ -337,10 +340,25 @@ pub async fn execute_grok_expand_9_16(
     let height = media.height.unwrap_or(1280);
     let ratio = validate_aspect_ratio(width, height)?;
 
-    let art = store
-      .save_bytes(&file_stem, &raw_bytes, "png", ArtifactKind::Visual)
-      .await
+    let tmp_dir = std::env::temp_dir().join("floword_artifacts");
+    let _ = std::fs::create_dir_all(&tmp_dir);
+    let file_path = tmp_dir.join(format!("{file_stem}.png"));
+    std::fs::write(&file_path, &raw_bytes)
       .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
+
+    let art = ArtifactRef {
+      artifact_id: format!("art_{step_id}_{file_stem}"),
+      kind: ArtifactKind::Story,
+      produced_by_stage: StageId::StoryScript,
+      location: file_path.to_string_lossy().to_string(),
+      mime_type: Some("image/png".to_string()),
+      metadata: serde_json::json!({
+        "sha256": gen_sha256,
+        "width": width,
+        "height": height,
+        "aspectRatio": ratio
+      }),
+    };
 
     Ok((art, gen_sha256, width, height, ratio))
   }
@@ -354,7 +372,7 @@ pub async fn execute_grok_expand_9_16(
     Ok((vertical_artifact, vertical_sha256, width, height, aspect_ratio)) => {
       info!(
         "[GrokExpand916] Success! Vertical 9:16 artifact materialized: path={} ({width}x{height}, ratio={aspect_ratio:.4})",
-        vertical_artifact.path
+        vertical_artifact.location
       );
       Ok(GrokExpand916Output {
         vertical_artifact,

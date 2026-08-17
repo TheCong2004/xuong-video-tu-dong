@@ -1,7 +1,7 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
 use crate::services::pipeline::clients::browser_runtime_client::{
   acquire_worker, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest,
-  HeartbeatLeaseRequest,
+  HeartbeatLeaseRequest, HeartbeatLeaseResponse,
 };
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
@@ -77,6 +77,7 @@ impl Drop for LeaseGuard {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionProductionRequest {
   protocol: &'static str,
   protocol_version: u32,
@@ -93,6 +94,7 @@ struct ExtensionProductionRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionImageEditParams {
   source_artifact: ExtensionSourceArtifact,
   prompt: String,
@@ -100,6 +102,7 @@ struct ExtensionImageEditParams {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionSourceArtifact {
   artifact_id: String,
   path: String,
@@ -108,6 +111,7 @@ struct ExtensionSourceArtifact {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionProductionResult {
   protocol: String,
   protocol_version: u32,
@@ -123,6 +127,7 @@ struct ExtensionProductionResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionGeneratedMedia {
   media_type: String,
   source: String,
@@ -133,6 +138,7 @@ struct ExtensionGeneratedMedia {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ExtensionError {
   code: String,
   message: String,
@@ -142,7 +148,8 @@ struct ExtensionError {
 pub fn compute_sha256(bytes: &[u8]) -> String {
   let mut hasher = Sha256::new();
   hasher.update(bytes);
-  format!("{:x}", hasher.finalize())
+  let result = hasher.finalize();
+  result.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
 /// Detect image MIME type from raw header magic bytes
@@ -158,8 +165,8 @@ pub fn detect_image_mime(bytes: &[u8]) -> Result<(&'static str, &'static str), S
   }
 }
 
-/// Executes single-job grok.image.edit with RAII lease guard, heartbeat, and strict artifact validation.
-pub async fn execute_grok_image_edit(
+/// Primary orchestrator entry point for executing a Grok image edit step.
+pub async fn execute_grok_image_edit_stage(
   input: GrokImageEditInput,
   attempt_id: &str,
 ) -> Result<GrokImageEditOutput, String> {
@@ -170,11 +177,11 @@ pub async fn execute_grok_image_edit(
 
   info!(
     "[GrokImageEdit] Starting execution: job_id={} attempt_id={} source_art={}",
-    job_id, attempt_id, input.source_image_artifact.id
+    job_id, attempt_id, input.source_image_artifact.artifact_id
   );
 
   // Read source artifact bytes and validate MIME BEFORE acquiring worker lease
-  let source_path = input.source_image_artifact.path.clone();
+  let source_path = input.source_image_artifact.location.clone();
   let (source_bytes, source_sha256, source_mime, data_url) = if let Ok(bytes) = tokio::fs::read(&source_path).await {
     if bytes.is_empty() {
       return Err("SOURCE_ARTIFACT_INVALID: Source file is 0 bytes".to_string());
@@ -192,30 +199,33 @@ pub async fn execute_grok_image_edit(
 
   // 1. Acquire exclusive worker lease
   let lease = acquire_worker(AcquireWorkerRequest {
+    pool_id: None,
+    capability: "grok.image.edit".to_string(),
     job_id: job_id.clone(),
     step_id: step_id.to_string(),
     attempt_id: attempt_id.to_string(),
-    capability: "grok.image.edit".to_string(),
-    pool_id: None,
-    ttl_seconds: Some(180),
+    ttl_seconds: Some(120),
   })
   .await
   .map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
 
   let lease_id = lease.lease_id.clone();
   let profile_id = lease.profile_id.clone();
-
-  // Initialize RAII lease guard to ensure cleanup on error or early return
   let mut lease_guard = LeaseGuard::new(lease_id.clone());
 
-  // 2. Start background heartbeat loop with authoritative failure detection
+  info!(
+    "[GrokImageEdit] Acquired worker lease: lease_id={} profile_id={}",
+    lease_id, profile_id
+  );
+
+  // 2. Spawn concurrent heartbeat maintainer
   let heartbeat_running = Arc::new(AtomicBool::new(true));
   let heartbeat_lost = Arc::new(AtomicBool::new(false));
-  let hb_running_clone = heartbeat_running.clone();
-  let hb_lost_clone = heartbeat_lost.clone();
   let hb_lease_id = lease_id.clone();
   let hb_job_id = job_id.clone();
   let hb_attempt_id = attempt_id.to_string();
+  let hb_running_clone = heartbeat_running.clone();
+  let hb_lost_clone = heartbeat_lost.clone();
 
   let heartbeat_task = tokio::spawn(async move {
     while hb_running_clone.load(Ordering::Relaxed) {
@@ -223,19 +233,15 @@ pub async fn execute_grok_image_edit(
       if !hb_running_clone.load(Ordering::Relaxed) {
         break;
       }
-      let res = heartbeat_lease(
-        &hb_lease_id,
-        HeartbeatLeaseRequest {
-          job_id: hb_job_id.clone(),
-          attempt_id: hb_attempt_id.clone(),
-          ttl_seconds: Some(60),
-        },
-      )
-      .await;
-      if let Err(err) = res {
-        warn!("[GrokImageEdit] Heartbeat warning for lease {hb_lease_id}: {err}");
-        // Check for authoritative lease revocation or loss
+      let req = HeartbeatLeaseRequest {
+        job_id: hb_job_id.clone(),
+        attempt_id: hb_attempt_id.clone(),
+        ttl_seconds: Some(120),
+      };
+      if let Err(err) = heartbeat_lease(&hb_lease_id, req).await {
+        warn!("[GrokImageEdit] Heartbeat failed for lease {hb_lease_id}: {err}");
         if err.contains("LEASE_NOT_FOUND")
+          || err.contains("Lease not found")
           || err.contains("LEASE_NOT_ACTIVE")
           || err.contains("Lease is not active")
           || err.contains("CORRELATION_MISMATCH")
@@ -263,7 +269,7 @@ pub async fn execute_grok_image_edit(
       method: "grok.image.edit",
       params: ExtensionImageEditParams {
         source_artifact: ExtensionSourceArtifact {
-          artifact_id: input.source_image_artifact.id.clone(),
+          artifact_id: input.source_image_artifact.artifact_id.clone(),
           path: source_path,
           data_url,
           mime_type: source_mime,
@@ -322,7 +328,6 @@ pub async fn execute_grok_image_edit(
     let media = prod_result.result.ok_or("No media result in response")?;
     info!("[GrokImageEdit] Received media locator: {}", media.locator);
 
-    let store = ArtifactStore::default();
     let file_stem = format!("{}_{}_{}", job_id, step_id, attempt_id);
 
     let raw_bytes = if media.locator.starts_with("data:") {
@@ -358,10 +363,24 @@ pub async fn execute_grok_image_edit(
     let size_bytes = raw_bytes.len();
     let gen_sha256 = compute_sha256(&raw_bytes);
 
-    let art = store
-      .save_bytes(&file_stem, &raw_bytes, ext, ArtifactKind::Visual)
-      .await
+    let tmp_dir = std::env::temp_dir().join("floword_artifacts");
+    let _ = std::fs::create_dir_all(&tmp_dir);
+    let file_path = tmp_dir.join(format!("{file_stem}.{ext}"));
+    std::fs::write(&file_path, &raw_bytes)
       .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
+
+    let art = ArtifactRef {
+      artifact_id: format!("art_{step_id}_{file_stem}"),
+      kind: ArtifactKind::Story,
+      produced_by_stage: StageId::StoryScript,
+      location: file_path.to_string_lossy().to_string(),
+      mime_type: Some(detected_mime.to_string()),
+      metadata: serde_json::json!({
+        "sha256": gen_sha256,
+        "sizeBytes": size_bytes,
+        "mimeType": detected_mime
+      }),
+    };
 
     // P0-5: TERMINAL HEARTBEAT OWNERSHIP BARRIER (FAIL-CLOSED)
     // Authoritative check right before declaring stage success
@@ -375,22 +394,15 @@ pub async fn execute_grok_image_edit(
     )
     .await;
 
-    match final_hb {
-      Ok(hb_resp) => {
-        if hb_resp.status != "Active" {
-          return Err(format!(
-            "LEASE_LOST: Terminal ownership check failed - lease status is {}",
-            hb_resp.status
-          ));
-        }
-      }
+    let hb_valid = match final_hb {
+      Ok(res) => res.status == "Active",
       Err(err) => {
-        // Fail-closed on ANY error (network timeout, 500, correlation mismatch, lease not found)
-        return Err(format!("LEASE_LOST: Terminal ownership verification failed: {err}"));
+        error!("[GrokImageEdit] Terminal heartbeat failed for lease {lease_id}: {err}");
+        false
       }
-    }
+    };
 
-    if heartbeat_lost.load(Ordering::Relaxed) {
+    if !hb_valid || heartbeat_lost.load(Ordering::Relaxed) {
       return Err("LEASE_LOST: Authoritative lease loss detected at terminal success boundary".to_string());
     }
 
@@ -407,7 +419,7 @@ pub async fn execute_grok_image_edit(
     Ok((generated_artifact, generated_sha256, mime_type, size_bytes)) => {
       info!(
         "[GrokImageEdit] Success! Artifact materialized: path={} mime={} size={} sha256={}",
-        generated_artifact.path, mime_type, size_bytes, generated_sha256
+        generated_artifact.location, mime_type, size_bytes, generated_sha256
       );
       Ok(GrokImageEditOutput {
         generated_artifact,
@@ -475,9 +487,12 @@ mod tests {
   fn test_case_a_normal_success_record_structure() {
     let output = GrokImageEditOutput {
       generated_artifact: ArtifactRef {
-        id: "ART_GEN_001".to_string(),
-        path: "D:/temp/ART_GEN_001.png".to_string(),
-        kind: ArtifactKind::Visual,
+        artifact_id: "ART_GEN_001".to_string(),
+        kind: ArtifactKind::Story,
+        produced_by_stage: StageId::StoryScript,
+        location: "D:/temp/ART_GEN_001.png".to_string(),
+        mime_type: Some("image/png".to_string()),
+        metadata: serde_json::json!({}),
       },
       job_id: "JOB_000001".to_string(),
       attempt_id: "ATTEMPT_001".to_string(),
@@ -594,5 +609,104 @@ mod tests {
     let hb_failed = true;
     let stage_success = artifact_written && !hb_failed;
     assert!(!stage_success, "Stage MUST NOT declare IMAGE_DONE if final heartbeat failed");
+  }
+
+  // TEST GROUP F — JSON Contract Alignment Tests
+  #[test]
+  fn test_f1_production_request_serializes_to_exact_camel_case() {
+    let req = ExtensionProductionRequest {
+      protocol: "floword-production",
+      protocol_version: 1,
+      request_id: "REQ_123".to_string(),
+      job_id: "JOB_456".to_string(),
+      step_id: "GENERATING_IMAGE".to_string(),
+      attempt_id: "1".to_string(),
+      lease_id: "LEASE_789".to_string(),
+      profile_id: "PROFILE_01".to_string(),
+      page_id: Some("PAGE_99".to_string()),
+      method: "grok.image.edit",
+      params: ExtensionImageEditParams {
+        source_artifact: ExtensionSourceArtifact {
+          artifact_id: "ART_001".to_string(),
+          path: "/tmp/img.png".to_string(),
+          data_url: Some("data:image/png;base64,...".to_string()),
+          mime_type: "image/png".to_string(),
+        },
+        prompt: "Fix lighting".to_string(),
+        timeout_ms: 120000,
+      },
+      created_at: "2026-08-17T22:30:00Z".to_string(),
+    };
+
+    let json_val = serde_json::to_value(&req).expect("Serialization failed");
+
+    assert_eq!(json_val.get("protocol").and_then(|v| v.as_str()), Some("floword-production"));
+    assert_eq!(json_val.get("protocolVersion").and_then(|v| v.as_u64()), Some(1));
+    assert_eq!(json_val.get("requestId").and_then(|v| v.as_str()), Some("REQ_123"));
+    assert_eq!(json_val.get("jobId").and_then(|v| v.as_str()), Some("JOB_456"));
+    assert_eq!(json_val.get("stepId").and_then(|v| v.as_str()), Some("GENERATING_IMAGE"));
+    assert_eq!(json_val.get("attemptId").and_then(|v| v.as_str()), Some("1"));
+    assert_eq!(json_val.get("leaseId").and_then(|v| v.as_str()), Some("LEASE_789"));
+    assert_eq!(json_val.get("profileId").and_then(|v| v.as_str()), Some("PROFILE_01"));
+    assert_eq!(json_val.get("pageId").and_then(|v| v.as_str()), Some("PAGE_99"));
+    assert_eq!(json_val.get("createdAt").and_then(|v| v.as_str()), Some("2026-08-17T22:30:00Z"));
+
+    let params = json_val.get("params").expect("params must exist");
+    assert_eq!(params.get("timeoutMs").and_then(|v| v.as_u64()), Some(120000));
+    assert_eq!(params.get("prompt").and_then(|v| v.as_str()), Some("Fix lighting"));
+
+    let src = params.get("sourceArtifact").expect("sourceArtifact must exist");
+    assert_eq!(src.get("artifactId").and_then(|v| v.as_str()), Some("ART_001"));
+    assert_eq!(src.get("mimeType").and_then(|v| v.as_str()), Some("image/png"));
+    assert_eq!(src.get("dataUrl").and_then(|v| v.as_str()), Some("data:image/png;base64,..."));
+
+    // Verify absence of snake_case
+    assert!(json_val.get("protocol_version").is_none());
+    assert!(json_val.get("request_id").is_none());
+    assert!(json_val.get("job_id").is_none());
+    assert!(json_val.get("lease_id").is_none());
+    assert!(json_val.get("profile_id").is_none());
+    assert!(params.get("timeout_ms").is_none());
+    assert!(params.get("source_artifact").is_none());
+    assert!(src.get("artifact_id").is_none());
+    assert!(src.get("mime_type").is_none());
+  }
+
+  #[test]
+  fn test_f2_production_result_deserializes_from_camel_case_json() {
+    let incoming_json = serde_json::json!({
+      "protocol": "floword-production",
+      "protocolVersion": 1,
+      "requestId": "REQ_123",
+      "jobId": "JOB_456",
+      "stepId": "GENERATING_IMAGE",
+      "attemptId": "1",
+      "leaseId": "LEASE_789",
+      "profileId": "PROFILE_01",
+      "ok": true,
+      "result": {
+        "mediaType": "image",
+        "source": "generated",
+        "locator": "https://grok.com/image/abc.png",
+        "mimeType": "image/png",
+        "width": 1024,
+        "height": 1024
+      }
+    });
+
+    let res: ExtensionProductionResult = serde_json::from_value(incoming_json).expect("Deserialization failed");
+    assert_eq!(res.protocol, "floword-production");
+    assert_eq!(res.protocol_version, 1);
+    assert_eq!(res.request_id, "REQ_123");
+    assert_eq!(res.job_id, "JOB_456");
+    assert_eq!(res.lease_id, "LEASE_789");
+    assert_eq!(res.profile_id, "PROFILE_01");
+    assert!(res.ok);
+
+    let media = res.result.expect("media must exist");
+    assert_eq!(media.media_type, "image");
+    assert_eq!(media.locator, "https://grok.com/image/abc.png");
+    assert_eq!(media.mime_type.as_deref(), Some("image/png"));
+    assert_eq!(media.width, Some(1024));
   }
 }
