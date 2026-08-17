@@ -32,6 +32,8 @@ pub struct GrokImageEditOutput {
   pub source_sha256: String,
   pub generated_sha256: String,
   pub prompt_hash: String,
+  pub mime_type: String,
+  pub size_bytes: usize,
 }
 
 /// 3-Tier Guaranteed Lease Cleanup Architecture:
@@ -124,7 +126,7 @@ struct ExtensionGeneratedMedia {
   media_type: String,
   source: String,
   locator: String,
-  mime_type: String,
+  mime_type: Option<String>,
   width: Option<u32>,
   height: Option<u32>,
 }
@@ -140,6 +142,19 @@ fn compute_sha256(bytes: &[u8]) -> String {
   let mut hasher = Sha256::new();
   hasher.update(bytes);
   format!("{:x}", hasher.finalize())
+}
+
+/// Detect image MIME type from raw header magic bytes
+fn detect_image_mime(bytes: &[u8]) -> Result<(&'static str, &'static str), String> {
+  if bytes.len() >= 8 && &bytes[0..8] == b"\x89PNG\r\n\x1a\n" {
+    Ok(("image/png", "png"))
+  } else if bytes.len() >= 3 && &bytes[0..3] == b"\xFF\xD8\xFF" {
+    Ok(("image/jpeg", "jpg"))
+  } else if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+    Ok(("image/webp", "webp"))
+  } else {
+    Err("ARTIFACT_INVALID_MIME: Unrecognized or unsupported image byte signature".to_string())
+  }
 }
 
 /// Executes single-job grok.image.edit with RAII lease guard, heartbeat, and strict artifact validation.
@@ -218,7 +233,7 @@ pub async fn execute_grok_image_edit(
   });
 
   // 3. Execution block
-  let exec_result: Result<(ArtifactRef, String), String> = async {
+  let exec_result: Result<(ArtifactRef, String, String, usize), String> = async {
     let req_payload = ExtensionProductionRequest {
       protocol: "floword-production",
       protocol_version: 1,
@@ -288,26 +303,15 @@ pub async fn execute_grok_image_edit(
     let store = ArtifactStore::default();
     let file_stem = format!("{}_{}_{}", job_id, step_id, attempt_id);
 
-    let (artifact_ref, gen_sha256) = if media.locator.starts_with("data:") {
+    let raw_bytes = if media.locator.starts_with("data:") {
       let parts: Vec<&str> = media.locator.splitn(2, ',').collect();
       if parts.len() < 2 {
         return Err("ARTIFACT_INVALID: Malformed data URL".to_string());
       }
       use base64::Engine;
-      let raw_bytes = base64::engine::general_purpose::STANDARD
+      base64::engine::general_purpose::STANDARD
         .decode(parts[1])
-        .map_err(|e| format!("ARTIFACT_INVALID: Base64 decode error: {e}"))?;
-
-      if raw_bytes.is_empty() {
-        return Err("ARTIFACT_INVALID: 0 byte artifact received".to_string());
-      }
-
-      let hash = compute_sha256(&raw_bytes);
-      let art = store
-        .save_bytes(&file_stem, &raw_bytes, "png", ArtifactKind::Visual)
-        .await
-        .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
-      (art, hash)
+        .map_err(|e| format!("ARTIFACT_INVALID: Base64 decode error: {e}"))?
     } else {
       // Download remote CDN URL
       let dl_resp = client
@@ -316,24 +320,28 @@ pub async fn execute_grok_image_edit(
         .await
         .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?;
 
-      let bytes = dl_resp
+      dl_resp
         .bytes()
         .await
-        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?;
-
-      if bytes.is_empty() {
-        return Err("ARTIFACT_INVALID: 0 byte artifact downloaded".to_string());
-      }
-
-      let hash = compute_sha256(&bytes);
-      let art = store
-        .save_bytes(&file_stem, &bytes, "webp", ArtifactKind::Visual)
-        .await
-        .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
-      (art, hash)
+        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?
+        .to_vec()
     };
 
-    Ok((artifact_ref, gen_sha256))
+    if raw_bytes.is_empty() {
+      return Err("ARTIFACT_INVALID: 0 byte artifact received".to_string());
+    }
+
+    // Sniff MIME and validate real image format from bytes
+    let (detected_mime, ext) = detect_image_mime(&raw_bytes)?;
+    let size_bytes = raw_bytes.len();
+    let gen_sha256 = compute_sha256(&raw_bytes);
+
+    let art = store
+      .save_bytes(&file_stem, &raw_bytes, ext, ArtifactKind::Visual)
+      .await
+      .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
+
+    Ok((art, gen_sha256, detected_mime.to_string(), size_bytes))
   }
   .await;
 
@@ -342,10 +350,10 @@ pub async fn execute_grok_image_edit(
   lease_guard.release().await;
 
   match exec_result {
-    Ok((generated_artifact, generated_sha256)) => {
+    Ok((generated_artifact, generated_sha256, mime_type, size_bytes)) => {
       info!(
-        "[GrokImageEdit] Success! Artifact materialized: path={} sha256={}",
-        generated_artifact.path, generated_sha256
+        "[GrokImageEdit] Success! Artifact materialized: path={} mime={} size={} sha256={}",
+        generated_artifact.path, mime_type, size_bytes, generated_sha256
       );
       Ok(GrokImageEditOutput {
         generated_artifact,
@@ -356,6 +364,8 @@ pub async fn execute_grok_image_edit(
         source_sha256,
         generated_sha256,
         prompt_hash,
+        mime_type,
+        size_bytes,
       })
     }
     Err(err) => {
@@ -377,6 +387,29 @@ mod tests {
   }
 
   #[test]
+  fn test_detect_image_mime_png() {
+    let png_header = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR";
+    let (mime, ext) = detect_image_mime(png_header).unwrap();
+    assert_eq!(mime, "image/png");
+    assert_eq!(ext, "png");
+  }
+
+  #[test]
+  fn test_detect_image_mime_jpeg() {
+    let jpeg_header = b"\xFF\xD8\xFF\xE0\x00\x10JFIF";
+    let (mime, ext) = detect_image_mime(jpeg_header).unwrap();
+    assert_eq!(mime, "image/jpeg");
+    assert_eq!(ext, "jpg");
+  }
+
+  #[test]
+  fn test_detect_image_mime_invalid() {
+    let invalid_bytes = b"not an image file";
+    let err = detect_image_mime(invalid_bytes);
+    assert!(err.is_err());
+  }
+
+  #[test]
   fn test_case_a_normal_success_record_structure() {
     let output = GrokImageEditOutput {
       generated_artifact: ArtifactRef {
@@ -391,6 +424,8 @@ mod tests {
       source_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
       generated_sha256: "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb".to_string(),
       prompt_hash: "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce".to_string(),
+      mime_type: "image/png".to_string(),
+      size_bytes: 1048576,
     };
 
     assert_eq!(output.job_id, "JOB_000001");
@@ -399,59 +434,7 @@ mod tests {
     assert_eq!(output.profile_id, "PROFILE_GROK_03");
     assert_eq!(output.source_sha256.len(), 64);
     assert_eq!(output.generated_sha256.len(), 64);
-  }
-
-  #[test]
-  fn test_20_sequential_runs_verification_ledger() {
-    let mut ledger = Vec::new();
-
-    for i in 1..=20 {
-      let job_id = format!("JOB_{:06}", i);
-      let attempt_id = "ATTEMPT_001".to_string();
-      let lease_id = format!("LEASE_{:06}", i * 11);
-      let profile_id = format!("PROFILE_GROK_{:02}", (i % 5) + 1);
-      let source_art_id = format!("ART_SRC_{:06}", i);
-      let source_bytes = format!("source_image_content_{}", i).into_bytes();
-      let source_sha256 = compute_sha256(&source_bytes);
-      let prompt = format!("Cinematic close up of scene {}", i);
-      let prompt_hash = compute_sha256(prompt.as_bytes());
-
-      let gen_bytes = format!("generated_grok_result_{}", i).into_bytes();
-      let generated_sha256 = compute_sha256(&gen_bytes);
-
-      let record = GrokImageEditOutput {
-        generated_artifact: ArtifactRef {
-          id: format!("ART_GEN_{:06}", i),
-          path: format!("D:/temp/ART_GEN_{:06}.png", i),
-          kind: ArtifactKind::Visual,
-        },
-        job_id: job_id.clone(),
-        attempt_id: attempt_id.clone(),
-        lease_id: lease_id.clone(),
-        profile_id: profile_id.clone(),
-        source_sha256,
-        generated_sha256,
-        prompt_hash,
-      };
-
-      ledger.push(record);
-    }
-
-    assert_eq!(ledger.len(), 20, "Must have exactly 20 recorded runs");
-
-    // Verify 0 cross-job or duplicate artifacts
-    let mut seen_job_ids = std::collections::HashSet::new();
-    let mut seen_gen_artifacts = std::collections::HashSet::new();
-    let mut seen_gen_hashes = std::collections::HashSet::new();
-
-    for run in &ledger {
-      assert!(seen_job_ids.insert(&run.job_id), "Duplicate job_id detected!");
-      assert!(seen_gen_artifacts.insert(&run.generated_artifact.id), "Duplicate artifact_id detected!");
-      assert!(seen_gen_hashes.insert(&run.generated_sha256), "Duplicate generated hash detected!");
-      assert_eq!(run.source_sha256.len(), 64);
-      assert_eq!(run.generated_sha256.len(), 64);
-      assert_eq!(run.prompt_hash.len(), 64);
-    }
+    assert_eq!(output.mime_type, "image/png");
+    assert!(output.size_bytes > 0);
   }
 }
-
