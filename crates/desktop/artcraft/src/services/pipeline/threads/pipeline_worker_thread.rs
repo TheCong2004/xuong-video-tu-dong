@@ -263,6 +263,76 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     .filter(|saved| saved.job_id == job_id_str)
     .unwrap_or(pipeline_context_from_input(&job_id_str, &input, &prompt, model_id.clone(), &language, target_duration_seconds, output_mode, local_file.clone(), source_url.clone(), story_url.clone(), Some(content_source.as_str().to_string()))?);
 
+  // Production Grok Image Edit Workflow Call Site (Fail-Closed)
+  let is_grok_image_edit = workflow_mode == "grok_image_edit"
+    || workflow_mode == "image_edit"
+    || input.get("method").and_then(Value::as_str) == Some("grok.image.edit")
+    || input.get("service").and_then(Value::as_str) == Some("grok");
+
+  if is_grok_image_edit {
+    check_cancelled(&job_id_str, PipelineStage::ScriptGenerating)?;
+
+    // 1. Mandatory Page validation (fail-closed)
+    let page_id = input.get("page_id")
+      .or_else(|| input.get("page"))
+      .and_then(Value::as_str)
+      .ok_or_else(|| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_REQUIRED", "Grok image edit workflow requires page_id".to_string()))?;
+
+    // 2. Mandatory Prompt validation (fail-closed)
+    if prompt.trim().is_empty() {
+      return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_PROMPT_REQUIRED", "Grok image edit workflow requires a non-empty image prompt".to_string()).into());
+    }
+
+    // 3. Mandatory Source Image Artifact validation (fail-closed)
+    let source_image_artifact = if let Some(art_val) = input.get("source_image_artifact").or_else(|| input.get("source_artifact")) {
+      serde_json::from_value::<ArtifactRef>(art_val.clone())
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Invalid source image artifact: {e}")))?
+    } else if let Some(local_path) = local_file.as_deref() {
+      let path = std::path::Path::new(local_path);
+      if !path.exists() {
+        return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Source image file does not exist at {local_path}")).into());
+      }
+      let (detected_mime, _ext) = crate::services::pipeline::grok_image_edit_stage::detect_image_mime(&std::fs::read(path).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e))?;
+      let stored = ArtifactStore::register_typed_artifact(
+        &work_dir,
+        &job_id_str,
+        StageId::StoryScript,
+        "input",
+        ArtifactKind::GeneratedImage,
+        path,
+        serde_json::json!({ "mime_type": detected_mime }),
+      ).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?;
+      stored.to_artifact_ref(StageId::StoryScript)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?
+    } else if let Some(first_art) = context.artifact_refs.iter().find(|a| a.kind == ArtifactKind::GeneratedImage || a.kind == ArtifactKind::Story || a.kind == ArtifactKind::SourceVideo) {
+      first_art.clone()
+    } else {
+      return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", "Grok image edit workflow requires a source image artifact".to_string()).into());
+    };
+
+    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::PreflightCheck, PipelineStage::ScriptGenerating, 50, "Editing image via Grok worker").await?;
+
+    let attempt_id = "1";
+    let edit_output = run_grok_image_edit_stage(
+      &job_id_str,
+      page_id,
+      source_image_artifact,
+      &prompt,
+      &work_dir,
+      attempt_id,
+    ).await?;
+
+    // Push GeneratedImage to context and persist outputs as IMAGE_DONE
+    context.artifact_refs.push(edit_output.generated_artifact.clone());
+    outputs["image_edit"] = serde_json::to_value(&edit_output).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_EDIT_SERIALIZATION_FAILED", e.to_string()))?;
+    outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_EDIT_SERIALIZATION_FAILED", e.to_string()))?;
+    outputs["status"] = json!("IMAGE_DONE");
+    persist_outputs(task_database, &job.id, PipelineStage::ScriptReady, &serialize_outputs(&outputs)?).await?;
+    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptGenerating, PipelineStage::ScriptReady, 100, "Image edited successfully via Grok").await?;
+    return Ok(());
+  }
+
   if let Some(resume_from) = prepare_resume(&mut context).map_err(contract_pipeline_run_error)? {
     invalidate_output_values(&mut outputs, resume_from);
     info!("[JOB][RESUME] Resuming canonical pipeline at {resume_from}; valid upstream artifacts will be reused");
@@ -1343,7 +1413,7 @@ pub async fn run_grok_image_edit_stage(
   };
   execute_grok_image_edit_stage(input, attempt_id)
     .await
-    .map_err(|err| PipelineRunError::new(PipelineStage::PreflightCheck, "GROK_IMAGE_EDIT_FAILED", err))
+    .map_err(|err| PipelineRunError::new(PipelineStage::ScriptGenerating, "GROK_IMAGE_EDIT_FAILED", err))
 }
 
 #[cfg(test)]
