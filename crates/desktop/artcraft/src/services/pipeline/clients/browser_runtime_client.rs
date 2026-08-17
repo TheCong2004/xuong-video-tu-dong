@@ -3,11 +3,19 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-const DEFAULT_BROWSER_RUNTIME_URL: &str = "http://127.0.0.1:4545";
+const DEFAULT_DONUT_BROWSER_API_URL: &str = "http://127.0.0.1:10108";
+const DEFAULT_EXTENSION_BRIDGE_URL: &str = "http://127.0.0.1:10108";
 
-fn get_browser_runtime_base_url() -> String {
+pub fn get_donut_browser_api_base_url() -> String {
   std::env::var("DONUT_BROWSER_API_URL")
-    .unwrap_or_else(|_| DEFAULT_BROWSER_RUNTIME_URL.to_string())
+    .unwrap_or_else(|_| DEFAULT_DONUT_BROWSER_API_URL.to_string())
+    .trim_end_matches('/')
+    .to_string()
+}
+
+pub fn get_extension_bridge_base_url() -> String {
+  std::env::var("EXTENSION_BRIDGE_URL")
+    .unwrap_or_else(|_| DEFAULT_EXTENSION_BRIDGE_URL.to_string())
     .trim_end_matches('/')
     .to_string()
 }
@@ -68,7 +76,7 @@ pub struct ListWorkersResponse {
 
 /// Acquire an exclusive worker lease from donutbrowser runtime.
 pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerResponse, String> {
-  let base_url = get_browser_runtime_base_url();
+  let base_url = get_donut_browser_api_base_url();
   let client = Client::builder()
     .timeout(Duration::from_secs(10))
     .build()
@@ -101,7 +109,7 @@ pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerRe
 
 /// Renew an active lease heartbeat.
 pub async fn heartbeat_lease(lease_id: &str, req: HeartbeatLeaseRequest) -> Result<HeartbeatLeaseResponse, String> {
-  let base_url = get_browser_runtime_base_url();
+  let base_url = get_donut_browser_api_base_url();
   let client = Client::builder()
     .timeout(Duration::from_secs(5))
     .build()
@@ -130,7 +138,7 @@ pub async fn heartbeat_lease(lease_id: &str, req: HeartbeatLeaseRequest) -> Resu
 
 /// Idempotently release a worker lease.
 pub async fn release_lease(lease_id: &str) -> Result<ReleaseLeaseResponse, String> {
-  let base_url = get_browser_runtime_base_url();
+  let base_url = get_donut_browser_api_base_url();
   let client = Client::builder()
     .timeout(Duration::from_secs(5))
     .build()
@@ -160,7 +168,7 @@ pub async fn release_lease(lease_id: &str) -> Result<ReleaseLeaseResponse, Strin
 
 /// Query worker health and list all workers.
 pub async fn list_workers() -> Result<ListWorkersResponse, String> {
-  let base_url = get_browser_runtime_base_url();
+  let base_url = get_donut_browser_api_base_url();
   let client = Client::builder()
     .timeout(Duration::from_secs(5))
     .build()

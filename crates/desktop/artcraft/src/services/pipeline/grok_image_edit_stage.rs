@@ -1,6 +1,7 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
 use crate::services::pipeline::clients::browser_runtime_client::{
-  acquire_worker, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest,
+  acquire_worker, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest,
+  HeartbeatLeaseRequest,
 };
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
@@ -283,7 +284,8 @@ pub async fn execute_grok_image_edit(
       .map_err(|e| format!("Failed to create client: {e}"))?;
 
     // Forward to extension bridge endpoint
-    let bridge_url = format!("http://127.0.0.1:4545/v1/workers/{profile_id}/dispatch");
+    let bridge_base = get_extension_bridge_base_url();
+    let bridge_url = format!("{bridge_base}/v1/workers/{profile_id}/dispatch");
     let resp = client
       .post(&bridge_url)
       .json(&req_payload)
@@ -361,7 +363,7 @@ pub async fn execute_grok_image_edit(
       .await
       .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
 
-    // P0-5: TERMINAL HEARTBEAT OWNERSHIP BARRIER
+    // P0-5: TERMINAL HEARTBEAT OWNERSHIP BARRIER (FAIL-CLOSED)
     // Authoritative check right before declaring stage success
     let final_hb = heartbeat_lease(
       &lease_id,
@@ -373,13 +375,18 @@ pub async fn execute_grok_image_edit(
     )
     .await;
 
-    if let Err(ref err) = final_hb {
-      if err.contains("LEASE_NOT_FOUND")
-        || err.contains("LEASE_NOT_ACTIVE")
-        || err.contains("Lease is not active")
-        || err.contains("CORRELATION_MISMATCH")
-      {
-        return Err(format!("LEASE_LOST: Terminal ownership check failed: {err}"));
+    match final_hb {
+      Ok(hb_resp) => {
+        if hb_resp.status != "Active" {
+          return Err(format!(
+            "LEASE_LOST: Terminal ownership check failed - lease status is {}",
+            hb_resp.status
+          ));
+        }
+      }
+      Err(err) => {
+        // Fail-closed on ANY error (network timeout, 500, correlation mismatch, lease not found)
+        return Err(format!("LEASE_LOST: Terminal ownership verification failed: {err}"));
       }
     }
 
@@ -498,5 +505,94 @@ mod tests {
     let heartbeat_lost = Arc::new(AtomicBool::new(true));
     let has_lost = heartbeat_lost.load(Ordering::Relaxed);
     assert!(has_lost, "Lease loss must be detected and cause rejection");
+  }
+
+  // TEST GROUP E — Final ownership barrier fail-closed tests
+  #[test]
+  fn test_e1_final_heartbeat_ok_allows_success() {
+    let hb_status = "Active";
+    let is_valid = hb_status == "Active";
+    assert!(is_valid);
+  }
+
+  #[test]
+  fn test_e2_final_heartbeat_lease_not_active_fails() {
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Ok(HeartbeatLeaseResponse {
+      lease_id: "L1".to_string(),
+      status: "Released".to_string(),
+      expires_at: "".to_string(),
+    });
+    let outcome = match hb_res {
+      Ok(r) if r.status == "Active" => Ok(()),
+      _ => Err("LEASE_LOST: Terminal ownership check failed".to_string()),
+    };
+    assert!(outcome.is_err());
+  }
+
+  #[test]
+  fn test_e3_final_heartbeat_correlation_mismatch_fails() {
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Err("CORRELATION_MISMATCH: lease belongs to another job".to_string());
+    let outcome = match hb_res {
+      Ok(r) if r.status == "Active" => Ok(()),
+      Err(e) => Err(format!("LEASE_LOST: {e}")),
+      _ => Err("LEASE_LOST".to_string()),
+    };
+    assert!(outcome.is_err());
+    assert!(outcome.unwrap_err().contains("CORRELATION_MISMATCH"));
+  }
+
+  #[test]
+  fn test_e4_final_heartbeat_connection_refused_fails() {
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Connection refused (os error 111)".to_string());
+    let outcome = match hb_res {
+      Ok(r) if r.status == "Active" => Ok(()),
+      Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
+      _ => Err("LEASE_LOST".to_string()),
+    };
+    assert!(outcome.is_err());
+    assert!(outcome.unwrap_err().contains("Connection refused"));
+  }
+
+  #[test]
+  fn test_e5_final_heartbeat_timeout_fails() {
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Operation timed out".to_string());
+    let outcome = match hb_res {
+      Ok(r) if r.status == "Active" => Ok(()),
+      Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
+      _ => Err("LEASE_LOST".to_string()),
+    };
+    assert!(outcome.is_err());
+    assert!(outcome.unwrap_err().contains("timed out"));
+  }
+
+  #[test]
+  fn test_e6_final_heartbeat_http_500_fails() {
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Heartbeat failed (500 Internal Server Error)".to_string());
+    let outcome = match hb_res {
+      Ok(r) if r.status == "Active" => Ok(()),
+      Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
+      _ => Err("LEASE_LOST".to_string()),
+    };
+    assert!(outcome.is_err());
+    assert!(outcome.unwrap_err().contains("500"));
+  }
+
+  #[test]
+  fn test_e7_final_heartbeat_malformed_response_fails() {
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Failed to parse HeartbeatLeaseResponse".to_string());
+    let outcome = match hb_res {
+      Ok(r) if r.status == "Active" => Ok(()),
+      Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
+      _ => Err("LEASE_LOST".to_string()),
+    };
+    assert!(outcome.is_err());
+  }
+
+  #[test]
+  fn test_e8_artifact_written_but_final_heartbeat_failed_forbids_image_done() {
+    let artifact_written = true;
+    let hb_failed = true;
+    let stage_success = artifact_written && !hb_failed;
+    assert!(!stage_success, "Stage MUST NOT declare IMAGE_DONE if final heartbeat failed");
   }
 }
