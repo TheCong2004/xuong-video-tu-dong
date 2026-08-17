@@ -266,8 +266,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
   // Production Grok Image Edit Workflow Call Site (Fail-Closed)
   let is_grok_image_edit = workflow_mode == "grok_image_edit"
     || workflow_mode == "image_edit"
-    || input.get("method").and_then(Value::as_str) == Some("grok.image.edit")
-    || input.get("service").and_then(Value::as_str) == Some("grok");
+    || input.get("method").and_then(Value::as_str) == Some("grok.image.edit");
 
   if is_grok_image_edit {
     check_cancelled(&job_id_str, PipelineStage::ScriptGenerating)?;
@@ -288,24 +287,35 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       serde_json::from_value::<ArtifactRef>(art_val.clone())
         .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Invalid source image artifact: {e}")))?
     } else if let Some(local_path) = local_file.as_deref() {
-      let path = std::path::Path::new(local_path);
-      if !path.exists() {
+      let src_path = std::path::Path::new(local_path);
+      if !src_path.exists() {
         return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Source image file does not exist at {local_path}")).into());
       }
-      let (detected_mime, _ext) = crate::services::pipeline::grok_image_edit_stage::detect_image_mime(&std::fs::read(path).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?)
+      let raw_bytes = std::fs::read(src_path)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Cannot read source image file: {e}")))?;
+      let (detected_mime, ext) = crate::services::pipeline::grok_image_edit_stage::detect_image_mime(&raw_bytes)
         .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e))?;
+
+      // Physical copy into canonical workflow root before ArtifactStore registration
+      let input_dir = work_dir.join("input");
+      std::fs::create_dir_all(&input_dir)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Cannot create input directory in workflow root: {e}")))?;
+      let target_file_path = input_dir.join(format!("source_image.{ext}"));
+      std::fs::write(&target_file_path, &raw_bytes)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Cannot write source image to workflow root: {e}")))?;
+
       let stored = ArtifactStore::register_typed_artifact(
         &work_dir,
         &job_id_str,
         StageId::StoryScript,
         "input",
         ArtifactKind::GeneratedImage,
-        path,
+        &target_file_path,
         serde_json::json!({ "mime_type": detected_mime }),
       ).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?;
       stored.to_artifact_ref(StageId::StoryScript)
         .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?
-    } else if let Some(first_art) = context.artifact_refs.iter().find(|a| a.kind == ArtifactKind::GeneratedImage || a.kind == ArtifactKind::Story || a.kind == ArtifactKind::SourceVideo) {
+    } else if let Some(first_art) = context.artifact_refs.iter().find(|a| a.kind == ArtifactKind::GeneratedImage) {
       first_art.clone()
     } else {
       return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", "Grok image edit workflow requires a source image artifact".to_string()).into());
@@ -323,13 +333,13 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       attempt_id,
     ).await?;
 
-    // Push GeneratedImage to context and persist outputs as IMAGE_DONE
+    // Push GeneratedImage to context, persist outputs, and finalize job with CompleteSuccess
     context.artifact_refs.push(edit_output.generated_artifact.clone());
     outputs["image_edit"] = serde_json::to_value(&edit_output).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_EDIT_SERIALIZATION_FAILED", e.to_string()))?;
     outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_EDIT_SERIALIZATION_FAILED", e.to_string()))?;
     outputs["status"] = json!("IMAGE_DONE");
-    persist_outputs(task_database, &job.id, PipelineStage::ScriptReady, &serialize_outputs(&outputs)?).await?;
-    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptGenerating, PipelineStage::ScriptReady, 100, "Image edited successfully via Grok").await?;
+    let serialized_outputs = serialize_outputs(&outputs)?;
+    finalize_image_done(app_handle, task_database, &job.id, &edit_output.generated_artifact.location, &serialized_outputs).await?;
     return Ok(());
   }
 
@@ -846,6 +856,13 @@ async fn finalize_draft_ready(app_handle: &AppHandle, task_database: &TaskDataba
   update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::DraftReady, maybe_stage_outputs: Some(outputs_string) }).await?;
   update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
   emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "draft".to_string(), stage: PipelineStage::DraftReady.to_str().to_string(), progress: 100, draft_url: draft_url.to_string(), video_url: None, rendering_supported: false });
+  Ok(())
+}
+
+async fn finalize_image_done(app_handle: &AppHandle, task_database: &TaskDatabase, job_id: &PipelineJobId, image_location: &str, outputs_string: &str) -> AnyhowResult<()> {
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string) }).await?;
+  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
+  emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "image".to_string(), stage: PipelineStage::Completed.to_str().to_string(), progress: 100, draft_url: image_location.to_string(), video_url: None, rendering_supported: false });
   Ok(())
 }
 
