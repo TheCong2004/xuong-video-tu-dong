@@ -4,10 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
 const DEFAULT_DONUT_BROWSER_API_URL: &str = "http://127.0.0.1:10108";
-const DEFAULT_EXTENSION_BRIDGE_URL: &str = "http://127.0.0.1:10108";
 
 pub fn get_donut_browser_api_base_url() -> String {
   std::env::var("DONUT_BROWSER_API_URL")
+    .or_else(|_| std::env::var("BROWSER_RUNTIME_URL"))
     .unwrap_or_else(|_| DEFAULT_DONUT_BROWSER_API_URL.to_string())
     .trim_end_matches('/')
     .to_string()
@@ -15,7 +15,7 @@ pub fn get_donut_browser_api_base_url() -> String {
 
 pub fn get_extension_bridge_base_url() -> String {
   std::env::var("EXTENSION_BRIDGE_URL")
-    .unwrap_or_else(|_| DEFAULT_EXTENSION_BRIDGE_URL.to_string())
+    .unwrap_or_else(|_| get_donut_browser_api_base_url())
     .trim_end_matches('/')
     .to_string()
 }
