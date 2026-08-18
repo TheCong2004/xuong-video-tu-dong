@@ -1,34 +1,13 @@
 import { create } from "zustand";
-import { useSceneStore } from "@storyteller/ui-pagedraw";
 
 export type TabId =
-  | "2D"
-  | "3D"
-  | "VIDEO"
-  | "EDIT"
-  | "IMAGE"
-  | "AUDIO"
   | "APPS"
-  | "VIDEO_FRAME_EXTRACTOR"
-  | "VIDEO_WATERMARK_REMOVAL"
-  | "IMAGE_WATERMARK_REMOVAL"
-  | "IMAGE_TO_3D_OBJECT"
-  | "IMAGE_TO_3D_WORLD"
-  | "REMOVE_BACKGROUND"
-  | "ANGLES"
-  | "STORYBOARD"
-  | "BACKGROUND_CHANGE"
-  | "VIDEO_EDITOR"
-  | "MOODBOARD"
+  | "FLOWORD_STUDIO"
   | "CAPCUT_AUTOMATION"
+  | "OMNI_ROUTE"
   | "YOUWEE"
   | "MEDIA_CRAWLER"
-  | "OPEN_MONTAGE"
-  | "FREE_LLM_API"
-  | "OMNI_ROUTE"
-  | "FLOWORD_STUDIO"
-  | "INKOS"
-  | "VYNARO";
+  | "INKOS";
 
 const DEFAULT_TAB: TabId = "FLOWORD_STUDIO";
 
@@ -52,39 +31,10 @@ export const useTabStore = create<TabState>((set, get) => ({
 
   setActiveTab: async (newTabId) => {
     const currentTabId = get().activeTabId;
-
-    // Don't do anything if we're already on this tab
     if (currentTabId === newTabId) return true;
 
-    try {
-      // Save current 2D state if we're leaving 2D tab
-      if (currentTabId === "2D") {
-        const sceneStore = useSceneStore.getState();
-        const sceneState = await sceneStore.serializeSceneToString();
-        set((state) => ({
-          tabData: {
-            ...state.tabData,
-            "2D": sceneState,
-          },
-        }));
-      }
-
-      // Load 2D state if we're entering 2D tab
-      if (newTabId === "2D") {
-        const savedState = get().tabData["2D"];
-        if (savedState) {
-          const sceneStore = useSceneStore.getState();
-          sceneStore.loadSceneFromString(savedState);
-        }
-      }
-
-      // Update active tab
-      set({ activeTabId: newTabId });
-      return true;
-    } catch (error) {
-      console.error("Error during tab change:", error);
-      return false;
-    }
+    set({ activeTabId: newTabId });
+    return true;
   },
 
   updateTabData: (tabId, data) => {

@@ -15,22 +15,31 @@ export interface MenuIconItem {
 }
 
 interface MenuIconSelectorProps {
-  menuItems: MenuIconItem[];
-  activeMenu: string;
-  onMenuChange: (menuId: string) => void;
+  menuItems?: MenuIconItem[];
+  items?: MenuIconItem[];
+  activeMenu?: string;
+  activeId?: string;
+  onMenuChange?: (menuId: string) => void;
+  onChange?: (menuId: string) => void;
   className?: string;
   disabled?: boolean;
   disabledMessage?: string;
 }
 
 export const MenuIconSelector: React.FC<MenuIconSelectorProps> = ({
-  menuItems,
-  activeMenu,
+  menuItems: rawMenuItems,
+  items: rawItems,
+  activeMenu: rawActiveMenu,
+  activeId: rawActiveId,
   onMenuChange,
+  onChange,
   className,
   disabled,
   disabledMessage,
 }) => {
+  const menuItems = rawMenuItems || rawItems || [];
+  const activeMenu = rawActiveMenu || rawActiveId || "";
+  const handleChange = onMenuChange || onChange || (() => {});
   const selectedIndex = menuItems.findIndex((item) => item.id === activeMenu);
   const [hoveredIndex, setHoveredIndex] = useState<number>(-1);
   const itemsRef = useRef<(HTMLButtonElement | null)[]>([]);
@@ -148,7 +157,7 @@ export const MenuIconSelector: React.FC<MenuIconSelectorProps> = ({
                   itemsRef.current[idx] = el;
                 }}
                 disabled={disabled}
-                onClick={() => !disabled && onMenuChange(item.id)}
+                onClick={() => !disabled && handleChange(item.id)}
                 onMouseEnter={() => setHoveredIndex(idx)}
                 className={twMerge(
                   "relative z-30 flex flex-col items-center justify-center px-3 py-2 rounded-full transition-all duration-150 text-base-fg",

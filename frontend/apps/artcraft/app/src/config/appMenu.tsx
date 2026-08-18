@@ -1,57 +1,21 @@
 import { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import {
-  faCube,
-  faFilm,
-  faImage,
-  faMusic,
-  faDroplet,
-  faPhotoFilm,
   faGlobe,
-  faPencil,
-  faWandMagicSparkles,
-  faPenNib,
-  faCrosshairs,
   faSparkles,
-  faObjectGroup,
   faClapperboardPlay,
   faCloudArrowDown,
   faSpider,
-  faKey,
 } from "@fortawesome/pro-solid-svg-icons";
 import { useMemo } from "react";
-import {
-  useExperimentalStore,
-  useStoryboardPageEnabled,
-} from "@storyteller/ui-settings-modal";
 import { useTabStore, TabId } from "~/pages/Stores/TabState";
 
 export type AppId =
-  | "IMAGE"
-  | "VIDEO"
-  | "AUDIO"
-  | "EDIT"
-  | "2D"
-  | "3D"
-  | "VIDEO_FRAME_EXTRACTOR"
-  | "VIDEO_WATERMARK_REMOVAL"
-  | "IMAGE_WATERMARK_REMOVAL"
-  | "IMAGE_TO_3D_OBJECT"
-  | "IMAGE_TO_3D_WORLD"
-  | "REMOVE_BACKGROUND"
-  | "ANGLES"
-  | "STORYBOARD"
-  | "BACKGROUND_CHANGE"
-  | "VIDEO_EDITOR"
-  | "MOODBOARD"
+  | "FLOWORD_STUDIO"
   | "CAPCUT_AUTOMATION"
+  | "OMNI_ROUTE"
   | "YOUWEE"
   | "MEDIA_CRAWLER"
-  | "OPEN_MONTAGE"
-  | "FREE_LLM_API"
-  | "OMNI_ROUTE"
-  | "FLOWORD_STUDIO"
-  | "INKOS"
-  | "VYNARO";
+  | "INKOS";
 
 export interface AppDescriptor {
   id: AppId;
@@ -67,15 +31,7 @@ export const APP_DESCRIPTORS: AppDescriptor[] = [
     id: "FLOWORD_STUDIO",
     label: "Floword Studio",
     icon: faSparkles,
-    description: "All-in-one automated video production console.",
-    large: true,
-  },
-  {
-    id: "2D",
-    label: "Image Editor",
-    icon: faPenNib,
-    imageSrc: "/resources/gifs/2D_CANVAS_DEMO.webp",
-    description: "Layer-based 2D canvas editor for graphics and thumbnail design.",
+    description: "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng).",
     large: true,
   },
   {
@@ -86,11 +42,17 @@ export const APP_DESCRIPTORS: AppDescriptor[] = [
     large: true,
   },
   {
-    id: "3D",
-    label: "3D Stage",
-    icon: faCube,
-    imageSrc: "/resources/gifs/3D_CANVAS_DEMO.webp",
-    description: "Precision control for 3D AI film staging.",
+    id: "OMNI_ROUTE",
+    label: "OmniRoute",
+    icon: faGlobe,
+    description: "Router 290+ Nhà cung cấp LLM, MCP Server & A2A Protocol.",
+    large: true,
+  },
+  {
+    id: "YOUWEE",
+    label: "Youwee",
+    icon: faCloudArrowDown,
+    description: "Download & process video media.",
     large: false,
   },
 ];
@@ -103,8 +65,6 @@ export interface FullAppItem {
   category: "generate" | "edit";
   badge?: "NEW" | "BEST" | "SOON" | "BETA";
   action?: AppId;
-  /** Legacy single-tone icon-square background (e.g. "bg-blue-600/40"). Still
-   *  used as the fallback for the apps-page card styling. */
   color?: string;
 }
 
@@ -115,110 +75,35 @@ interface AppCardPalette {
 }
 
 const APP_CARD_PALETTES: Record<string, AppCardPalette> = {
-  "text-to-image": {
-    accent: "from-blue-500/20 to-blue-500/0",
-    iconBg: "bg-blue-500/20 border-blue-400/30",
-    iconColor: "text-blue-300",
-  },
-  "image-to-video": {
-    accent: "from-amber-500/20 to-amber-500/0",
-    iconBg: "bg-amber-500/20 border-amber-400/30",
-    iconColor: "text-amber-300",
-  },
-  "create-audio": {
-    accent: "from-pink-500/20 to-pink-500/0",
-    iconBg: "bg-pink-500/20 border-pink-400/30",
-    iconColor: "text-pink-300",
-  },
-  "image-to-3d-object": {
-    accent: "from-emerald-500/20 to-emerald-500/0",
-    iconBg: "bg-emerald-500/20 border-emerald-400/30",
-    iconColor: "text-emerald-300",
-  },
-  "image-to-3d-world": {
-    accent: "from-sky-500/20 to-sky-500/0",
-    iconBg: "bg-sky-500/20 border-sky-400/30",
-    iconColor: "text-sky-300",
-  },
-  angles: {
-    accent: "from-lime-500/20 to-lime-500/0",
-    iconBg: "bg-lime-500/20 border-lime-400/30",
-    iconColor: "text-lime-300",
-  },
-  storyboard: {
-    accent: "from-fuchsia-500/20 to-fuchsia-500/0",
-    iconBg: "bg-fuchsia-500/20 border-fuchsia-400/30",
-    iconColor: "text-fuchsia-300",
-  },
-  "2d-canvas": {
-    accent: "from-sky-500/20 to-sky-500/0",
-    iconBg: "bg-sky-500/20 border-sky-400/30",
-    iconColor: "text-sky-300",
-  },
-  "3d-editor": {
-    accent: "from-emerald-500/20 to-emerald-500/0",
-    iconBg: "bg-emerald-500/20 border-emerald-400/30",
-    iconColor: "text-emerald-300",
-  },
-  "edit-image": {
+  "floword-studio": {
     accent: "from-purple-500/20 to-purple-500/0",
     iconBg: "bg-purple-500/20 border-purple-400/30",
     iconColor: "text-purple-300",
-  },
-  "remove-background": {
-    accent: "from-violet-500/20 to-violet-500/0",
-    iconBg: "bg-violet-500/20 border-violet-400/30",
-    iconColor: "text-violet-300",
-  },
-  "video-frame-extractor": {
-    accent: "from-rose-500/20 to-rose-500/0",
-    iconBg: "bg-rose-500/20 border-rose-400/30",
-    iconColor: "text-rose-300",
-  },
-  "background-change": {
-    accent: "from-orange-500/20 to-orange-500/0",
-    iconBg: "bg-orange-500/20 border-orange-400/30",
-    iconColor: "text-orange-300",
-  },
-  "video-editor": {
-    accent: "from-teal-500/20 to-teal-500/0",
-    iconBg: "bg-teal-500/20 border-teal-400/30",
-    iconColor: "text-teal-300",
   },
   "capcut-automation": {
     accent: "from-cyan-500/20 to-cyan-500/0",
     iconBg: "bg-cyan-500/20 border-cyan-400/30",
     iconColor: "text-cyan-300",
   },
-  youwee: {
-    accent: "from-sky-500/20 to-emerald-500/0",
-    iconBg: "bg-sky-500/20 border-sky-400/30",
-    iconColor: "text-sky-300",
-  },
-  "free-llm-api": {
-    accent: "from-emerald-500/20 to-emerald-500/0",
-    iconBg: "bg-emerald-500/20 border-emerald-400/30",
-    iconColor: "text-emerald-300",
-  },
   "omni-route": {
     accent: "from-indigo-500/20 to-indigo-500/0",
     iconBg: "bg-indigo-500/20 border-indigo-400/30",
     iconColor: "text-indigo-300",
   },
-  "floword-studio": {
-    accent: "from-purple-500/20 to-purple-500/0",
-    iconBg: "bg-purple-500/20 border-purple-400/30",
-    iconColor: "text-purple-300",
+  youwee: {
+    accent: "from-sky-500/20 to-emerald-500/0",
+    iconBg: "bg-sky-500/20 border-sky-400/30",
+    iconColor: "text-sky-300",
   },
-  "video-watermark-removal": {
+  "media-crawler": {
     accent: "from-cyan-500/20 to-cyan-500/0",
     iconBg: "bg-cyan-500/20 border-cyan-400/30",
     iconColor: "text-cyan-300",
   },
-  "image-watermark-removal": {
-    accent: "from-indigo-500/20 to-indigo-500/0",
-    iconBg: "bg-indigo-500/20 border-indigo-400/30",
-    iconColor: "text-indigo-300",
+  inkos: {
+    accent: "from-purple-500/20 to-purple-500/0",
+    iconBg: "bg-purple-500/20 border-purple-400/30",
+    iconColor: "text-purple-300",
   },
 };
 
@@ -233,159 +118,19 @@ export const getAppCardPalette = (id: string): AppCardPalette =>
 
 export const ALL_APPS: FullAppItem[] = [
   {
-    id: "text-to-image",
-    label: "Create Image",
-    description: "Generate AI images",
-    icon: faImage,
-    category: "generate",
-    action: "IMAGE",
-    color: "bg-blue-600/40",
-  },
-  {
-    id: "image-to-video",
-    label: "Create Video",
-    description: "Create video from images",
-    icon: faFilm,
-    category: "generate",
-    action: "VIDEO",
-    color: "bg-amber-500/40",
-  },
-  {
-    id: "create-audio",
-    label: "Create Audio",
-    description: "Generate music and sound effects",
-    icon: faMusic,
-    category: "generate",
-    action: "AUDIO",
-    color: "bg-pink-500/40",
-  },
-  {
-    id: "image-to-3d-object",
-    label: "Image to 3D Object",
-    description: "Convert references into textured assets",
-    icon: faCube,
-    category: "generate",
-    action: "IMAGE_TO_3D_OBJECT",
-    color: "bg-emerald-500/40",
-  },
-  {
-    id: "image-to-3d-world",
-    label: "Image to 3D World",
-    description: "Turn mood boards into explorable worlds",
-    icon: faGlobe,
-    category: "generate",
-    action: "IMAGE_TO_3D_WORLD",
-    color: "bg-blue-500/40",
-  },
-  {
-    id: "free-llm-api",
-    label: "Free LLM API",
-    description: "Quản lý và xoay vòng API Key LLM miễn phí (Google, Groq, Mistral...)",
-    icon: faKey,
-    category: "generate",
-    action: "FREE_LLM_API",
-    color: "bg-emerald-500/40",
-    badge: "NEW",
-  },
-  {
-    id: "edit-image",
-    label: "Edit Image",
-    description: "Change with inpainting",
-    icon: faPencil,
-    category: "edit",
-    action: "2D",
-    color: "bg-purple-600/40",
-  },
-  {
-    id: "video-frame-extractor",
-    label: "Video Frame Extractor",
-    description: "Extract frames from video",
-    icon: faPhotoFilm,
-    category: "edit",
-    action: "VIDEO_FRAME_EXTRACTOR",
-    color: "bg-rose-600/40",
-  },
-  {
-    id: "video-watermark-removal",
-    label: "Video Watermark Remover",
-    description: "Remove watermarks from videos",
-    icon: faDroplet,
-    category: "edit",
-    badge: "SOON",
-    color: "bg-cyan-500/40",
-  },
-  {
-    id: "image-watermark-removal",
-    label: "Image Watermark Remover",
-    description: "Remove watermarks from images",
-    icon: faDroplet,
-    category: "edit",
-    badge: "SOON",
-    color: "bg-indigo-600/40",
-  },
-  {
-    id: "remove-background",
-    label: "Remove Background",
-    description: "Remove backgrounds from images",
-    icon: faWandMagicSparkles,
-    category: "edit",
-    action: "REMOVE_BACKGROUND",
-    color: "bg-violet-500/40",
-  },
-  {
-    id: "angles",
-    label: "Angles",
-    description: "Generate new camera angles from a single photo",
-    icon: faCrosshairs,
-    category: "generate",
-    action: "ANGLES",
-    color: "bg-lime-500/40",
-    badge: "NEW",
-  },
-  {
-    id: "storyboard",
-    label: "Storyboard",
-    description: "Plan your shots with a visual storyboard",
-    icon: faPhotoFilm,
-    category: "generate",
-    action: "STORYBOARD",
-    color: "bg-fuchsia-600/40",
-    badge: "NEW",
-  },
-  {
-    id: "moodboard",
-    label: "Moodboard",
-    description: "Collect references and steer generations from a board",
-    icon: faObjectGroup,
-    category: "generate",
-    action: "MOODBOARD",
-    color: "bg-orange-500/40",
-    badge: "BETA",
-  },
-  {
-    id: "background-change",
-    label: "Background Change",
-    description: "Swap the backdrop of a video using a reference image",
+    id: "floword-studio",
+    label: "Floword Studio",
+    description: "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng)",
     icon: faSparkles,
-    category: "edit",
-    action: "BACKGROUND_CHANGE",
-    color: "bg-orange-500/40",
-    badge: "NEW",
-  },
-  {
-    id: "video-editor",
-    label: "Video Editor",
-    description: "Edit and assemble videos on a timeline",
-    icon: faFilm,
-    category: "edit",
-    action: "VIDEO_EDITOR",
-    color: "bg-teal-500/40",
-    badge: "BETA",
+    category: "generate",
+    action: "FLOWORD_STUDIO",
+    color: "bg-purple-500/40",
+    badge: "BEST",
   },
   {
     id: "capcut-automation",
-    label: "CapCut Automation",
-    description: "Auto-sync footage, audio, and subtitles like CapCut Pilot",
+    label: "CapCut Studio",
+    description: "Auto-sync footage, audio, and subtitles directly to CapCut Drafts",
     icon: faClapperboardPlay,
     category: "edit",
     action: "CAPCUT_AUTOMATION",
@@ -393,10 +138,19 @@ export const ALL_APPS: FullAppItem[] = [
     badge: "NEW",
   },
   {
+    id: "omni-route",
+    label: "OmniRoute",
+    description: "Router 290+ Nhà cung cấp LLM, MCP Server & A2A Protocol",
+    icon: faGlobe,
+    category: "generate",
+    action: "OMNI_ROUTE",
+    color: "bg-indigo-500/40",
+    badge: "NEW",
+  },
+  {
     id: "youwee",
     label: "Youwee",
-    description:
-      "Download & process video (BE like capcut-mate — ArtCraft UI)",
+    description: "Tải và xử lý video đa nền tảng tốc độ cao",
     icon: faCloudArrowDown,
     category: "edit",
     action: "YOUWEE",
@@ -414,96 +168,19 @@ export const ALL_APPS: FullAppItem[] = [
     badge: "NEW",
   },
   {
-    id: "open-montage",
-    label: "OpenMontage",
-    description: "Theo dõi và quản lý quy trình sản xuất video",
-    icon: faPhotoFilm,
-    category: "edit",
-    action: "OPEN_MONTAGE",
-    color: "bg-violet-500/40",
-    badge: "NEW",
-  },
-  {
-    id: "omni-route",
-    label: "OmniRoute",
-    description: "Router 290+ Nhà cung cấp LLM, MCP Server & A2A Protocol",
-    icon: faGlobe,
-    category: "edit",
-    action: "OMNI_ROUTE",
-    color: "bg-indigo-500/40",
-    badge: "NEW",
-  },
-  {
-    id: "floword-studio",
-    label: "Floword Studio",
-    description: "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng)",
-    icon: faSparkles,
-    category: "edit",
-    action: "FLOWORD_STUDIO",
-    color: "bg-purple-500/40",
-    badge: "NEW",
-  },
-  {
     id: "inkos",
     label: "Story Studio",
     description: "InkOS Story Creation AI Agent Workbench",
     icon: faSparkles,
-    category: "edit",
+    category: "generate",
     action: "INKOS",
     color: "bg-purple-600/40",
     badge: "NEW",
   },
-  {
-    id: "vynaro",
-    label: "Vynaro",
-    description: "叙影 — AI Video Narration & Workflow Desktop App",
-    icon: faFilm,
-    category: "edit",
-    action: "VYNARO",
-    color: "bg-pink-600/40",
-    badge: "NEW",
-  },
-  {
-    id: "2d-canvas",
-    label: "Image Editor",
-    description: "Easy edits. Great for graphic design.",
-    icon: faPenNib,
-    category: "edit",
-    action: "2D",
-    color: "bg-sky-500/40",
-  },
-  {
-    id: "3d-editor",
-    label: "3D Stage",
-    description: "Precision control. Great for AI film.",
-    icon: faCube,
-    category: "generate",
-    action: "3D",
-    color: "bg-emerald-600/40",
-  },
 ];
 
-export const GENERATE_APPS = ALL_APPS.filter(
-  (app) => app.category === "generate",
-);
-export const EDIT_APPS = ALL_APPS.filter((app) => app.category === "edit");
-
-const CUSTOMER_FACING_APP_ACTIONS = new Set<string>([
-  "FLOWORD_STUDIO",
-  "2D",
-  "CAPCUT_AUTOMATION",
-  "3D",
-]);
-
 export const useVisibleApps = (): FullAppItem[] => {
-  return useMemo(
-    () =>
-      ALL_APPS.filter((app) => {
-        if (!app.action) return false;
-        return CUSTOMER_FACING_APP_ACTIONS.has(app.action);
-      }),
-    [],
-  );
+  return useMemo(() => ALL_APPS, []);
 };
 
 export const useGenerateApps = (): FullAppItem[] => {
@@ -541,38 +218,15 @@ export const goToApp = (action?: string) => {
   if (
     action &&
     [
-      "IMAGE",
-      "VIDEO",
-      "AUDIO",
-      "2D",
-      "3D",
-      "VIDEO_FRAME_EXTRACTOR",
-      "VIDEO_WATERMARK_REMOVAL",
-      "IMAGE_WATERMARK_REMOVAL",
-      "IMAGE_TO_3D_OBJECT",
-      "IMAGE_TO_3D_WORLD",
-      "REMOVE_BACKGROUND",
-      "ANGLES",
-      "STORYBOARD",
-      "BACKGROUND_CHANGE",
-      "VIDEO_EDITOR",
-      "MOODBOARD",
+      "APPS",
+      "FLOWORD_STUDIO",
       "CAPCUT_AUTOMATION",
+      "OMNI_ROUTE",
       "YOUWEE",
       "MEDIA_CRAWLER",
-      "OPEN_MONTAGE",
-      "FREE_LLM_API",
-      "OMNI_ROUTE",
-      "FLOWORD_STUDIO",
       "INKOS",
-      "VYNARO",
     ].includes(action)
   ) {
-    if (action === "STORYBOARD") {
-      const { enabled, storyboardPageEnabled } =
-        useExperimentalStore.getState();
-      if (!enabled || !storyboardPageEnabled) return;
-    }
     useTabStore.getState().setActiveTab(action as TabId);
   }
 };

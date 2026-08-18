@@ -65,6 +65,9 @@ function probeLoad(binaryPath) {
 
 /** Default rebuild: `npm rebuild better-sqlite3` at the repo root (no shell interpolation). */
 function defaultRebuild() {
+  const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
+  const pnpmResult = spawnSync(pnpm, ["rebuild", "better-sqlite3"], { cwd: ROOT, stdio: "inherit" });
+  if (pnpmResult.status === 0) return true;
   const npm = process.platform === "win32" ? "npm.cmd" : "npm";
   const result = spawnSync(npm, ["rebuild", "better-sqlite3"], { cwd: ROOT, stdio: "inherit" });
   return result.status === 0;

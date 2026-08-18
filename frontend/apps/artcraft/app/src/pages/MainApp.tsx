@@ -1,7 +1,5 @@
-// Top-level shell for the artcraft app. Always-mounted chrome
-// (TopBar, login + pricing modals, toaster, Tauri event listeners,
-// background refresh hooks) lives here, and a single tab-driven
-// switch picks the active page below it.
+// Top-level shell for the Floword / ArtCraft app.
+// Tab-driven switch picks the active page below the TopBar.
 
 import React, { Component, useEffect, useState } from "react";
 import * as gpu from "detect-gpu";
@@ -9,67 +7,30 @@ import { useSignals } from "@preact/signals-react/runtime";
 
 import { TopBar } from "~/components";
 import { ErrorDialog } from "~/components";
-import { LoginModal, useLoginModalStore } from "@storyteller/ui-login-modal";
-import { toast, Toaster } from "@storyteller/ui-toaster";
-import {
-  GalleryDragComponent,
-  GalleryItem,
-  onImageDrop,
-  removeImageDropListener,
-} from "@storyteller/ui-gallery-modal";
-import {
-  PricingModal,
-  CreditsModal,
-  useCreditsModalStore,
-} from "@storyteller/ui-pricing-modal";
-import {
-  isActionReminderOpen,
-  actionReminderProps,
-  ActionReminderModal,
-} from "@storyteller/ui-action-reminder-modal";
-import {
-  useGenerationEnqueueSuccessEvent,
-} from "@storyteller/tauri-events";
-import { useStoryboardPageEnabled } from "@storyteller/ui-settings-modal";
-import { DomLevels, usePageSceneStore } from "@storyteller/ui-pagescene";
-
+import { Toaster } from "@storyteller/ui-toaster";
 import { useActiveJobs } from "~/hooks/useActiveJobs";
 import { useBackgroundLoadingMedia } from "~/hooks/useBackgroundLoadingMedia";
-import { UsersApi } from "~/Classes/ApiManager";
-import { authentication } from "~/signals";
-import { AUTH_STATUS } from "~/enums";
 import { useTabStore } from "./Stores/TabState";
 
 import { AppsIndexPage } from "./PageApps/AppsIndexPage";
-const PageDraw = React.lazy(() => import("./PageDraw/PageDraw"));
-const TextToImage = React.lazy(() => import("./PageImage/TextToImage"));
-const ImageToVideo = React.lazy(() => import("./PageVideo/ImageToVideo"));
-const CreateAudio = React.lazy(() => import("./PageAudio/CreateAudio"));
-const VideoFrameExtractor = React.lazy(() => import("./PageVideoFrameExtractor").then(m => ({ default: m.VideoFrameExtractor })));
-const VideoWatermarkRemover = React.lazy(() => import("./PageVideoWatermarkRemover").then(m => ({ default: m.VideoWatermarkRemover })));
-const ImageWatermarkRemover = React.lazy(() => import("./PageImageWatermarkRemover").then(m => ({ default: m.ImageWatermarkRemover })));
-const ImageTo3DObject = React.lazy(() => import("./PageImageTo3DObject").then(m => ({ default: m.ImageTo3DObject })));
-const ImageTo3DWorld = React.lazy(() => import("./PageImageTo3DWorld").then(m => ({ default: m.ImageTo3DWorld })));
-const RemoveBackground = React.lazy(() => import("./PageRemoveBackground").then(m => ({ default: m.RemoveBackground })));
-const Angles = React.lazy(() => import("./PageAngles").then(m => ({ default: m.Angles })));
-const Storyboard = React.lazy(() => import("./PageStoryboard").then(m => ({ default: m.Storyboard })));
-const PageBackgroundChange = React.lazy(() => import("./PageBackgroundChange").then(m => ({ default: m.PageBackgroundChange })));
-const PageScene = React.lazy(() => import("./PageScene").then(m => ({ default: m.PageScene })));
-const PageVideoEditor = React.lazy(() => import("./PageVideoEditor").then(m => ({ default: m.PageVideoEditor })));
-const PageMoodboard = React.lazy(() => import("./PageMoodboard").then(m => ({ default: m.PageMoodboard })));
-const CapCutAutomation = React.lazy(() => import("./PageCapCutAutomation").then(m => ({ default: m.CapCutAutomation })));
-const Youwee = React.lazy(() => import("./PageYouwee").then(m => ({ default: m.Youwee })));
-const PageMediaCrawler = React.lazy(() => import("./PageMediaCrawler").then(m => ({ default: m.PageMediaCrawler })));
-const PageOpenMontage = React.lazy(() => import("./PageOpenMontage").then(m => ({ default: m.PageOpenMontage })));
-const PageFreeLLMApi = React.lazy(() => import("./freellmapi").then(m => ({ default: m.PageFreeLLMApi })));
-const PageOmniRoute = React.lazy(() => import("./OmniRoute/index").then(m => ({ default: m.PageOmniRoute })));
-const PageFlowordStudio = React.lazy(() => import("./FlowordStudio").then(m => ({ default: m.PageFlowordStudio })));
-const PageInkOS = React.lazy(() => import("./PageInkOS").then(m => ({ default: m.PageInkOS })));
-const PageVynaro = React.lazy(() => import("./PageVynaro").then(m => ({ default: m.PageVynaro })));
-import {
-  topNavMediaId,
-  topNavMediaUrl,
-} from "~/components/signaled/TopBar/TopBar";
+const CapCutAutomation = React.lazy(() =>
+  import("./PageCapCutAutomation").then((m) => ({ default: m.CapCutAutomation }))
+);
+const Youwee = React.lazy(() =>
+  import("./PageYouwee").then((m) => ({ default: m.Youwee }))
+);
+const PageMediaCrawler = React.lazy(() =>
+  import("./PageMediaCrawler").then((m) => ({ default: m.PageMediaCrawler }))
+);
+const PageOmniRoute = React.lazy(() =>
+  import("./OmniRoute/index").then((m) => ({ default: m.PageOmniRoute }))
+);
+const PageFlowordStudio = React.lazy(() =>
+  import("./FlowordStudio").then((m) => ({ default: m.PageFlowordStudio }))
+);
+const PageInkOS = React.lazy(() =>
+  import("./PageInkOS").then((m) => ({ default: m.PageInkOS }))
+);
 
 interface Props {
   sceneToken?: string;
@@ -119,22 +80,11 @@ export const MainApp = ({ sceneToken }: Props) => {
 
   useActiveJobs();
   useBackgroundLoadingMedia();
-  useGenerationEnqueueSuccessEvent();
-
-  useEffect(() => {
-    const usersApi = new UsersApi();
-    usersApi.GetSession().then((result) => {
-      console.log(
-        `User Info | Username: ${result.data?.user?.username}, Token: ${result.data?.user?.user_token}`,
-      );
-    });
-  }, []);
 
   const [, setValidGpu] = useState("unknown");
   useEffect(() => {
     const { getGPUTier } = gpu;
     getGPUTier().then((gpuTier) => {
-      console.log("GPU tier", gpuTier);
       let isValid = false;
       const fps = gpuTier.fps || 0;
       if (gpuTier.tier > 1) isValid = true;
@@ -147,8 +97,6 @@ export const MainApp = ({ sceneToken }: Props) => {
   // Idle Preloader for heavy priority chunks
   useEffect(() => {
     const preloadAppChunks = () => {
-      // Preload high-priority apps so they are ready when clicked
-      console.log("[MainApp] Preloading FlowordStudio and OmniRoute in background...");
       import("./FlowordStudio");
       import("./OmniRoute/index");
     };
@@ -160,65 +108,17 @@ export const MainApp = ({ sceneToken }: Props) => {
     }
   }, []);
 
-  const { triggerRecheck } = useLoginModalStore();
-  const { isOpen: isCreditsOpen, closeModal: closeCreditsModal } =
-    useCreditsModalStore();
-  const disableHotkeyInput = usePageSceneStore((s) => s.disableHotkeyInput);
-  const enableHotkeyInput = usePageSceneStore((s) => s.enableHotkeyInput);
-
-  const currentReminderModalProps = actionReminderProps.value;
-
   return (
     <div className="w-screen">
       <TopBar
-        loginSignUpPressed={() => {
-          console.log("PRESSED");
-          triggerRecheck();
-        }}
-        pageName="Edit Scene"
-      />
-      <LoginModal
-        videoSrc2D="/resources/videos/artcraft-canvas-demo.mp4"
-        videoSrc3D="/resources/videos/artcraft-3d-demo.mp4"
-        onOpenChange={(isOpen: boolean) => {
-          if (isOpen) {
-            disableHotkeyInput(DomLevels.DIALOGUE);
-          } else {
-            enableHotkeyInput(DomLevels.DIALOGUE);
-          }
-        }}
-        onArtCraftAuthSuccess={(userInfo: any) => {
-          authentication.status.value = AUTH_STATUS.LOGGED_IN;
-          authentication.userInfo.value = userInfo;
-        }}
+        loginSignUpPressed={() => {}}
+        pageName="Floword Studio"
       />
 
       <TabBody sceneToken={sceneToken} />
 
-      <GalleryDragComponent />
       <ErrorDialog />
       <Toaster offsetTop={70} offsetRight={12} zIndex={9999} />
-      {currentReminderModalProps && (
-        <ActionReminderModal
-          isOpen={isActionReminderOpen.value}
-          onClose={currentReminderModalProps.onClose}
-          reminderType={currentReminderModalProps.reminderType}
-          onPrimaryAction={currentReminderModalProps.onPrimaryAction}
-          title={currentReminderModalProps.title}
-          message={currentReminderModalProps.message}
-          primaryActionText={currentReminderModalProps.primaryActionText}
-          secondaryActionText={currentReminderModalProps.secondaryActionText}
-          onSecondaryAction={currentReminderModalProps.onSecondaryAction}
-          isLoading={currentReminderModalProps.isLoading}
-          openAiLogo={currentReminderModalProps.openAiLogo}
-          primaryActionIcon={currentReminderModalProps.primaryActionIcon}
-          primaryActionBtnClassName={
-            currentReminderModalProps.primaryActionBtnClassName
-          }
-        />
-      )}
-      <PricingModal />
-      <CreditsModal isOpen={isCreditsOpen} onClose={closeCreditsModal} />
     </div>
   );
 };
@@ -234,14 +134,8 @@ const TabFallback = () => (
 
 const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
   const tabStore = useTabStore();
-  const storyboardPageEnabled = useStoryboardPageEnabled();
-
   const tabId = tabStore.activeTabId;
 
-  // OmniRoute mounts on first activation instead of on app boot: mounting at
-  // boot raced the OmniRoute dev server on :20128, so the iframe requested
-  // /omniroute/ before Next was listening and never recovered. Once mounted it
-  // stays warm — visibility is still toggled via CSS on tab switch.
   const [omniRouteMounted, setOmniRouteMounted] = useState(false);
   useEffect(() => {
     if (tabId === "OMNI_ROUTE") setOmniRouteMounted(true);
@@ -268,195 +162,41 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
           <React.Suspense fallback={<TabFallback />}>
             {(() => {
               switch (tabId) {
-                case "3D":
-                  return <PageScene sceneToken={sceneToken} />;
                 case "APPS":
+                  return <AppsIndexPage />;
+                case "CAPCUT_AUTOMATION":
+                  return <CapCutAutomation />;
+                case "YOUWEE":
+                  return <Youwee />;
+                case "MEDIA_CRAWLER":
                   return (
-                    <div>
-                      <AppsIndexPage />
+                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                      <PageMediaCrawler />
                     </div>
                   );
-              case "2D":
-                return (
-                  <div>
-                    <PageDrawWithGalleryDrop />
-                  </div>
-                );
-              case "IMAGE":
-                return (
-                  <div>
-                    <TextToImage
-                      imageMediaId={topNavMediaId.value}
-                      imageUrl={topNavMediaUrl.value}
-                    />
-                  </div>
-                );
-              case "VIDEO":
-                return (
-                  <div>
-                    <ImageToVideo />
-                  </div>
-                );
-              case "AUDIO":
-                return (
-                  <div>
-                    <CreateAudio />
-                  </div>
-                );
-              case "VIDEO_FRAME_EXTRACTOR":
-                return (
-                  <div>
-                    <VideoFrameExtractor />
-                  </div>
-                );
-              case "VIDEO_WATERMARK_REMOVAL":
-                return (
-                  <div>
-                    <VideoWatermarkRemover />
-                  </div>
-                );
-              case "IMAGE_WATERMARK_REMOVAL":
-                return (
-                  <div>
-                    <ImageWatermarkRemover />
-                  </div>
-                );
-              case "IMAGE_TO_3D_OBJECT":
-                return (
-                  <div>
-                    <ImageTo3DObject />
-                  </div>
-                );
-              case "IMAGE_TO_3D_WORLD":
-                return (
-                  <div>
-                    <ImageTo3DWorld />
-                  </div>
-                );
-              case "REMOVE_BACKGROUND":
-                return (
-                  <div>
-                    <RemoveBackground />
-                  </div>
-                );
-              case "ANGLES":
-                return (
-                  <div>
-                    <Angles />
-                  </div>
-                );
-              case "STORYBOARD":
-                return storyboardPageEnabled ? (
-                  <div>
-                    <Storyboard />
-                  </div>
-                ) : null;
-              case "BACKGROUND_CHANGE":
-                return (
-                  <div>
-                    <PageBackgroundChange />
-                  </div>
-                );
-              case "VIDEO_EDITOR":
-                return (
-                  <div className="h-[calc(100vh-3rem)] w-full">
-                    <PageVideoEditor />
-                  </div>
-                );
-              case "MOODBOARD":
-                return (
-                  <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                    <PageMoodboard />
-                  </div>
-                );
-              case "CAPCUT_AUTOMATION":
-                return (
-                  <div>
-                    <CapCutAutomation />
-                  </div>
-                );
-              case "YOUWEE":
-                return (
-                  <div>
-                    <Youwee />
-                  </div>
-                );
-              case "MEDIA_CRAWLER":
-                return (
-                  <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                    <PageMediaCrawler />
-                  </div>
-                );
-              case "OPEN_MONTAGE":
-                return (
-                  <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                    <PageOpenMontage />
-                  </div>
-                );
-              case "FREE_LLM_API":
-                return (
-                  <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                    <PageFreeLLMApi />
-                  </div>
-                );
-              case "OMNI_ROUTE":
-                return null;
-              case "FLOWORD_STUDIO":
-                return (
-                  <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                    <PageFlowordStudio />
-                  </div>
-                );
-              case "INKOS":
-                return (
-                  <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                    <PageInkOS />
-                  </div>
-                );
-              case "VYNARO":
-                return (
-                  <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                    <PageVynaro />
-                  </div>
-                );
-              default:
-                return null;
-            }
-          })()}
+                case "FLOWORD_STUDIO":
+                  return (
+                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                      <PageFlowordStudio />
+                    </div>
+                  );
+                case "INKOS":
+                  return (
+                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                      <PageInkOS />
+                    </div>
+                  );
+                default:
+                  return (
+                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
+                      <PageFlowordStudio />
+                    </div>
+                  );
+              }
+            })()}
           </React.Suspense>
         </TabErrorBoundary>
       )}
     </>
   );
-};
-
-const PageDrawWithGalleryDrop = () => {
-  useEffect(() => {
-    const handler = onImageDrop(
-      (item: GalleryItem, position: { x: number; y: number }) => {
-        const canvasElement = document.querySelectorAll("canvas")[0];
-        if (!canvasElement) return;
-        const rect = canvasElement.getBoundingClientRect();
-        if (
-          position.x >= rect.left &&
-          position.x <= rect.right &&
-          position.y >= rect.top &&
-          position.y <= rect.bottom
-        ) {
-          const dropEvent = new CustomEvent("gallery-2d-drop", {
-            detail: { item, position: { x: position.x - rect.left, y: position.y - rect.top } },
-          });
-          window.dispatchEvent(dropEvent);
-        }
-      },
-    );
-
-    return () => {
-      if (handler) {
-        removeImageDropListener(handler);
-      }
-    };
-  }, []);
-
-  return <PageDraw />;
 };

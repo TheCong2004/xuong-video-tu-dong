@@ -4,7 +4,9 @@ import {
   Boxes,
   ChevronLeft,
   ChevronRight,
+  Globe,
   HardDrive,
+  KeyRound,
   LayoutDashboard,
   Layers,
   ListChecks,
@@ -16,7 +18,9 @@ import {
   Sparkles,
   Workflow,
   X,
+  Clapperboard,
 } from 'lucide-react';
+import { goToApp } from '~/config/appMenu';
 
 export type FlowordView =
   | 'dashboard'
@@ -182,6 +186,52 @@ export const FlowordSidebar: React.FC<FlowordSidebarProps> = ({
               </button>
             );
           })}
+
+          {/* AI Tools & Integrations Section */}
+          <div className="pt-4 mt-4 border-t border-white/[0.08]">
+            {!collapsed && (
+              <div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+                AI & Routing
+              </div>
+            )}
+
+            {/* OmniRoute Button */}
+            <button
+              type="button"
+              title="Quản lý API Keys & Router AI (OmniRoute)"
+              onClick={() => {
+                goToApp("OMNI_ROUTE");
+                onCloseMobile();
+              }}
+              className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-indigo-300 hover:bg-indigo-500/10 hover:text-indigo-200 border border-indigo-500/20 transition group"
+            >
+              <Globe className="h-4 w-4 shrink-0 text-indigo-400 group-hover:scale-110 transition-transform" />
+              {!collapsed && (
+                <>
+                  <span className="truncate flex-1 text-left font-medium">AI Keys (OmniRoute)</span>
+                  <span className="px-1.5 py-0.5 rounded bg-indigo-500/20 text-[9px] font-bold text-indigo-300">
+                    290+
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* CapCut Studio Button */}
+            <button
+              type="button"
+              title="CapCut Timeline & Draft Automation"
+              onClick={() => {
+                goToApp("CAPCUT_AUTOMATION");
+                onCloseMobile();
+              }}
+              className="mt-1.5 flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold text-cyan-300 hover:bg-cyan-500/10 hover:text-cyan-200 border border-cyan-500/20 transition group"
+            >
+              <Clapperboard className="h-4 w-4 shrink-0 text-cyan-400 group-hover:scale-110 transition-transform" />
+              {!collapsed && (
+                <span className="truncate flex-1 text-left font-medium">CapCut Studio</span>
+              )}
+            </button>
+          </div>
         </nav>
 
         {/* Sidebar Collapse Toggle */}

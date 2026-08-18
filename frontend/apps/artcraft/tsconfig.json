@@ -7,6 +7,13 @@
     "app/**/*.tsx",
     "netlify-edge-plugin.ts"
   ],
+  "exclude": [
+    "node_modules",
+    "**/node_modules",
+    "app/**/node_modules",
+    "dist",
+    "build"
+  ],
   "compilerOptions": {
     "lib": [
       "DOM",
@@ -27,7 +34,6 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./app/src/*", "./app/src/pages/PageYouwee/*"],
-      "@freellmapi/*": ["./app/src/pages/freellmapi/client/src/*"],
       "@mediacrawler/*": ["./app/src/pages/PageMediaCrawler/src/*"],
       "~/*": ["./app/src/*"],
       "libs/*": ["../../libs/*"],

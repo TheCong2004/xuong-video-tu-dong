@@ -1,6 +1,7 @@
 import React from 'react';
 import { Settings2, Save, Play, Square, Layers, Plus, Edit2 } from 'lucide-react';
 import { ContentPage } from '../api/flowordClient';
+import { goToApp } from '~/config/appMenu';
 
 interface FlowordHeaderProps {
   status: {
@@ -85,16 +86,31 @@ export const FlowordHeader: React.FC<FlowordHeaderProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
-          {[
-            ['CapCut', status.mateOnline],
-            ['OmniRoute', status.omniOnline],
-            ['Pipeline', status.rustPipelineOnline],
-          ].map(([label, online]) => (
-            <span key={String(label)} className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 font-medium">
-              <span className={`h-1.5 w-1.5 rounded-full ${online ? 'bg-green-500' : 'bg-zinc-600'}`} />
-              {label}
-            </span>
-          ))}
+          <button
+            type="button"
+            onClick={() => goToApp("CAPCUT_AUTOMATION")}
+            title="Mở CapCut Studio"
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] hover:bg-cyan-500/20 px-2.5 py-1 font-medium transition cursor-pointer border border-transparent hover:border-cyan-500/30"
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${status.mateOnline ? 'bg-green-500' : 'bg-zinc-600'}`} />
+            <span className="text-zinc-300">CapCut</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => goToApp("OMNI_ROUTE")}
+            title="Mở OmniRoute AI Key Router"
+            className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] hover:bg-indigo-500/20 px-2.5 py-1 font-medium transition cursor-pointer border border-transparent hover:border-indigo-500/30"
+          >
+            <span className={`h-1.5 w-1.5 rounded-full ${status.omniOnline ? 'bg-green-500' : 'bg-zinc-600'}`} />
+            <span className="text-zinc-300">OmniRoute (AI Keys)</span>
+          </button>
+
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/[0.05] px-2.5 py-1 font-medium">
+            <span className={`h-1.5 w-1.5 rounded-full ${status.rustPipelineOnline ? 'bg-green-500' : 'bg-zinc-600'}`} />
+            <span>Pipeline</span>
+          </span>
+
           {activeDraftUrl && <span className="hidden max-w-48 truncate text-zinc-500 lg:inline">{activeDraftUrl}</span>}
         </div>
       </div>

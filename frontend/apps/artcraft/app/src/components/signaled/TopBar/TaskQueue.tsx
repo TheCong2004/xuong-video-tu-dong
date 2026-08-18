@@ -48,7 +48,6 @@ import {
   THUMBNAIL_SIZES,
   getPlaceholderForMediaClass,
 } from "@storyteller/common";
-import { coverImageCache } from "~/pages/PageImageTo3DObject/ImageTo3DStore";
 import { useCreditsState } from "@storyteller/credits";
 import { getMetaForTask, cleanupOldEntries } from "./taskEnqueueMeta";
 import { twMerge } from "tailwind-merge";

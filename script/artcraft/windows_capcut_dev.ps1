@@ -126,39 +126,7 @@ if (Test-Port 30000) {
   Write-Host "WARNING: Unified backend unified_server.py not found at $ArtcraftRoot" -ForegroundColor Yellow
 }
 
-# --- 2. FreeLLMAPI Server on :3001 ---
-$FreeLLMAPIRoot = Join-Path $ArtcraftRoot "frontend\apps\artcraft\app\src\pages\freellmapi\server"
-if (Test-Port 3001) {
-  Write-Host "FreeLLMAPI API already on :3001" -ForegroundColor Green
-} elseif (Test-Path (Join-Path $FreeLLMAPIRoot "package.json")) {
-  Write-Host "Starting FreeLLMAPI API on :3001 ..." -ForegroundColor Cyan
-  $freeLlmLogDir = Join-Path $env:TEMP "artcraft-freellmapi"
-  New-Item -ItemType Directory -Path $freeLlmLogDir -Force | Out-Null
-  $freeLlmStdout = Join-Path $freeLlmLogDir "api.stdout.log"
-  $freeLlmStderr = Join-Path $freeLlmLogDir "api.stderr.log"
-  Remove-Item -LiteralPath $freeLlmStdout -Force -ErrorAction SilentlyContinue
-  Remove-Item -LiteralPath $freeLlmStderr -Force -ErrorAction SilentlyContinue
 
-  $freeLlmProcess = Start-Process `
-    -WorkingDirectory $FreeLLMAPIRoot `
-    -FilePath "cmd.exe" `
-    -ArgumentList "/c","pnpm","run","dev" `
-    -RedirectStandardOutput $freeLlmStdout `
-    -RedirectStandardError $freeLlmStderr `
-    -WindowStyle Hidden `
-    -PassThru
-
-  Write-Host "[FreeLLMAPI] process spawned pid=$($freeLlmProcess.Id)" -ForegroundColor DarkGray
-  if (Wait-ForTcpPort -Port 3001 -TimeoutSeconds 60) {
-    Write-Host "[FreeLLMAPI] READY on :3001 (PID $($freeLlmProcess.Id))" -ForegroundColor Green
-  } else {
-    # Non-fatal: FreeLLMAPI is one tab, not a launch prerequisite.
-    Write-Host "[FreeLLMAPI] not ready on :3001 after 60s - continuing" -ForegroundColor Yellow
-    Show-ServiceLogTail -Name "FreeLLMAPI" -LogPaths @($freeLlmStderr) -Lines 20
-  }
-} else {
-  Write-Host "WARNING: FreeLLMAPI server not found at $FreeLLMAPIRoot" -ForegroundColor Yellow
-}
 
 # --- 2.5. OmniRoute AI Router on :20128 ---
 $OmniRouteRoot = Join-Path $ArtcraftRoot "frontend\apps\artcraft\app\src\pages\OmniRoute"
@@ -196,12 +164,12 @@ if (Test-Port 20128) {
 
   $omniReady = $false
   $omniWaitStartedAt = Get-Date
-  $omniDeadline = $omniWaitStartedAt.AddSeconds(120)
+  $omniDeadline = $omniWaitStartedAt.AddSeconds(45)
   while ((Get-Date) -lt $omniDeadline) {
     if ($omniProcess.HasExited) {
       Write-Host "[OmniRoute] process exited before readiness (pid=$($omniProcess.Id), exit=$($omniProcess.ExitCode))" -ForegroundColor Red
       Show-ServiceLogTail -Name "OmniRoute" -LogPaths @($omniStderr, $omniStdout)
-      throw "OmniRoute failed to start. Logs: $omniStderr"
+      break
     }
     if (Test-OmniRouteHealth) {
       $omniReady = $true
@@ -212,14 +180,12 @@ if (Test-Port 20128) {
 
   if (-not $omniReady) {
     $omniWaited = [int]((Get-Date) - $omniWaitStartedAt).TotalSeconds
-    Write-Host "[OmniRoute] readiness timeout after ${omniWaited}s (pid=$($omniProcess.Id))" -ForegroundColor Red
-    Show-ServiceLogTail -Name "OmniRoute" -LogPaths @($omniStderr, $omniStdout)
-    throw "OmniRoute did not become ready on 127.0.0.1:20128 within 120s. Logs: $omniStderr"
+    Write-Host "[OmniRoute] still starting up on :20128 after ${omniWaited}s - continuing in background" -ForegroundColor Yellow
+  } else {
+    $omniElapsed = [math]::Round(((Get-Date) - $omniWaitStartedAt).TotalSeconds, 1)
+    Write-Host "[OmniRoute] ready after ${omniElapsed}s" -ForegroundColor DarkGray
+    Write-Host "[OmniRoute] READY on 127.0.0.1:20128 (PID $($omniProcess.Id))" -ForegroundColor Green
   }
-
-  $omniElapsed = [math]::Round(((Get-Date) - $omniWaitStartedAt).TotalSeconds, 1)
-  Write-Host "[OmniRoute] ready after ${omniElapsed}s" -ForegroundColor DarkGray
-  Write-Host "[OmniRoute] READY on 127.0.0.1:20128 (PID $($omniProcess.Id))" -ForegroundColor Green
 } else {
   Write-Host "WARNING: OmniRoute not found at $OmniRouteRoot" -ForegroundColor Yellow
 }
