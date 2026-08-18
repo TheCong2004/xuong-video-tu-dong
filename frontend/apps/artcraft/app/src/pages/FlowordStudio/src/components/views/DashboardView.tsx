@@ -37,12 +37,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectJob,
   onRefresh,
 }) => {
-  // Aggregate stats
   const totalJobs = activeRuns.length;
   const runningJobs = activeRuns.filter((r) => r.status === 'running').length;
-  const queuedJobs = activeRuns.filter((r) => r.status === 'pending' || r.status === 'queued').length;
-  const errorJobs = activeRuns.filter((r) => r.status === 'failed' || r.status === 'error').length;
-  const completedJobs = activeRuns.filter((r) => r.status === 'completed' || r.status === 'complete_success').length;
+  const queuedJobs = activeRuns.filter((r) => (r.status as string) === 'pending' || r.status === 'queued').length;
+  const errorJobs = activeRuns.filter((r) => r.status === 'failed' || (r.status as string) === 'error').length;
+  const completedJobs = activeRuns.filter((r) => r.status === 'completed' || (r.status as string) === 'complete_success').length;
 
   // Pipeline stage breakdown counts
   const stageCounts = {
@@ -220,7 +219,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="space-y-2.5">
               <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
                 <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${readiness.overall === 'ready' ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  <span className={`h-2 w-2 rounded-full ${readiness.isReadyForExecution ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                   <span className="text-xs text-zinc-300">Unified Orchestrator</span>
                 </div>
                 <span className="text-[11px] font-mono text-zinc-500">:20128</span>

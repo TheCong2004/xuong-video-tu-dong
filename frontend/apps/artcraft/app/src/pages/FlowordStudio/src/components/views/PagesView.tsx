@@ -51,6 +51,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
     storagePath: string;
     browserProfile: string;
     defaultImagePrompt: string;
+    defaultExpand916Prompt: string;
     defaultVideoPrompt: string;
     postMode: 'auto' | 'review';
     slots: string;
@@ -61,6 +62,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
     storagePath: 'D:\\Floword_Media\\',
     browserProfile: 'PROFILE_01',
     defaultImagePrompt: 'Cinematic wide angle frame, 8k resolution, photorealistic lighting',
+    defaultExpand916Prompt: 'Expand image to 9:16 vertical ratio preserving subject and composition',
     defaultVideoPrompt: 'Smooth camera panning, vivid 4k cinematic movement',
     postMode: 'review',
     slots: '08:30, 12:00, 17:30, 21:00',
@@ -75,6 +77,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
       storagePath: 'D:\\Floword_Media\\',
       browserProfile: 'PROFILE_DEFAULT',
       defaultImagePrompt: 'Cinematic shot, hyper-realistic, vivid atmosphere',
+      defaultExpand916Prompt: 'Expand image to 9:16 vertical ratio preserving subject and composition',
       defaultVideoPrompt: 'Dynamic motion, smooth camera pan',
       postMode: 'review',
       slots: '08:30, 12:00, 17:30, 21:00',
@@ -86,12 +89,13 @@ export const PagesView: React.FC<PagesViewProps> = ({
     setEditingPageId(page.id);
     setFormData({
       name: page.name,
-      description: page.description || '',
-      targetAudience: page.targetAudience || 'General Audience',
-      storagePath: 'D:\\Floword_Media\\' + page.name,
+      description: (page as unknown as { description?: string }).description || '',
+      targetAudience: (page as unknown as { targetAudience?: string }).targetAudience || 'General Audience',
+      storagePath: page.output_root || 'D:\\Floword_Media\\' + page.name,
       browserProfile: 'PROFILE_' + page.name.toUpperCase().replace(/\s+/g, '_'),
-      defaultImagePrompt: 'Cinematic shot, hyper-realistic, vivid atmosphere',
-      defaultVideoPrompt: 'Dynamic motion, smooth camera pan',
+      defaultImagePrompt: page.default_image_prompt || 'Cinematic shot, hyper-realistic, vivid atmosphere',
+      defaultExpand916Prompt: page.default_expand_9_16_prompt || 'Expand image to 9:16 vertical ratio preserving subject and composition',
+      defaultVideoPrompt: page.default_video_prompt || 'Dynamic motion, smooth camera pan',
       postMode: 'review',
       slots: '08:30, 12:00, 17:30, 21:00',
     });
@@ -109,12 +113,18 @@ export const PagesView: React.FC<PagesViewProps> = ({
           name: formData.name.trim(),
           output_root: formData.storagePath.trim() || 'D:\\',
           target_platform: 'tiktok',
+          default_image_prompt: formData.defaultImagePrompt.trim() || undefined,
+          default_expand_9_16_prompt: formData.defaultExpand916Prompt.trim() || undefined,
+          default_video_prompt: formData.defaultVideoPrompt.trim() || undefined,
         });
       } else {
         await onCreatePage({
           name: formData.name.trim(),
           output_root: formData.storagePath.trim() || 'D:\\',
           target_platform: 'tiktok',
+          default_image_prompt: formData.defaultImagePrompt.trim() || undefined,
+          default_expand_9_16_prompt: formData.defaultExpand916Prompt.trim() || undefined,
+          default_video_prompt: formData.defaultVideoPrompt.trim() || undefined,
         });
       }
       setIsEditing(false);
@@ -168,7 +178,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
                       <h3 className="font-bold text-base text-white">{page.name}</h3>
                     </div>
                     <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-                      {page.description || 'No description configured.'}
+                      {(page as unknown as { description?: string }).description || `Output: ${page.output_root}`}
                     </p>
                   </div>
 
@@ -188,8 +198,8 @@ export const PagesView: React.FC<PagesViewProps> = ({
                 {/* Target Audience & Preset Badges */}
                 <div className="mt-4 pt-3 border-t border-white/[0.06] space-y-2">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-500">Audience:</span>
-                    <span className="text-zinc-300 font-medium">{page.targetAudience || 'General'}</span>
+                    <span className="text-zinc-500">Platform:</span>
+                    <span className="text-zinc-300 font-medium uppercase">{page.target_platform || 'TikTok'}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-zinc-500">Post Mode:</span>

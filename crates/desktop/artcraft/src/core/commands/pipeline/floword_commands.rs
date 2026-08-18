@@ -812,6 +812,9 @@ pub struct CreateContentPageRequest {
   pub default_tone: Option<String>,
   pub default_aspect_ratio: Option<String>,
   pub browser_profile_id: Option<String>,
+  pub default_image_prompt: Option<String>,
+  pub default_expand_9_16_prompt: Option<String>,
+  pub default_video_prompt: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -827,6 +830,9 @@ pub struct UpdateContentPageRequest {
   pub default_tone: Option<String>,
   pub default_aspect_ratio: Option<String>,
   pub browser_profile_id: Option<String>,
+  pub default_image_prompt: Option<String>,
+  pub default_expand_9_16_prompt: Option<String>,
+  pub default_video_prompt: Option<String>,
 }
 
 #[tauri::command]
@@ -887,6 +893,9 @@ pub async fn create_content_page_command(
     default_tone: request.default_tone.as_deref(),
     default_aspect_ratio: request.default_aspect_ratio.as_deref(),
     browser_profile_id: request.browser_profile_id.as_deref(),
+    default_image_prompt: request.default_image_prompt.as_deref(),
+    default_expand_9_16_prompt: request.default_expand_9_16_prompt.as_deref(),
+    default_video_prompt: request.default_video_prompt.as_deref(),
   })
   .await
   .map_err(|e| internal_error(&format!("Failed to create content page: {e}"), None))?;
@@ -922,6 +931,9 @@ pub async fn update_content_page_command(
     default_tone: request.default_tone.as_deref(),
     default_aspect_ratio: request.default_aspect_ratio.as_deref(),
     browser_profile_id: request.browser_profile_id.as_deref(),
+    default_image_prompt: request.default_image_prompt.as_deref(),
+    default_expand_9_16_prompt: request.default_expand_9_16_prompt.as_deref(),
+    default_video_prompt: request.default_video_prompt.as_deref(),
   })
   .await
   .map_err(|e| internal_error(&format!("Failed to update content page: {e}"), None))?;

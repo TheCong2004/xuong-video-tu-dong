@@ -283,11 +283,13 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     }).await.map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_LOOKUP_FAILED", e.to_string()))?
       .ok_or_else(|| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_NOT_FOUND", format!("ContentPage with id '{page_id}' not found in database")))?;
 
-    // 2. Mandatory Prompt validation (fail-closed)
-    let final_prompt = if !prompt.trim().is_empty() {
-      &prompt
-    } else if let Some(p) = input.get("image_prompt").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+    // 2. Mandatory Prompt validation (fail-closed authoritative resolution)
+    let final_prompt: &str = if let Some(p) = input.get("image_prompt").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
       p
+    } else if !prompt.trim().is_empty() {
+      prompt.as_str()
+    } else if let Some(dp) = content_page.default_image_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
+      dp
     } else {
       return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_PROMPT_REQUIRED", "Grok image edit workflow requires a non-empty image prompt".to_string()).into());
     };
@@ -385,24 +387,37 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     }
     let output_root = &content_page.output_root;
 
-    // 2. Prompts resolution (custom or input prompt)
-    let image_prompt = input.get("image_prompt").and_then(Value::as_str)
-      .filter(|s| !s.trim().is_empty())
-      .unwrap_or(if !prompt.trim().is_empty() { &prompt } else { "" });
-    if image_prompt.trim().is_empty() {
+    // 2. Authoritative Prompts resolution (Job override -> ContentPage default -> safe system fallback/fail-closed)
+    let image_prompt: &str = if let Some(p) = input.get("image_prompt").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
+      p
+    } else if !prompt.trim().is_empty() {
+      prompt.as_str()
+    } else if let Some(dp) = content_page.default_image_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
+      dp
+    } else {
       return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_PROMPT_REQUIRED", "Grok content pipeline requires a non-empty image prompt".to_string()).into());
-    }
+    };
 
-    let expand_prompt = input.get("expand_prompt")
-      .or_else(|| input.get("expand_9_16_prompt"))
+    let default_expand_fallback = "Expand image to 9:16 vertical ratio preserving subject and composition";
+    let expand_prompt = input.get("expand_9_16_prompt")
+      .or_else(|| input.get("expand_prompt"))
       .and_then(Value::as_str)
       .filter(|s| !s.trim().is_empty())
-      .unwrap_or("Expand image to 9:16 vertical ratio preserving subject and composition");
+      .unwrap_or(
+        content_page.default_expand_9_16_prompt.as_deref()
+          .filter(|s| !s.trim().is_empty())
+          .unwrap_or(default_expand_fallback)
+      );
 
+    let default_video_fallback = "Generate cinematic dynamic video animation preserving character and action";
     let video_prompt = input.get("video_prompt")
       .and_then(Value::as_str)
       .filter(|s| !s.trim().is_empty())
-      .unwrap_or("Generate cinematic dynamic video animation preserving character and action");
+      .unwrap_or(
+        content_page.default_video_prompt.as_deref()
+          .filter(|s| !s.trim().is_empty())
+          .unwrap_or(default_video_fallback)
+      );
 
     // True Resume Check 1: Already LOCAL_SAVED
     if outputs.get("status").and_then(Value::as_str) == Some("LOCAL_SAVED") {

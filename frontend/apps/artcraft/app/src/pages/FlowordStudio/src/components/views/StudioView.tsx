@@ -40,9 +40,12 @@ export const StudioView: React.FC<StudioViewProps> = ({
   onRunWorkflow,
   onCancelWorkflow,
 }) => {
+  const [pipelineType, setPipelineType] = useState<'grok_content_pipeline' | 'grok_image_edit' | 'floword_video_pipeline'>('grok_content_pipeline');
   const [mode, setMode] = useState<'simple' | 'advanced'>('simple');
   const [topic, setTopic] = useState<string>('Top 5 Hidden Gems in Action Cinema 2026');
+  const [sourceImagePath, setSourceImagePath] = useState<string>('D:\\source_hero.png');
   const [imagePrompt, setImagePrompt] = useState<string>('Cinematic hero poster, dynamic rim light, 8k resolution');
+  const [expand916Prompt, setExpand916Prompt] = useState<string>('Expand image to 9:16 vertical ratio preserving subject and composition');
   const [videoPrompt, setVideoPrompt] = useState<string>('Smooth drone zooming into cinematic cityscape, hyper-realistic');
   const [caption, setCaption] = useState<string>('Khám phá ngay danh sách siêu phẩm không thể bỏ lỡ! #cinema #review #movies');
   const [skipResearch, setSkipResearch] = useState<boolean>(true);
@@ -52,9 +55,29 @@ export const StudioView: React.FC<StudioViewProps> = ({
 
   const handleStartRun = async () => {
     await onRunWorkflow({
+      workflowMode: pipelineType,
+      workflowName: pipelineType,
+      pageId: selectedPage?.id,
+      prompt: imagePrompt.trim() || selectedPage?.default_image_prompt || '',
+      imagePrompt: imagePrompt.trim() || selectedPage?.default_image_prompt || undefined,
+      expand916Prompt: expand916Prompt.trim() || selectedPage?.default_expand_9_16_prompt || undefined,
+      videoPrompt: videoPrompt.trim() || selectedPage?.default_video_prompt || undefined,
+      sourceFiles: sourceImagePath.trim() ? [sourceImagePath.trim()] : [],
+      sourceUrls: [],
+      targetPlatform: 'tiktok',
+      targetDurationSeconds: 45,
+      language: selectedPage?.default_language || 'vi',
+      tone: (selectedPage?.default_tone as any) || 'professional',
+      aspectRatio: '9:16',
+      scriptMode: 'original',
+      outputMode: 'render_video',
+      researchEnabled: false,
+      researchPlatform: 'xhs',
+      researchQuery: '',
+      researchMode: 'search',
       topic,
       customPrompt: imagePrompt,
-      platform: 'facebook',
+      platform: 'tiktok',
       targetDurationSec: 45,
       voiceTone: 'cinematic_narrator',
       skipResearch,
@@ -63,7 +86,16 @@ export const StudioView: React.FC<StudioViewProps> = ({
     });
   };
 
-  const STAGES = [
+  const GROK_STAGES = [
+    { key: 'input', label: '1. Ingest / Page', desc: 'Target Page & Source Image input' },
+    { key: 'IMAGE', label: '2. Grok Image Edit', desc: 'Synthesize edited image via Grok' },
+    { key: '9_16', label: '3. 9:16 Outpaint', desc: 'Expand canvas to vertical 9:16' },
+    { key: 'VIDEO', label: '4. Video Synthesis', desc: 'Grok dynamic video motion' },
+    { key: 'SAVING', label: '5. Save Storage', desc: 'Publish to Page output root' },
+    { key: 'complete', label: '6. Ready to Publish', desc: 'Final video verified' },
+  ];
+
+  const LEGACY_STAGES = [
     { key: 'input', label: '1. Ingest / Input', desc: 'Page & topic initialization' },
     { key: 'image', label: '2. Image AI', desc: 'High-res image generation' },
     { key: 'aspect', label: '3. 9:16 Transform', desc: 'Short-form framing outpaint' },
@@ -71,6 +103,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
     { key: 'download', label: '5. Download & Merge', desc: 'Asset pack creation' },
     { key: 'publish', label: '6. Ready to Publish', desc: 'Inbox review & schedule' },
   ];
+
+  const STAGES = pipelineType.includes('grok') ? GROK_STAGES : LEGACY_STAGES;
 
   return (
     <div className="flex flex-col h-full max-w-7xl mx-auto p-6 space-y-4 overflow-hidden">
@@ -193,6 +227,19 @@ export const StudioView: React.FC<StudioViewProps> = ({
           </div>
 
           <div>
+            <label className="block text-zinc-400 mb-1 font-medium">Pipeline Workflow Mode</label>
+            <select
+              value={pipelineType}
+              onChange={(e) => setPipelineType(e.target.value as any)}
+              className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 font-semibold"
+            >
+              <option value="grok_content_pipeline">Grok Full Production (Image Edit &rarr; 9:16 &rarr; Video)</option>
+              <option value="grok_image_edit">Grok Image Edit Only</option>
+              <option value="floword_video_pipeline">Floword Legacy Video Pipeline</option>
+            </select>
+          </div>
+
+          <div>
             <label className="block text-zinc-400 mb-1 font-medium">Target Page / Preset</label>
             <select
               value={activePageId || ''}
@@ -201,10 +248,26 @@ export const StudioView: React.FC<StudioViewProps> = ({
             >
               {pages.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.targetAudience || 'General'})
+                  {p.name} ({p.target_platform || 'tiktok'})
                 </option>
               ))}
             </select>
+            {selectedPage?.default_image_prompt && (
+              <p className="text-[10px] text-zinc-500 mt-1">
+                Default image prompt configured in Page: <span className="italic text-zinc-400 font-mono">{selectedPage.default_image_prompt.slice(0, 50)}...</span>
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-zinc-400 mb-1 font-medium">Source Image Path <span className="text-rose-400">*</span></label>
+            <input
+              type="text"
+              value={sourceImagePath}
+              onChange={(e) => setSourceImagePath(e.target.value)}
+              placeholder="e.g. D:\images\source_hero.png"
+              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 font-mono text-[11px]"
+            />
           </div>
 
           <div>
@@ -218,24 +281,41 @@ export const StudioView: React.FC<StudioViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Image Prompt (Grok / FLUX)</label>
+            <label className="block text-zinc-400 mb-1 font-medium">Image Edit Prompt (Grok FLUX)</label>
             <textarea
               rows={3}
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
+              placeholder={selectedPage?.default_image_prompt || 'Enter custom image prompt...'}
               className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
             />
           </div>
 
-          <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Video Motion Prompt</label>
-            <textarea
-              rows={2}
-              value={videoPrompt}
-              onChange={(e) => setVideoPrompt(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
-            />
-          </div>
+          {pipelineType === 'grok_content_pipeline' && (
+            <div>
+              <label className="block text-zinc-400 mb-1 font-medium">9:16 Vertical Outpaint Prompt</label>
+              <textarea
+                rows={2}
+                value={expand916Prompt}
+                onChange={(e) => setExpand916Prompt(e.target.value)}
+                placeholder={selectedPage?.default_expand_9_16_prompt || 'Enter 9:16 expand prompt...'}
+                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
+              />
+            </div>
+          )}
+
+          {pipelineType === 'grok_content_pipeline' && (
+            <div>
+              <label className="block text-zinc-400 mb-1 font-medium">Video Motion Animation Prompt</label>
+              <textarea
+                rows={2}
+                value={videoPrompt}
+                onChange={(e) => setVideoPrompt(e.target.value)}
+                placeholder={selectedPage?.default_video_prompt || 'Enter video motion prompt...'}
+                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-zinc-400 mb-1 font-medium">Publishing Caption & Tags</label>

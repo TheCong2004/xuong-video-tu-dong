@@ -85,7 +85,7 @@ async fn test_content_page_crud_in_sqlite() {
 
   let db = TaskDbConnection::connect_and_migrate(&db_path).await.unwrap();
 
-  // 1. Create Page
+  // 1. Create Page with default prompt fields
   let page = create_content_page(CreateContentPageArgs {
     db: &db,
     id: None,
@@ -99,6 +99,9 @@ async fn test_content_page_crud_in_sqlite() {
     default_tone: Some("professional"),
     default_aspect_ratio: Some("9:16"),
     browser_profile_id: None,
+    default_image_prompt: Some("Default Hollywood image prompt"),
+    default_expand_9_16_prompt: Some("Default Hollywood expand 9:16 prompt"),
+    default_video_prompt: Some("Default Hollywood video prompt"),
   })
   .await
   .unwrap();
@@ -106,6 +109,9 @@ async fn test_content_page_crud_in_sqlite() {
   assert_eq!(page.name, "Hollywood Review");
   assert_eq!(page.slug, "hollywood-review");
   assert_eq!(page.output_root, "D:\\Outputs");
+  assert_eq!(page.default_image_prompt.as_deref(), Some("Default Hollywood image prompt"));
+  assert_eq!(page.default_expand_9_16_prompt.as_deref(), Some("Default Hollywood expand 9:16 prompt"));
+  assert_eq!(page.default_video_prompt.as_deref(), Some("Default Hollywood video prompt"));
   assert_eq!(page.is_archived, false);
 
   // 2. Read Page by ID
@@ -119,6 +125,7 @@ async fn test_content_page_crud_in_sqlite() {
 
   assert_eq!(fetched.id, page.id);
   assert_eq!(fetched.name, "Hollywood Review");
+  assert_eq!(fetched.default_image_prompt.as_deref(), Some("Default Hollywood image prompt"));
 
   // 3. Update Page
   let updated = update_content_page(UpdateContentPageArgs {
@@ -134,6 +141,9 @@ async fn test_content_page_crud_in_sqlite() {
     default_tone: Some("viral"),
     default_aspect_ratio: Some("16:9"),
     browser_profile_id: None,
+    default_image_prompt: Some("Updated Hollywood image prompt"),
+    default_expand_9_16_prompt: Some("Updated Hollywood expand prompt"),
+    default_video_prompt: Some("Updated Hollywood video prompt"),
   })
   .await
   .unwrap();
@@ -142,6 +152,7 @@ async fn test_content_page_crud_in_sqlite() {
   assert_eq!(updated.slug, "hollywood-review-official");
   assert_eq!(updated.output_root, "E:\\NewOutputs");
   assert_eq!(updated.target_platform.as_deref(), Some("reels"));
+  assert_eq!(updated.default_image_prompt.as_deref(), Some("Updated Hollywood image prompt"));
 
   // 4. List Active Pages
   let list = list_content_pages(ListContentPagesArgs {
@@ -182,4 +193,103 @@ async fn test_content_page_crud_in_sqlite() {
   .unwrap();
   assert_eq!(all_list.pages.len(), 1);
   assert_eq!(all_list.pages[0].is_archived, true);
+}
+
+#[tokio::test]
+async fn test_grok_pipeline_prompt_resolution_rules() {
+  let temp_dir = tempdir().unwrap();
+  let db_path = temp_dir.path().join("test_prompts.sqlite");
+  let db = TaskDbConnection::connect_and_migrate(&db_path).await.unwrap();
+
+  // Seed ContentPage with defaults
+  let page = create_content_page(CreateContentPageArgs {
+    db: &db,
+    id: Some("PAGE_PROMPTS_01"),
+    name: "Movie Magic",
+    slug: Some("movie-magic"),
+    output_root: "D:\\Outputs",
+    target_platform: Some("tiktok"),
+    default_model_id: None,
+    default_workflow_id: None,
+    default_language: Some("vi"),
+    default_tone: None,
+    default_aspect_ratio: Some("9:16"),
+    browser_profile_id: None,
+    default_image_prompt: Some("Page Default Image Prompt"),
+    default_expand_9_16_prompt: Some("Page Default 9:16 Prompt"),
+    default_video_prompt: Some("Page Default Video Prompt"),
+  })
+  .await
+  .unwrap();
+
+  // Helper matching run_job_pipeline resolution logic
+  fn resolve_image_prompt<'a>(job_prompt: Option<&'a str>, raw_prompt: &'a str, page: &'a sqlite_tasks::queries::content_pages::content_page::ContentPage) -> Result<&'a str, &'static str> {
+    if let Some(p) = job_prompt.filter(|s| !s.trim().is_empty()) {
+      Ok(p)
+    } else if !raw_prompt.trim().is_empty() {
+      Ok(raw_prompt)
+    } else if let Some(ref dp) = page.default_image_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
+      Ok(dp)
+    } else {
+      Err("IMAGE_PROMPT_REQUIRED")
+    }
+  }
+
+  fn resolve_expand_prompt<'a>(job_expand: Option<&'a str>, page: &'a sqlite_tasks::queries::content_pages::content_page::ContentPage) -> &'a str {
+    const FALLBACK: &str = "Expand image to 9:16 vertical ratio preserving subject and composition";
+    job_expand.filter(|s| !s.trim().is_empty())
+      .unwrap_or_else(|| page.default_expand_9_16_prompt.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(FALLBACK))
+  }
+
+  fn resolve_video_prompt<'a>(job_video: Option<&'a str>, page: &'a sqlite_tasks::queries::content_pages::content_page::ContentPage) -> &'a str {
+    const FALLBACK: &str = "Generate cinematic dynamic video animation preserving character and action";
+    job_video.filter(|s| !s.trim().is_empty())
+      .unwrap_or_else(|| page.default_video_prompt.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(FALLBACK))
+  }
+
+  // CASE 1: Job image prompt present, Page default present -> Job prompt wins
+  let res_c1 = resolve_image_prompt(Some("Job Custom Image Prompt"), "", &page);
+  assert_eq!(res_c1.unwrap(), "Job Custom Image Prompt");
+
+  // CASE 2: Job image prompt missing, Page default present -> Page default used
+  let res_c2 = resolve_image_prompt(None, "", &page);
+  assert_eq!(res_c2.unwrap(), "Page Default Image Prompt");
+
+  // CASE 3: Both missing -> IMAGE_PROMPT_REQUIRED
+  let empty_page = sqlite_tasks::queries::content_pages::content_page::ContentPage {
+    id: "PAGE_EMPTY".to_string(),
+    name: "Empty".to_string(),
+    slug: "empty".to_string(),
+    output_root: "D:\\".to_string(),
+    target_platform: None,
+    default_model_id: None,
+    default_workflow_id: None,
+    default_language: None,
+    default_tone: None,
+    default_aspect_ratio: None,
+    browser_profile_id: None,
+    default_image_prompt: None,
+    default_expand_9_16_prompt: None,
+    default_video_prompt: None,
+    is_archived: false,
+    created_at: 0,
+    updated_at: 0,
+  };
+  let res_c3 = resolve_image_prompt(None, "", &empty_page);
+  assert_eq!(res_c3.unwrap_err(), "IMAGE_PROMPT_REQUIRED");
+
+  // CASE 4: Job 9:16 prompt present -> Job override
+  let res_c4 = resolve_expand_prompt(Some("Job Custom 9:16 Prompt"), &page);
+  assert_eq!(res_c4, "Job Custom 9:16 Prompt");
+
+  // CASE 5: Job missing 9:16 prompt, Page default exists -> Page default
+  let res_c5 = resolve_expand_prompt(None, &page);
+  assert_eq!(res_c5, "Page Default 9:16 Prompt");
+
+  // CASE 6: Video Job override vs Page default -> Job override
+  let res_c6_override = resolve_video_prompt(Some("Job Custom Video Prompt"), &page);
+  assert_eq!(res_c6_override, "Job Custom Video Prompt");
+
+  let res_c6_default = resolve_video_prompt(None, &page);
+  assert_eq!(res_c6_default, "Page Default Video Prompt");
 }

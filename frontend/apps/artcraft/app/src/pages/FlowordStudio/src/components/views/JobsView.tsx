@@ -370,10 +370,10 @@ export const JobsView: React.FC<JobsViewProps> = ({
                 {selectedRun.steps?.map((step) => (
                   <div key={step.id} className="relative">
                     <span className={`absolute -left-[17px] top-1 h-2 w-2 rounded-full ${
-                      step.status === 'completed' ? 'bg-emerald-400' : step.status === 'failed' ? 'bg-rose-400' : 'bg-zinc-500'
+                      step.status === 'succeeded' ? 'bg-emerald-400' : step.status === 'failed' ? 'bg-rose-400' : 'bg-zinc-500'
                     }`} />
                     <div className="text-[11px] text-zinc-300 capitalize">{step.id} — {step.status}</div>
-                    <div className="text-[10px] text-zinc-500">Duration: {step.durationSec ? `${step.durationSec}s` : 'active'}</div>
+                    <div className="text-[10px] text-zinc-500">Duration: {step.durationMs ? `${Math.round(step.durationMs / 1000)}s` : 'active'}</div>
                   </div>
                 ))}
               </div>

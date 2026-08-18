@@ -91,6 +91,11 @@ export interface EnqueueFlowordWorkflowRequest {
   source_urls?: string[];
   source_files?: string[];
   workflow_mode?: string;
+  image_prompt?: string;
+  expand_9_16_prompt?: string;
+  expand_prompt?: string;
+  video_prompt?: string;
+  source_image_artifact?: unknown;
   target_platform?: string;
   aspect_ratio?: string;
   target_duration_seconds?: number;
@@ -387,7 +392,7 @@ export async function fetchDetailedReadiness(): Promise<DetailedReadinessStatus>
 // ---------------------------------------------------------------------------
 
 const BACKEND_BASE_URL = (
-  import.meta.env.VITE_BACKEND_BASE_URL?.trim() || 'http://127.0.0.1:30000'
+  (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_BACKEND_BASE_URL?.trim() || 'http://127.0.0.1:30000'
 ).replace(/\/+$/, '');
 
 interface GatewayErrorBody {
@@ -709,6 +714,9 @@ export interface ContentPage {
   default_tone?: string | null;
   default_aspect_ratio?: string | null;
   browser_profile_id?: string | null;
+  default_image_prompt?: string | null;
+  default_expand_9_16_prompt?: string | null;
+  default_video_prompt?: string | null;
   is_archived: boolean;
   created_at: number;
   updated_at: number;
@@ -726,6 +734,9 @@ export interface CreateContentPageRequest {
   default_tone?: string;
   default_aspect_ratio?: string;
   browser_profile_id?: string;
+  default_image_prompt?: string;
+  default_expand_9_16_prompt?: string;
+  default_video_prompt?: string;
 }
 
 export interface UpdateContentPageRequest {
@@ -740,6 +751,9 @@ export interface UpdateContentPageRequest {
   default_tone?: string;
   default_aspect_ratio?: string;
   browser_profile_id?: string;
+  default_image_prompt?: string;
+  default_expand_9_16_prompt?: string;
+  default_video_prompt?: string;
 }
 
 export interface ResolveOutputPathResponse {

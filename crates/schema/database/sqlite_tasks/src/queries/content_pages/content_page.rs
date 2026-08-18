@@ -1,7 +1,7 @@
 use crate::error::SqliteTasksError;
 use serde_derive::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ContentPage {
   pub id: String,
   pub name: String,
@@ -14,6 +14,9 @@ pub struct ContentPage {
   pub default_tone: Option<String>,
   pub default_aspect_ratio: Option<String>,
   pub browser_profile_id: Option<String>,
+  pub default_image_prompt: Option<String>,
+  pub default_expand_9_16_prompt: Option<String>,
+  pub default_video_prompt: Option<String>,
   pub is_archived: bool,
   pub created_at: i64,
   pub updated_at: i64,
@@ -32,6 +35,9 @@ pub struct RawContentPage {
   pub default_tone: Option<String>,
   pub default_aspect_ratio: Option<String>,
   pub browser_profile_id: Option<String>,
+  pub default_image_prompt: Option<String>,
+  pub default_expand_9_16_prompt: Option<String>,
+  pub default_video_prompt: Option<String>,
   pub is_archived: i64,
   pub created_at: i64,
   pub updated_at: i64,
@@ -50,6 +56,9 @@ pub(crate) fn raw_into_content_page(raw: RawContentPage) -> Result<ContentPage, 
     default_tone: raw.default_tone,
     default_aspect_ratio: raw.default_aspect_ratio,
     browser_profile_id: raw.browser_profile_id,
+    default_image_prompt: raw.default_image_prompt,
+    default_expand_9_16_prompt: raw.default_expand_9_16_prompt,
+    default_video_prompt: raw.default_video_prompt,
     is_archived: raw.is_archived != 0,
     created_at: raw.created_at,
     updated_at: raw.updated_at,

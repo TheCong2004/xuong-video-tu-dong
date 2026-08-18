@@ -5,6 +5,12 @@ export interface WorkflowInput {
   pageId?: string;
   workflowName: string;
   prompt: string;
+  workflowMode?: 'grok_content_pipeline' | 'grok_image_edit' | 'floword_video_pipeline' | string;
+  imagePrompt?: string;
+  expand916Prompt?: string;
+  expandPrompt?: string;
+  videoPrompt?: string;
+  sourceImageArtifact?: ArtifactRef | Record<string, unknown>;
   topic?: string;
   sourceUrls: string[];
   sourceFiles: string[];
@@ -25,6 +31,14 @@ export interface WorkflowInput {
   xhsVariant?: 'mainland' | 'international';
   musicPath?: string;
   characterReferencePath?: string;
+  // UI helper / backward compatible fields
+  customPrompt?: string;
+  platform?: string;
+  targetDurationSec?: number;
+  voiceTone?: string;
+  skipResearch?: boolean;
+  generateImage?: boolean;
+  generateDraft?: boolean;
 }
 
 export type StepStatus =
@@ -132,15 +146,19 @@ export interface StepError {
 
 export interface WorkflowRun {
   id: string;
-  workflowName: string;
+  pageId?: string;
+  workflowName?: string;
   input: WorkflowInput;
   status: WorkflowStatus;
-  currentStepId: string | null;
-  progress: number;
-  createdAt: string;
+  currentStage?: string;
+  currentStepId?: string | null;
+  progress?: number;
+  progressPercent?: number;
+  isPublished?: boolean;
+  createdAt?: string;
   startedAt?: string;
   completedAt?: string;
-  steps: StepRun[];
+  steps?: StepRun[];
   artifacts: ArtifactRef[];
   errorCode?: string;
   errorMessage?: string;

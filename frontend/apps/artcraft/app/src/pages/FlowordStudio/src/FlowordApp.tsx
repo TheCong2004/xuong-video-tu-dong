@@ -50,6 +50,19 @@ const POLL_INTERVAL_MS = 2000;
 
 function backendProgress(stage: string, status: string): number {
   if (status === 'complete_success') return 100;
+  if (status === 'complete_failure' || status.includes('cancelled')) return 0;
+
+  // Grok pipeline stages
+  if (stage === 'GENERATING_IMAGE') return 20;
+  if (stage === 'IMAGE_DONE') return 30;
+  if (stage === 'CONVERTING_9_16') return 45;
+  if (stage === 'IMAGE_9_16_DONE') return 55;
+  if (stage === 'GENERATING_VIDEO') return 70;
+  if (stage === 'VIDEO_DONE') return 82;
+  if (stage === 'SAVING_LOCAL') return 92;
+  if (stage === 'LOCAL_SAVED') return 98;
+
+  // Legacy pipeline stages
   if (stage.includes('ingest_analyze')) return 29;
   if (stage.includes('preflight')) return 14;
   if (stage.includes('research')) return 43;
@@ -57,7 +70,7 @@ function backendProgress(stage: string, status: string): number {
   if (stage.includes('voice')) return 71;
   if (stage.includes('media_timeline') || stage.includes('caption')) return 86;
   if (stage.includes('draft') || stage.includes('render') || stage.includes('capcut')) return 95;
-  return 0;
+  return 10;
 }
 
 const TERMINAL_STAGES = new Set(['completed', 'draft_ready', 'failed', 'cancelled']);
@@ -78,32 +91,81 @@ function parseWorkflowOutputs(value: string | null | undefined): {
   if (!value) return { artifacts: [] };
   try {
     const output = JSON.parse(value) as Record<string, unknown>;
-    const artifacts = ['script_artifact', 'capcut_artifact'].flatMap((key) => {
-      const raw = output[key];
-      if (!raw || typeof raw !== 'object') return [];
-      const artifact = raw as Record<string, unknown>;
-      const path = String(artifact.path ?? '');
-      const type = String(artifact.artifact_type ?? 'trace') as ArtifactRef['type'];
-      if (!path || !artifact.id || !artifact.workflow_id || !artifact.step_id) return [];
-      return [{
-        id: String(artifact.id),
-        workflowId: String(artifact.workflow_id),
-        stepId: String(artifact.step_id),
+    const artifacts: ArtifactRef[] = [];
+
+    const pushArtifact = (raw: unknown, defaultType: ArtifactRef['type'], defaultName: string) => {
+      if (!raw || typeof raw !== 'object') return;
+      const a = raw as Record<string, unknown>;
+      const path = String(a.path ?? a.location ?? '');
+      if (!path) return;
+      const type = (a.artifact_type ?? a.kind ?? defaultType) as ArtifactRef['type'];
+      artifacts.push({
+        id: String(a.id ?? `art_${Math.random().toString(36).slice(2, 9)}`),
+        workflowId: String(a.workflow_id ?? 'grok_run'),
+        stepId: String(a.step_id ?? a.stage ?? 'pipeline'),
         type,
-        name: path.split(/[\\/]/).pop() || type,
+        name: String(a.name ?? path.split(/[\\/]/).pop() ?? defaultName),
         path,
-        sizeBytes: Number(artifact.size_bytes ?? 0),
-        mimeType: String(artifact.mime_type ?? 'application/octet-stream'),
-        sha256: artifact.sha256 ? String(artifact.sha256) : undefined,
-        createdByStep: String(artifact.producer ?? artifact.step_id),
-        createdAt: String(artifact.created_at ?? ''),
-        metadata: artifact.metadata && typeof artifact.metadata === 'object' ? (artifact.metadata as Record<string, unknown>) : undefined,
-      } satisfies ArtifactRef];
+        url: typeof a.url === 'string' ? a.url : undefined,
+        sizeBytes: Number(a.size_bytes ?? a.size ?? 0),
+        mimeType: String(a.mime_type ?? (type === 'video' || type === 'rendered_video' ? 'video/mp4' : 'image/png')),
+        sha256: a.sha256 ? String(a.sha256) : undefined,
+        createdByStep: String(a.producer ?? a.step_id ?? 'grok_engine'),
+        createdAt: String(a.created_at ?? new Date().toISOString()),
+        metadata: a.metadata && typeof a.metadata === 'object' ? (a.metadata as Record<string, unknown>) : undefined,
+      });
+    };
+
+    // Legacy artifacts
+    ['script_artifact', 'capcut_artifact'].forEach((key) => {
+      pushArtifact(output[key], key.includes('script') ? 'script' : 'capcut_draft', key);
     });
+
+    // Grok image edit stage artifact
+    if (output.image_edit && typeof output.image_edit === 'object') {
+      const imgEdit = output.image_edit as Record<string, unknown>;
+      pushArtifact(imgEdit.generated_artifact, 'image', 'grok_image_edit.png');
+    }
+
+    // Grok 9:16 expand stage artifact
+    if (output.expand_9_16 && typeof output.expand_9_16 === 'object') {
+      const exp = output.expand_9_16 as Record<string, unknown>;
+      pushArtifact(exp.expanded_artifact, 'image', 'grok_expand_9_16.png');
+    }
+
+    // Grok video generate stage artifact
+    if (output.video_generate && typeof output.video_generate === 'object') {
+      const vid = output.video_generate as Record<string, unknown>;
+      pushArtifact(vid.video_artifact, 'video', 'grok_video.mp4');
+    }
+
+    // Final video path output
+    if (typeof output.final_video_path === 'string' && output.final_video_path.trim().length > 0) {
+      const finalPath = output.final_video_path.trim();
+      artifacts.push({
+        id: 'final_video_output',
+        workflowId: 'grok_run',
+        stepId: 'save_local',
+        type: 'rendered_video',
+        name: finalPath.split(/[\\/]/).pop() || 'final_video.mp4',
+        path: finalPath,
+        sizeBytes: 0,
+        mimeType: 'video/mp4',
+        createdByStep: 'save_local',
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    const videoUrl = typeof output.video_url === 'string'
+      ? output.video_url
+      : typeof output.final_video_path === 'string'
+      ? output.final_video_path
+      : undefined;
+
     return {
       artifacts,
       draftUrl: typeof output.draft_url === 'string' ? output.draft_url : undefined,
-      videoUrl: typeof output.video_url === 'string' ? output.video_url : undefined,
+      videoUrl,
     };
   } catch {
     return { artifacts: [] };
@@ -280,15 +342,49 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
 
   const handleExecuteWorkflow = async (customInput?: WorkflowInput) => {
     const inputToUse = customInput || workflowInput;
+
+    const isGrokWorkflow = inputToUse.workflowMode === 'grok_content_pipeline'
+      || inputToUse.workflowMode === 'grok_image_edit'
+      || inputToUse.workflowName?.toLowerCase().includes('grok');
+
+    // Validation for Grok pipeline
+    if (isGrokWorkflow) {
+      const selectedPage = pages.find((p) => p.id === (inputToUse.pageId || activePageId));
+      if (!selectedPage && !activePageId) {
+        toast.error('Vui lòng chọn Page trước khi chạy Grok Pipeline.');
+        return;
+      }
+
+      // Check image prompt: custom or page default
+      const effImagePrompt = inputToUse.imagePrompt || inputToUse.prompt || inputToUse.customPrompt || selectedPage?.default_image_prompt;
+      if (!effImagePrompt || effImagePrompt.trim().length === 0) {
+        toast.error('Grok Pipeline yêu cầu Image Prompt (nhập trực tiếp hoặc cấu hình mặc định trong Page).');
+        return;
+      }
+
+      // Check source image
+      const hasSourceImage = (inputToUse.sourceFiles && inputToUse.sourceFiles.length > 0)
+        || inputToUse.sourceImageArtifact !== undefined;
+      if (!hasSourceImage) {
+        toast.error('Grok Pipeline yêu cầu Source Image (chọn file ảnh đầu vào).');
+        return;
+      }
+    }
+
     setRunning(true);
     setProgress(5);
-    appendLog('🚀 Khởi chạy Floword Production Pipeline...');
+    appendLog(`🚀 Khởi chạy ${inputToUse.workflowName || 'Floword Production Pipeline'}...`);
 
     try {
       const res = await enqueueFlowordWorkflow({
-        page_id: activePageId ?? undefined,
-        workflow_name: inputToUse.workflowName || 'floword_video_pipeline',
+        page_id: inputToUse.pageId || activePageId || undefined,
+        workflow_name: inputToUse.workflowName || (inputToUse.workflowMode === 'grok_content_pipeline' ? 'grok_content_pipeline' : 'floword_video_pipeline'),
+        workflow_mode: inputToUse.workflowMode || (inputToUse.workflowName?.toLowerCase().includes('grok') ? 'grok_content_pipeline' : undefined),
         prompt: inputToUse.prompt || inputToUse.customPrompt || '',
+        image_prompt: inputToUse.imagePrompt || inputToUse.customPrompt || (inputToUse.prompt !== DEFAULT_WORKFLOW_INPUT.prompt ? inputToUse.prompt : undefined),
+        expand_9_16_prompt: inputToUse.expand916Prompt || inputToUse.expandPrompt,
+        video_prompt: inputToUse.videoPrompt,
+        source_image_artifact: inputToUse.sourceImageArtifact,
         topic: inputToUse.topic,
         source_urls: inputToUse.sourceUrls,
         source_files: inputToUse.sourceFiles,
@@ -308,8 +404,8 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       const initialRun: WorkflowRun = {
         id: jobId,
         pageId: activePageId ?? 'general',
-        input: inputToUse,
-        currentStage: 'image',
+        input: { ...inputToUse },
+        currentStage: isGrokWorkflow ? 'GENERATING_IMAGE' : 'image',
         status: 'running',
         progressPercent: 5,
         artifacts: [],

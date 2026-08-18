@@ -23,6 +23,9 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
   const [defaultLanguage, setDefaultLanguage] = useState('vi');
   const [defaultTone, setDefaultTone] = useState('professional');
   const [defaultAspectRatio, setDefaultAspectRatio] = useState('9:16');
+  const [defaultImagePrompt, setDefaultImagePrompt] = useState('');
+  const [defaultExpand916Prompt, setDefaultExpand916Prompt] = useState('');
+  const [defaultVideoPrompt, setDefaultVideoPrompt] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +37,9 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
       setDefaultLanguage(pageToEdit.default_language || 'vi');
       setDefaultTone(pageToEdit.default_tone || 'professional');
       setDefaultAspectRatio(pageToEdit.default_aspect_ratio || '9:16');
+      setDefaultImagePrompt(pageToEdit.default_image_prompt || '');
+      setDefaultExpand916Prompt(pageToEdit.default_expand_9_16_prompt || '');
+      setDefaultVideoPrompt(pageToEdit.default_video_prompt || '');
     } else {
       setName('');
       setOutputRoot('D:\\');
@@ -41,6 +47,9 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
       setDefaultLanguage('vi');
       setDefaultTone('professional');
       setDefaultAspectRatio('9:16');
+      setDefaultImagePrompt('');
+      setDefaultExpand916Prompt('');
+      setDefaultVideoPrompt('');
     }
     setError(null);
   }, [pageToEdit, isOpen]);
@@ -70,6 +79,9 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
           default_language: defaultLanguage,
           default_tone: defaultTone,
           default_aspect_ratio: defaultAspectRatio,
+          default_image_prompt: defaultImagePrompt.trim() || undefined,
+          default_expand_9_16_prompt: defaultExpand916Prompt.trim() || undefined,
+          default_video_prompt: defaultVideoPrompt.trim() || undefined,
         });
       } else {
         await onSavePage({
@@ -79,6 +91,9 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
           default_language: defaultLanguage,
           default_tone: defaultTone,
           default_aspect_ratio: defaultAspectRatio,
+          default_image_prompt: defaultImagePrompt.trim() || undefined,
+          default_expand_9_16_prompt: defaultExpand916Prompt.trim() || undefined,
+          default_video_prompt: defaultVideoPrompt.trim() || undefined,
         });
       }
       onClose();
@@ -106,9 +121,9 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-lg rounded-xl border border-white/[0.1] bg-[#12161f] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="w-full max-w-lg max-h-[90vh] flex flex-col rounded-xl border border-white/[0.1] bg-[#12161f] shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4 shrink-0">
           <div className="flex items-center gap-2 text-white font-semibold text-base">
             <Layers className="h-5 w-5 text-indigo-400" />
             {pageToEdit ? 'Edit Content Page' : 'Create New Content Page'}
@@ -121,7 +136,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto flex-1 text-xs">
           {error && (
             <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-400">
               {error}
@@ -217,6 +232,43 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 <option value="review">Review</option>
                 <option value="viral">Viral</option>
               </select>
+            </div>
+          </div>
+
+          <div className="border-t border-white/[0.08] pt-3 space-y-3">
+            <div className="text-xs font-semibold text-indigo-300">Grok Pipeline Default Prompts</div>
+
+            <div>
+              <label className="block text-[11px] text-zinc-400 mb-1">Default Image Prompt</label>
+              <textarea
+                rows={2}
+                value={defaultImagePrompt}
+                onChange={(e) => setDefaultImagePrompt(e.target.value)}
+                placeholder="Default fallback prompt when creating/editing Grok images for this page"
+                className="w-full rounded-lg border border-white/[0.1] bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-zinc-400 mb-1">Default 9:16 Outpaint Prompt</label>
+              <textarea
+                rows={2}
+                value={defaultExpand916Prompt}
+                onChange={(e) => setDefaultExpand916Prompt(e.target.value)}
+                placeholder="Default fallback for 9:16 vertical expansion"
+                className="w-full rounded-lg border border-white/[0.1] bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-zinc-400 mb-1">Default Video Animation Prompt</label>
+              <textarea
+                rows={2}
+                value={defaultVideoPrompt}
+                onChange={(e) => setDefaultVideoPrompt(e.target.value)}
+                placeholder="Default fallback for Grok video animation"
+                className="w-full rounded-lg border border-white/[0.1] bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
+              />
             </div>
           </div>
 
