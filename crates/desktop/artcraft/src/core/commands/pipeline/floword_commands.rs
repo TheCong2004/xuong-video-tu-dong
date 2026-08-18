@@ -48,7 +48,7 @@ const OMNIROUTE_UNAVAILABLE: &str = "OMNIROUTE_UNAVAILABLE";
 // Enqueue
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EnqueueFlowordWorkflowRequest {
   pub page_id: Option<String>,
   pub workflow_name: String,
@@ -57,6 +57,11 @@ pub struct EnqueueFlowordWorkflowRequest {
   pub source_urls: Option<Vec<String>>,
   pub source_files: Option<Vec<String>>,
   pub workflow_mode: Option<String>,
+  pub image_prompt: Option<String>,
+  pub expand_9_16_prompt: Option<String>,
+  pub expand_prompt: Option<String>,
+  pub video_prompt: Option<String>,
+  pub source_image_artifact: Option<Value>,
   pub target_platform: Option<String>,
   pub aspect_ratio: Option<String>,
   pub target_duration_seconds: Option<u32>,
@@ -100,16 +105,32 @@ pub struct FlowordErrorDetails {
 pub async fn enqueue_floword_workflow(task_database: State<'_, TaskDatabase>, request: EnqueueFlowordWorkflowRequest) -> ResponseOrError<EnqueueFlowordWorkflowResponse, FlowordErrorDetails> {
   info!("[FlowordDB] command=enqueue db_path={}", task_database.db_path_display());
 
-  let page_id_trimmed = request.page_id.as_deref().map(str::trim).filter(|s| !s.is_empty());
+  let mut req = request;
+  // Resolve authoritative workflow_mode if not explicitly provided
+  if req.workflow_mode.as_deref().unwrap_or("").trim().is_empty() {
+    let lower_name = req.workflow_name.to_lowercase();
+    if lower_name.contains("grok full") || lower_name.contains("auto ai grok") || lower_name == "grok_content_pipeline" {
+      req.workflow_mode = Some("grok_content_pipeline".to_string());
+    } else if lower_name.contains("grok image") || lower_name == "grok_image_edit" {
+      req.workflow_mode = Some("grok_image_edit".to_string());
+    }
+  }
+
+  let page_id_trimmed = req.page_id.as_deref().map(str::trim).filter(|s| !s.is_empty());
   if page_id_trimmed.is_none() {
     return Err(internal_error("Select a Page before running the workflow.", None));
   }
 
-  if request.prompt.trim().is_empty() && request.source_urls.as_ref().map(|values| values.is_empty()).unwrap_or(true) && request.source_files.as_ref().map(|values| values.is_empty()).unwrap_or(true) {
-    return Err(internal_error("Prompt, source_urls, and source_files are all empty", None));
+  if req.prompt.trim().is_empty()
+    && req.image_prompt.as_ref().map(|p| p.trim().is_empty()).unwrap_or(true)
+    && req.source_urls.as_ref().map(|values| values.is_empty()).unwrap_or(true)
+    && req.source_files.as_ref().map(|values| values.is_empty()).unwrap_or(true)
+    && req.source_image_artifact.is_none()
+  {
+    return Err(internal_error("Prompt, image_prompt, source_urls, source_files, and source_image_artifact are all empty", None));
   }
 
-  let input_payload = serde_json::to_string(&request).map_err(|e| internal_error(&format!("Failed to serialize input payload: {e}"), None))?;
+  let input_payload = serde_json::to_string(&req).map_err(|e| internal_error(&format!("Failed to serialize input payload: {e}"), None))?;
 
   let job_id = create_pipeline_job(CreatePipelineJobArgs {
     db: task_database.get_connection(),
@@ -1075,6 +1096,52 @@ mod tests {
       assert_eq!(bump_retry_count(&mut outputs, "step-3"), 1);
       assert_eq!(bump_retry_count(&mut outputs, "youwee"), 2); // same module, different id form
       assert_eq!(bump_retry_count(&mut outputs, "step-2"), 1); // different module
+    }
+
+    #[test]
+    fn test_enqueue_resolves_grok_content_pipeline_workflow_mode() {
+      let mut req = EnqueueFlowordWorkflowRequest {
+        page_id: Some("PAGE_01".to_string()),
+        workflow_name: "Grok Full Pipeline".to_string(),
+        prompt: "A cybernetic tiger".to_string(),
+        topic: None,
+        source_urls: None,
+        source_files: None,
+        workflow_mode: None,
+        image_prompt: Some("tiger in neon city".to_string()),
+        expand_9_16_prompt: Some("expand 9:16".to_string()),
+        expand_prompt: None,
+        video_prompt: Some("tiger running".to_string()),
+        source_image_artifact: None,
+        target_platform: None,
+        aspect_ratio: None,
+        target_duration_seconds: None,
+        output_mode: None,
+        model_id: None,
+        voice_id: None,
+        language: None,
+        content_source: None,
+        story_url: None,
+        research_enabled: None,
+        research_platform: None,
+        research_query: None,
+        research_mode: None,
+        xhs_variant: None,
+        cookie_mode: None,
+        cookie_browser: None,
+        cookie_browser_profile: None,
+        cookie_file_path: None,
+        cookie_skip_patterns: None,
+      };
+
+      if req.workflow_mode.as_deref().unwrap_or("").trim().is_empty() {
+        let lower_name = req.workflow_name.to_lowercase();
+        if lower_name.contains("grok full") || lower_name.contains("auto ai grok") || lower_name == "grok_content_pipeline" {
+          req.workflow_mode = Some("grok_content_pipeline".to_string());
+        }
+      }
+
+      assert_eq!(req.workflow_mode, Some("grok_content_pipeline".to_string()));
     }
   }
 }

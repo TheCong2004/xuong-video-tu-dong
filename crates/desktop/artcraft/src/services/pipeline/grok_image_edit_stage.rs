@@ -171,6 +171,7 @@ pub fn detect_image_mime(bytes: &[u8]) -> Result<(&'static str, &'static str), S
 pub async fn execute_grok_image_edit_stage(
   input: GrokImageEditInput,
   attempt_id: &str,
+  cancel_flag: Option<&Arc<AtomicBool>>,
 ) -> Result<GrokImageEditOutput, String> {
   let job_id = input.job_id.clone();
   let step_id = "GENERATING_IMAGE";
@@ -228,13 +229,13 @@ pub async fn execute_grok_image_edit_stage(
     lease_id, profile_id
   );
 
-  // 2. Spawn concurrent heartbeat maintainer
+  // 2. Start background heartbeat loop (every 30s)
   let heartbeat_running = Arc::new(AtomicBool::new(true));
-  let heartbeat_lost = Arc::new(AtomicBool::new(false));
+  let hb_running_clone = heartbeat_running.clone();
   let hb_lease_id = lease_id.clone();
   let hb_job_id = job_id.clone();
   let hb_attempt_id = attempt_id.to_string();
-  let hb_running_clone = heartbeat_running.clone();
+  let heartbeat_lost = Arc::new(AtomicBool::new(false));
   let hb_lost_clone = heartbeat_lost.clone();
 
   let heartbeat_task = tokio::spawn(async move {
@@ -246,7 +247,7 @@ pub async fn execute_grok_image_edit_stage(
       let req = HeartbeatLeaseRequest {
         job_id: hb_job_id.clone(),
         attempt_id: hb_attempt_id.clone(),
-        ttl_seconds: Some(120),
+        ttl_seconds: Some(60),
       };
       if let Err(err) = heartbeat_lease(&hb_lease_id, req).await {
         warn!("[GrokImageEdit] Heartbeat failed for lease {hb_lease_id}: {err}");
@@ -302,12 +303,47 @@ pub async fn execute_grok_image_edit_stage(
     // Forward to extension bridge endpoint
     let bridge_base = get_extension_bridge_base_url();
     let bridge_url = format!("{bridge_base}/v1/workers/{profile_id}/dispatch");
-    let resp = client
-      .post(&bridge_url)
-      .json(&req_payload)
-      .send()
-      .await
-      .map_err(|e| format!("Bridge dispatch failed: {e}"))?;
+
+    let (resp_res, was_cancelled) = tokio::select! {
+      res = client.post(&bridge_url).json(&req_payload).send() => {
+        (Some(res), false)
+      }
+      _ = async {
+        if let Some(flag) = cancel_flag {
+          while !flag.load(Ordering::Relaxed) {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+          }
+        } else {
+          std::future::pending::<()>().await;
+        }
+      } => {
+        (None, true)
+      }
+    };
+
+    if was_cancelled {
+      info!("[GrokImageEdit] Job cancelled in-flight! Dispatching cancel request to worker {profile_id}");
+      let cancel_payload = serde_json::json!({
+        "protocol": "floword-production",
+        "protocolVersion": 1,
+        "requestId": format!("CANCEL_{}", Uuid::new_v4().simple()),
+        "jobId": job_id,
+        "stepId": step_id,
+        "attemptId": attempt_id,
+        "leaseId": lease_id,
+        "profileId": profile_id,
+        "method": "production.task.cancel",
+        "params": {
+          "targetRequestId": request_id,
+        },
+        "createdAt": chrono::Utc::now().to_rfc3339(),
+      });
+      let _ = client.post(&bridge_url).json(&cancel_payload).send().await;
+      lease_guard.release().await;
+      return Err("CANCELLED".to_string());
+    }
+
+    let resp = resp_res.unwrap().map_err(|e| format!("Bridge dispatch failed: {e}"))?;
 
     if !resp.status().is_success() {
       let status = resp.status();
@@ -783,7 +819,7 @@ mod tests {
       workflow_root: std::path::PathBuf::from(""),
     };
 
-    let outcome = execute_grok_image_edit_stage(input, "1").await;
+    let outcome = execute_grok_image_edit_stage(input, "1", None).await;
     assert!(outcome.is_err());
     assert!(outcome.unwrap_err().contains("WORKFLOW_ROOT_REQUIRED"));
   }

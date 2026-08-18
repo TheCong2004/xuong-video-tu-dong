@@ -145,110 +145,183 @@ struct ExtensionGeneratedMedia {
 struct ExtensionError {
   code: String,
   message: String,
-  retryable: Option<bool>,
 }
 
-/// Validate that the actual pixel dimensions conform to 9:16 aspect ratio (ratio ~ 0.5625)
+/// Decode actual image dimensions (width, height) directly from raw image bytes.
+/// Supports PNG, JPEG, and WebP headers without heuristic guesses.
+pub fn decode_image_dimensions(bytes: &[u8]) -> Result<(u32, u32), String> {
+  if bytes.len() < 8 {
+    return Err("ARTIFACT_INVALID_IMAGE: Truncated image bytes".to_string());
+  }
+
+  // PNG
+  if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+    if bytes.len() >= 24 && &bytes[12..16] == b"IHDR" {
+      let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+      let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+      if width > 0 && height > 0 {
+        return Ok((width, height));
+      }
+    }
+    return Err("ARTIFACT_INVALID_IMAGE: Malformed PNG IHDR header".to_string());
+  }
+
+  // JPEG
+  if bytes.starts_with(b"\xFF\xD8") {
+    let mut i = 2;
+    while i + 8 < bytes.len() {
+      if bytes[i] != 0xFF {
+        i += 1;
+        continue;
+      }
+      let marker = bytes[i + 1];
+      // SOF0 (0xC0), SOF1 (0xC1), SOF2 (0xC2)
+      if marker == 0xC0 || marker == 0xC1 || marker == 0xC2 {
+        let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+        let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
+        if width > 0 && height > 0 {
+          return Ok((width, height));
+        }
+      }
+      if marker == 0xD9 || marker == 0xDA {
+        break;
+      }
+      if i + 3 < bytes.len() {
+        let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        i += 2 + len;
+      } else {
+        break;
+      }
+    }
+    return Err("ARTIFACT_INVALID_IMAGE: Malformed JPEG frame header".to_string());
+  }
+
+  // WebP
+  if bytes.starts_with(b"RIFF") && bytes.len() >= 30 && &bytes[8..12] == b"WEBP" {
+    let chunk = &bytes[12..16];
+    if chunk == b"VP8 " && bytes.len() >= 30 {
+      let width = (u16::from_le_bytes([bytes[26], bytes[27]]) & 0x3FFF) as u32;
+      let height = (u16::from_le_bytes([bytes[28], bytes[29]]) & 0x3FFF) as u32;
+      if width > 0 && height > 0 {
+        return Ok((width, height));
+      }
+    } else if chunk == b"VP8L" && bytes.len() >= 25 {
+      let b1 = bytes[21] as u32;
+      let b2 = bytes[22] as u32;
+      let b3 = bytes[23] as u32;
+      let b4 = bytes[24] as u32;
+      let width = 1 + (((b2 & 0x3F) << 8) | b1);
+      let height = 1 + (((b4 & 0xF) << 10) | (b3 << 2) | ((b2 & 0xC0) >> 6));
+      return Ok((width, height));
+    } else if chunk == b"VP8X" && bytes.len() >= 30 {
+      let width = 1 + (bytes[24] as u32 | ((bytes[25] as u32) << 8) | ((bytes[26] as u32) << 16));
+      let height = 1 + (bytes[27] as u32 | ((bytes[28] as u32) << 8) | ((bytes[29] as u32) << 16));
+      return Ok((width, height));
+    }
+  }
+
+  Err("ARTIFACT_INVALID_IMAGE: Unsupported image format or unreadable dimensions".to_string())
+}
+
 pub fn validate_aspect_ratio(width: u32, height: u32) -> Result<f64, String> {
   if width == 0 || height == 0 {
-    return Err("ASPECT_RATIO_INVALID: Zero width or height".to_string());
+    return Err("ASPECT_RATIO_INVALID: Zero dimension".to_string());
   }
-
-  let ratio = (width as f64) / (height as f64);
-  let target_ratio = 9.0 / 16.0; // ~ 0.5625
-  let tolerance = 0.08; // 0.4825 to 0.6425 tolerance for vertical crop
-
-  if (ratio - target_ratio).abs() > tolerance {
+  let ratio = width as f64 / height as f64;
+  let target = 9.0 / 16.0; // 0.5625
+  let tolerance = 0.03; // [0.5325, 0.5925]
+  if (ratio - target).abs() > tolerance {
     return Err(format!(
-      "ASPECT_RATIO_INVALID: Actual ratio {ratio:.4} ({width}x{height}) deviates from 9:16 ({target_ratio:.4})"
+      "ASPECT_RATIO_INVALID: Image ratio {ratio:.4} ({width}x{height}) is not 9:16 vertical ratio (expected ~0.5625)"
     ));
   }
-
   Ok(ratio)
 }
 
-/// Executes single-job grok.image.expand_9_16 with 9:16 aspect validation and 3-tier cleanup.
+/// Executes single-job grok.image.expand_9_16 with 3-tier cleanup and terminal barrier.
 pub async fn execute_grok_expand_9_16(
   input: GrokExpand916Input,
   attempt_id: &str,
+  cancel_flag: Option<&Arc<AtomicBool>>,
 ) -> Result<GrokExpand916Output, String> {
   let job_id = input.job_id.clone();
   let step_id = "CONVERTING_9_16";
   let request_id = format!("REQ_{}", Uuid::new_v4().simple());
 
   info!(
-    "[GrokExpand916] Starting 9:16 expansion: job_id={} attempt_id={} input_art={}",
+    "[GrokExpand916] Starting 9:16 expand: job_id={} attempt_id={} input_art={}",
     job_id, attempt_id, input.image_done_artifact.artifact_id
   );
 
   // Fail-closed canonical workflow root validation
-  let workflow_root_buf = input.workflow_root.clone();
-  if workflow_root_buf.as_os_str().is_empty() {
-    return Err("WORKFLOW_ROOT_REQUIRED: Canonical workflow artifact root path is required".to_string());
+  if input.workflow_root.as_os_str().is_empty() {
+    return Err("WORKFLOW_ROOT_REQUIRED: GrokExpand916Input workflow_root must be a non-empty canonical PathBuf".to_string());
   }
-  std::fs::create_dir_all(&workflow_root_buf)
-    .map_err(|e| format!("WORKFLOW_ROOT_INVALID: Cannot create canonical workflow artifact root {:?}: {e}", workflow_root_buf))?;
+  let workflow_root_buf = input.workflow_root.clone();
 
-  // Read input artifact (which MUST be the output of IMAGE_DONE)
-  let source_path = input.image_done_artifact.location.clone();
-  let (source_bytes, source_sha256, source_mime, data_url) = if let Ok(bytes) = tokio::fs::read(&source_path).await {
-    if bytes.is_empty() {
-      return Err("SOURCE_ARTIFACT_INVALID: Source file is 0 bytes".to_string());
-    }
-    let (mime, _ext) = detect_image_mime(&bytes)
-      .map_err(|e| format!("SOURCE_ARTIFACT_INVALID_MIME: {e}"))?;
-    use base64::Engine;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-    let hash = compute_sha256(&bytes);
-    (bytes, hash, mime, Some(format!("data:{mime};base64,{b64}")))
-  } else {
-    return Err("SOURCE_ARTIFACT_NOT_FOUND: IMAGE_DONE artifact missing on disk".to_string());
-  };
-
-  // 1. Acquire exclusive worker lease for expand_9_16
-  let lease = acquire_worker(AcquireWorkerRequest {
+  // Tier 1: Acquire exclusive lease
+  let acq_req = AcquireWorkerRequest {
     job_id: job_id.clone(),
     step_id: step_id.to_string(),
     attempt_id: attempt_id.to_string(),
     capability: "grok.image.expand_9_16".to_string(),
     pool_id: None,
     ttl_seconds: Some(180),
-  })
-  .await
-  .map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
+  };
 
-  let lease_id = lease.lease_id.clone();
-  let profile_id = lease.profile_id.clone();
-  let mut lease_guard = LeaseGuard::new(lease_id.clone());
+  let acq_res = acquire_worker(acq_req)
+    .await
+    .map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
 
-  // 2. Start background heartbeat loop
-  let heartbeat_running = Arc::new(AtomicBool::new(true));
-  let hb_running_clone = heartbeat_running.clone();
+  let lease_id = acq_res.lease_id.clone();
+  let profile_id = acq_res.profile_id.clone();
+  info!("[GrokExpand916] Lease acquired: {lease_id} for profile {profile_id}");
+
+  let mut guard = LeaseGuard::new(lease_id.clone());
+
+  // Heartbeat loop
+  let hb_cancel = Arc::new(AtomicBool::new(false));
+  let hb_cancel_clone = hb_cancel.clone();
   let hb_lease_id = lease_id.clone();
   let hb_job_id = job_id.clone();
   let hb_attempt_id = attempt_id.to_string();
 
-  tokio::spawn(async move {
-    while hb_running_clone.load(Ordering::Relaxed) {
+  let hb_handle = tokio::spawn(async move {
+    while !hb_cancel_clone.load(Ordering::Relaxed) {
       sleep(Duration::from_secs(30)).await;
-      if !hb_running_clone.load(Ordering::Relaxed) {
+      if hb_cancel_clone.load(Ordering::Relaxed) {
         break;
       }
-      let _ = heartbeat_lease(
-        &hb_lease_id,
-        HeartbeatLeaseRequest {
-          job_id: hb_job_id.clone(),
-          attempt_id: hb_attempt_id.clone(),
-          ttl_seconds: Some(60),
-        },
-      )
-      .await;
+      let req = HeartbeatLeaseRequest {
+        job_id: hb_job_id.clone(),
+        attempt_id: hb_attempt_id.clone(),
+        ttl_seconds: Some(180),
+      };
+      if let Err(e) = heartbeat_lease(&hb_lease_id, req).await {
+        warn!("[GrokExpand916] Heartbeat error for lease {hb_lease_id}: {e}");
+      }
     }
   });
 
-  // 3. Primary Execution Block
-  let timeout_val = input.timeout_ms.unwrap_or(180000);
   let exec_result: Result<(ArtifactRef, String, u32, u32, f64), String> = async {
+    let source_path = input.image_done_artifact.location.clone();
+    let source_file = std::path::Path::new(&source_path);
+    if !source_file.exists() {
+      return Err(format!("Source image artifact file does not exist at {source_path}"));
+    }
+
+    let source_bytes = tokio::fs::read(source_file)
+      .await
+      .map_err(|e| format!("Failed to read source image artifact file: {e}"))?;
+    let (source_mime, _) = detect_image_mime(&source_bytes)
+      .map_err(|e| format!("Invalid source image artifact: {e}"))?;
+    let source_sha256 = compute_sha256(&source_bytes);
+
+    use base64::Engine;
+    let b64_source = base64::engine::general_purpose::STANDARD.encode(&source_bytes);
+    let data_url = format!("data:{source_mime};base64,{b64_source}");
+
+    let timeout_val = input.timeout_ms.unwrap_or(180000);
     let req_payload = ExtensionProductionRequest {
       protocol: "floword-production",
       protocol_version: 1,
@@ -264,7 +337,7 @@ pub async fn execute_grok_expand_9_16(
         source_artifact: ExtensionSourceArtifact {
           artifact_id: input.image_done_artifact.artifact_id.clone(),
           path: source_path.clone(),
-          data_url,
+          data_url: Some(data_url),
           mime_type: source_mime.to_string(),
         },
         prompt: input.prompt.clone(),
@@ -274,22 +347,53 @@ pub async fn execute_grok_expand_9_16(
       created_at: chrono::Utc::now().to_rfc3339(),
     };
 
-    info!(
-      "[GrokExpand916] Dispatching 9:16 expand request {request_id} to worker {profile_id}"
-    );
-
     let client = Client::builder()
       .timeout(Duration::from_millis(timeout_val + 10000))
       .build()
       .map_err(|e| format!("Failed to create client: {e}"))?;
 
     let bridge_url = format!("{}/v1/workers/{profile_id}/dispatch", get_donut_browser_api_base_url());
-    let resp = client
-      .post(&bridge_url)
-      .json(&req_payload)
-      .send()
-      .await
-      .map_err(|e| format!("Bridge dispatch failed: {e}"))?;
+
+    let (resp_res, was_cancelled) = tokio::select! {
+      res = client.post(&bridge_url).json(&req_payload).send() => {
+        (Some(res), false)
+      }
+      _ = async {
+        if let Some(flag) = cancel_flag {
+          while !flag.load(Ordering::Relaxed) {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+          }
+        } else {
+          std::future::pending::<()>().await;
+        }
+      } => {
+        (None, true)
+      }
+    };
+
+    if was_cancelled {
+      info!("[GrokExpand916] Job cancelled in-flight! Dispatching cancel request to worker {profile_id}");
+      let cancel_payload = serde_json::json!({
+        "protocol": "floword-production",
+        "protocolVersion": 1,
+        "requestId": format!("CANCEL_{}", Uuid::new_v4().simple()),
+        "jobId": job_id,
+        "stepId": step_id,
+        "attemptId": attempt_id,
+        "leaseId": lease_id,
+        "profileId": profile_id,
+        "method": "production.task.cancel",
+        "params": {
+          "targetRequestId": request_id,
+        },
+        "createdAt": chrono::Utc::now().to_rfc3339(),
+      });
+      let _ = client.post(&bridge_url).json(&cancel_payload).send().await;
+      guard.release().await;
+      return Err("CANCELLED".to_string());
+    }
+
+    let resp = resp_res.unwrap().map_err(|e| format!("Bridge dispatch failed: {e}"))?;
 
     if !resp.status().is_success() {
       let status = resp.status();
@@ -303,17 +407,17 @@ pub async fn execute_grok_expand_9_16(
       .map_err(|e| format!("Failed to parse production result: {e}"))?;
 
     if !prod_result.ok {
-      let err = prod_result.error.unwrap_or(ExtensionError {
-        code: "UNKNOWN_ERROR".to_string(),
-        message: "Extension reported error without details".to_string(),
-        retryable: Some(true),
-      });
-      return Err(format!("{}: {}", err.code, err.message));
+      let err_msg = prod_result
+        .error
+        .map(|e| format!("{}: {}", e.code, e.message))
+        .unwrap_or_else(|| "Unknown extension execution error".to_string());
+      return Err(format!("Extension error: {err_msg}"));
     }
 
-    let media = prod_result.result.ok_or_else(|| "No media result in response".to_string())?;
+    let media = prod_result
+      .result
+      .ok_or_else(|| "ProductionResult missing result payload".to_string())?;
 
-    // Materialize raw bytes
     let raw_bytes = if media.locator.starts_with("data:") {
       let parts: Vec<&str> = media.locator.splitn(2, ',').collect();
       if parts.len() < 2 {
@@ -344,14 +448,15 @@ pub async fn execute_grok_expand_9_16(
       .map_err(|e| format!("ARTIFACT_INVALID_MIME: {e}"))?;
     let vertical_sha256 = compute_sha256(&raw_bytes);
 
-    let width = media.width.unwrap_or(1080);
-    let height = media.height.unwrap_or(1920);
+    // Decode actual dimensions directly from downloaded image bytes
+    let (width, height) = decode_image_dimensions(&raw_bytes)?;
     let ratio = validate_aspect_ratio(width, height)?;
 
     // Write file directly into canonical workflow directory
     let file_name = format!("{}_{}_{}.{}", job_id, step_id, attempt_id, ext);
     let file_path = workflow_root_buf.join(&file_name);
-    std::fs::write(&file_path, &raw_bytes)
+    tokio::fs::write(&file_path, &raw_bytes)
+      .await
       .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: Failed to write {file_path:?}: {e}"))?;
 
     // Register typed artifact through canonical ArtifactStore
@@ -380,32 +485,25 @@ pub async fn execute_grok_expand_9_16(
       .to_artifact_ref(StageId::StoryScript)
       .map_err(|e| format!("ARTIFACT_REF_CONVERSION_FAILED: {e}"))?;
 
-    // Terminal Ownership Barrier: Must confirm lease ACTIVE before returning IMAGE_9_16_DONE
-    let hb_check = heartbeat_lease(
-      &lease_id,
-      HeartbeatLeaseRequest {
-        job_id: job_id.clone(),
-        attempt_id: attempt_id.to_string(),
-        ttl_seconds: Some(60),
-      },
-    )
-    .await;
-
-    match hb_check {
-      Ok(hb_res) if hb_res.status == "ACTIVE" => {
-        info!("[GrokExpand916] Terminal heartbeat barrier passed. Lease {} ACTIVE.", lease_id);
+    // Final Heartbeat Barrier
+    let hb_final_req = HeartbeatLeaseRequest {
+      job_id: job_id.clone(),
+      attempt_id: attempt_id.to_string(),
+      ttl_seconds: Some(60),
+    };
+    let hb_final = heartbeat_lease(&lease_id, hb_final_req).await;
+    match hb_final {
+      Ok(hb_resp) => {
+        if hb_resp.status != "ACTIVE" {
+          return Err(format!(
+            "TERMINAL_OWNERSHIP_LOST: Final heartbeat status was {}, expected ACTIVE",
+            hb_resp.status
+          ));
+        }
       }
-      Ok(hb_res) => {
-        let _ = std::fs::remove_file(&file_path);
+      Err(e) => {
         return Err(format!(
-          "TERMINAL_OWNERSHIP_LOST: Final heartbeat returned inactive status: {}",
-          hb_res.status
-        ));
-      }
-      Err(err) => {
-        let _ = std::fs::remove_file(&file_path);
-        return Err(format!(
-          "TERMINAL_OWNERSHIP_LOST: Final heartbeat check failed: {err}"
+          "TERMINAL_OWNERSHIP_LOST: Final heartbeat failed before stage completion: {e}"
         ));
       }
     }
@@ -414,9 +512,20 @@ pub async fn execute_grok_expand_9_16(
   }
   .await;
 
-  // 4. Guaranteed Primary Cleanup
-  heartbeat_running.store(false, Ordering::Relaxed);
-  lease_guard.release().await;
+  // Cleanup heartbeat
+  hb_cancel.store(true, Ordering::Relaxed);
+  let _ = hb_handle.await;
+
+  // Cleanup lease
+  guard.release().await;
+
+  let source_sha256 = input
+    .image_done_artifact
+    .metadata
+    .get("sha256")
+    .and_then(|v| v.as_str())
+    .unwrap_or("")
+    .to_string();
 
   match exec_result {
     Ok((vertical_artifact, vertical_sha256, width, height, aspect_ratio)) => {
@@ -463,6 +572,61 @@ mod tests {
   }
 
   #[test]
+  fn test_decode_image_dimensions_png_fixtures() {
+    // 1080x1920 PNG fixture
+    let mut png_1080_1920 = Vec::new();
+    png_1080_1920.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+    png_1080_1920.extend_from_slice(&[0, 0, 0, 13]); // length
+    png_1080_1920.extend_from_slice(b"IHDR");
+    png_1080_1920.extend_from_slice(&1080u32.to_be_bytes()); // width
+    png_1080_1920.extend_from_slice(&1920u32.to_be_bytes()); // height
+    png_1080_1920.extend_from_slice(&[8, 6, 0, 0, 0]); // bit depth etc
+
+    let (w, h) = decode_image_dimensions(&png_1080_1920).unwrap();
+    assert_eq!((w, h), (1080, 1920));
+    assert!(validate_aspect_ratio(w, h).is_ok());
+
+    // 720x1280 PNG fixture
+    let mut png_720_1280 = Vec::new();
+    png_720_1280.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+    png_720_1280.extend_from_slice(&[0, 0, 0, 13]);
+    png_720_1280.extend_from_slice(b"IHDR");
+    png_720_1280.extend_from_slice(&720u32.to_be_bytes());
+    png_720_1280.extend_from_slice(&1280u32.to_be_bytes());
+    png_720_1280.extend_from_slice(&[8, 6, 0, 0, 0]);
+
+    let (w2, h2) = decode_image_dimensions(&png_720_1280).unwrap();
+    assert_eq!((w2, h2), (720, 1280));
+    assert!(validate_aspect_ratio(w2, h2).is_ok());
+
+    // 1024x1024 PNG fixture (Square -> should FAIL aspect ratio)
+    let mut png_1024_1024 = Vec::new();
+    png_1024_1024.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+    png_1024_1024.extend_from_slice(&[0, 0, 0, 13]);
+    png_1024_1024.extend_from_slice(b"IHDR");
+    png_1024_1024.extend_from_slice(&1024u32.to_be_bytes());
+    png_1024_1024.extend_from_slice(&1024u32.to_be_bytes());
+    png_1024_1024.extend_from_slice(&[8, 6, 0, 0, 0]);
+
+    let (w3, h3) = decode_image_dimensions(&png_1024_1024).unwrap();
+    assert_eq!((w3, h3), (1024, 1024));
+    assert!(validate_aspect_ratio(w3, h3).is_err());
+
+    // 1920x1080 PNG fixture (Landscape -> should FAIL aspect ratio)
+    let mut png_1920_1080 = Vec::new();
+    png_1920_1080.extend_from_slice(b"\x89PNG\r\n\x1a\n");
+    png_1920_1080.extend_from_slice(&[0, 0, 0, 13]);
+    png_1920_1080.extend_from_slice(b"IHDR");
+    png_1920_1080.extend_from_slice(&1920u32.to_be_bytes());
+    png_1920_1080.extend_from_slice(&1080u32.to_be_bytes());
+    png_1920_1080.extend_from_slice(&[8, 6, 0, 0, 0]);
+
+    let (w4, h4) = decode_image_dimensions(&png_1920_1080).unwrap();
+    assert_eq!((w4, h4), (1920, 1080));
+    assert!(validate_aspect_ratio(w4, h4).is_err());
+  }
+
+  #[test]
   fn test_empty_workflow_root_rejected_fail_closed() {
     let input = GrokExpand916Input {
       job_id: "JOB_EXP_001".to_string(),
@@ -481,9 +645,8 @@ mod tests {
     };
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let outcome = rt.block_on(execute_grok_expand_9_16(input, "1"));
+    let outcome = rt.block_on(execute_grok_expand_9_16(input, "1", None));
     assert!(outcome.is_err());
     assert!(outcome.unwrap_err().contains("WORKFLOW_ROOT_REQUIRED"));
   }
 }
-
