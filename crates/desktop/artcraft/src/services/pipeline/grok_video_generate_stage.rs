@@ -16,11 +16,11 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GrokExpand916Input {
+pub struct GrokVideoGenerateInput {
   pub job_id: String,
   pub page_id: String,
-  /// MUST be the exact generated artifact output from IMAGE_DONE
-  pub image_done_artifact: ArtifactRef,
+  /// MUST be the exact 9:16 vertical artifact output from IMAGE_9_16_DONE
+  pub vertical_image_artifact: ArtifactRef,
   pub prompt: String,
   pub timeout_ms: Option<u64>,
   pub workflow_root: std::path::PathBuf,
@@ -28,17 +28,16 @@ pub struct GrokExpand916Input {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GrokExpand916Output {
-  pub vertical_artifact: ArtifactRef,
+pub struct GrokVideoGenerateOutput {
+  pub video_artifact: ArtifactRef,
   pub job_id: String,
   pub attempt_id: String,
   pub lease_id: String,
   pub profile_id: String,
   pub source_sha256: String,
-  pub vertical_sha256: String,
-  pub width: u32,
-  pub height: u32,
-  pub aspect_ratio: f64,
+  pub video_sha256: String,
+  pub duration_sec: Option<f64>,
+  pub mime_type: String,
 }
 
 /// 3-Tier Guaranteed Lease Cleanup Architecture:
@@ -91,16 +90,15 @@ struct ExtensionProductionRequest {
   profile_id: String,
   page_id: Option<String>,
   method: &'static str,
-  params: ExtensionExpandParams,
+  params: ExtensionVideoGenerateParams,
   created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ExtensionExpandParams {
+struct ExtensionVideoGenerateParams {
   source_artifact: ExtensionSourceArtifact,
   prompt: String,
-  target_aspect_ratio: &'static str,
   timeout_ms: u64,
 }
 
@@ -136,6 +134,7 @@ struct ExtensionGeneratedMedia {
   source: String,
   locator: String,
   mime_type: Option<String>,
+  duration_sec: Option<f64>,
   width: Option<u32>,
   height: Option<u32>,
 }
@@ -148,37 +147,34 @@ struct ExtensionError {
   retryable: Option<bool>,
 }
 
-/// Validate that the actual pixel dimensions conform to 9:16 aspect ratio (ratio ~ 0.5625)
-pub fn validate_aspect_ratio(width: u32, height: u32) -> Result<f64, String> {
-  if width == 0 || height == 0 {
-    return Err("ASPECT_RATIO_INVALID: Zero width or height".to_string());
+/// Sniff video container magic bytes (MP4 / WebM)
+pub fn detect_video_mime(bytes: &[u8]) -> Result<(&'static str, &'static str), String> {
+  if bytes.len() >= 12 && &bytes[4..8] == b"ftyp" {
+    Ok(("video/mp4", "mp4"))
+  } else if bytes.len() >= 4 && &bytes[0..4] == b"\x1A\x45\xDF\xA3" {
+    Ok(("video/webm", "webm"))
+  } else {
+    // Default to MP4 if video data starts with typical header or non-empty binary
+    if bytes.len() >= 8 {
+      Ok(("video/mp4", "mp4"))
+    } else {
+      Err("ARTIFACT_INVALID_VIDEO: Unrecognized or truncated video byte signature".to_string())
+    }
   }
-
-  let ratio = (width as f64) / (height as f64);
-  let target_ratio = 9.0 / 16.0; // ~ 0.5625
-  let tolerance = 0.08; // 0.4825 to 0.6425 tolerance for vertical crop
-
-  if (ratio - target_ratio).abs() > tolerance {
-    return Err(format!(
-      "ASPECT_RATIO_INVALID: Actual ratio {ratio:.4} ({width}x{height}) deviates from 9:16 ({target_ratio:.4})"
-    ));
-  }
-
-  Ok(ratio)
 }
 
-/// Executes single-job grok.image.expand_9_16 with 9:16 aspect validation and 3-tier cleanup.
-pub async fn execute_grok_expand_9_16(
-  input: GrokExpand916Input,
+/// Executes single-job grok.video.generate with 3-tier cleanup and terminal barrier.
+pub async fn execute_grok_video_generate(
+  input: GrokVideoGenerateInput,
   attempt_id: &str,
-) -> Result<GrokExpand916Output, String> {
+) -> Result<GrokVideoGenerateOutput, String> {
   let job_id = input.job_id.clone();
-  let step_id = "CONVERTING_9_16";
+  let step_id = "GENERATING_VIDEO";
   let request_id = format!("REQ_{}", Uuid::new_v4().simple());
 
   info!(
-    "[GrokExpand916] Starting 9:16 expansion: job_id={} attempt_id={} input_art={}",
-    job_id, attempt_id, input.image_done_artifact.artifact_id
+    "[GrokVideoGenerate] Starting video generation: job_id={} attempt_id={} input_art={}",
+    job_id, attempt_id, input.vertical_image_artifact.artifact_id
   );
 
   // Fail-closed canonical workflow root validation
@@ -189,8 +185,8 @@ pub async fn execute_grok_expand_9_16(
   std::fs::create_dir_all(&workflow_root_buf)
     .map_err(|e| format!("WORKFLOW_ROOT_INVALID: Cannot create canonical workflow artifact root {:?}: {e}", workflow_root_buf))?;
 
-  // Read input artifact (which MUST be the output of IMAGE_DONE)
-  let source_path = input.image_done_artifact.location.clone();
+  // Read vertical 9:16 input artifact (which MUST be the output of IMAGE_9_16_DONE)
+  let source_path = input.vertical_image_artifact.location.clone();
   let (source_bytes, source_sha256, source_mime, data_url) = if let Ok(bytes) = tokio::fs::read(&source_path).await {
     if bytes.is_empty() {
       return Err("SOURCE_ARTIFACT_INVALID: Source file is 0 bytes".to_string());
@@ -202,26 +198,26 @@ pub async fn execute_grok_expand_9_16(
     let hash = compute_sha256(&bytes);
     (bytes, hash, mime, Some(format!("data:{mime};base64,{b64}")))
   } else {
-    return Err("SOURCE_ARTIFACT_NOT_FOUND: IMAGE_DONE artifact missing on disk".to_string());
+    return Err("SOURCE_ARTIFACT_NOT_FOUND: IMAGE_9_16_DONE artifact missing on disk".to_string());
   };
 
-  // 1. Acquire exclusive worker lease for expand_9_16
+  // 1. Acquire exclusive worker lease for video generation
   let lease = acquire_worker(AcquireWorkerRequest {
     job_id: job_id.clone(),
     step_id: step_id.to_string(),
     attempt_id: attempt_id.to_string(),
-    capability: "grok.image.expand_9_16".to_string(),
+    capability: "grok.video.generate".to_string(),
     pool_id: None,
-    ttl_seconds: Some(180),
+    ttl_seconds: Some(300),
   })
   .await
-  .map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
+  .map_err(|e| format!("Failed to acquire worker lease for grok.video.generate: {e}"))?;
 
   let lease_id = lease.lease_id.clone();
   let profile_id = lease.profile_id.clone();
   let mut lease_guard = LeaseGuard::new(lease_id.clone());
 
-  // 2. Start background heartbeat loop
+  // 2. Start background heartbeat loop (every 30s)
   let heartbeat_running = Arc::new(AtomicBool::new(true));
   let hb_running_clone = heartbeat_running.clone();
   let hb_lease_id = lease_id.clone();
@@ -247,8 +243,8 @@ pub async fn execute_grok_expand_9_16(
   });
 
   // 3. Primary Execution Block
-  let timeout_val = input.timeout_ms.unwrap_or(180000);
-  let exec_result: Result<(ArtifactRef, String, u32, u32, f64), String> = async {
+  let timeout_val = input.timeout_ms.unwrap_or(300000);
+  let exec_result: Result<(ArtifactRef, String, Option<f64>, String), String> = async {
     let req_payload = ExtensionProductionRequest {
       protocol: "floword-production",
       protocol_version: 1,
@@ -259,23 +255,22 @@ pub async fn execute_grok_expand_9_16(
       lease_id: lease_id.clone(),
       profile_id: profile_id.clone(),
       page_id: Some(input.page_id.clone()),
-      method: "grok.image.expand_9_16",
-      params: ExtensionExpandParams {
+      method: "grok.video.generate",
+      params: ExtensionVideoGenerateParams {
         source_artifact: ExtensionSourceArtifact {
-          artifact_id: input.image_done_artifact.artifact_id.clone(),
+          artifact_id: input.vertical_image_artifact.artifact_id.clone(),
           path: source_path.clone(),
           data_url,
           mime_type: source_mime.to_string(),
         },
         prompt: input.prompt.clone(),
-        target_aspect_ratio: "9:16",
         timeout_ms: timeout_val,
       },
       created_at: chrono::Utc::now().to_rfc3339(),
     };
 
     info!(
-      "[GrokExpand916] Dispatching 9:16 expand request {request_id} to worker {profile_id}"
+      "[GrokVideoGenerate] Dispatching video generate request {request_id} to worker {profile_id}"
     );
 
     let client = Client::builder()
@@ -313,7 +308,7 @@ pub async fn execute_grok_expand_9_16(
 
     let media = prod_result.result.ok_or_else(|| "No media result in response".to_string())?;
 
-    // Materialize raw bytes
+    // Materialize raw video bytes
     let raw_bytes = if media.locator.starts_with("data:") {
       let parts: Vec<&str> = media.locator.splitn(2, ',').collect();
       if parts.len() < 2 {
@@ -328,25 +323,21 @@ pub async fn execute_grok_expand_9_16(
         .get(&media.locator)
         .send()
         .await
-        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?;
+        .map_err(|e| format!("VIDEO_DOWNLOAD_FAILED: {e}"))?;
       dl_resp
         .bytes()
         .await
-        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?
+        .map_err(|e| format!("VIDEO_DOWNLOAD_FAILED: {e}"))?
         .to_vec()
     };
 
     if raw_bytes.is_empty() {
-      return Err("ARTIFACT_INVALID: 0 byte artifact received".to_string());
+      return Err("ARTIFACT_INVALID: 0 byte video artifact received".to_string());
     }
 
-    let (detected_mime, ext) = detect_image_mime(&raw_bytes)
-      .map_err(|e| format!("ARTIFACT_INVALID_MIME: {e}"))?;
-    let vertical_sha256 = compute_sha256(&raw_bytes);
-
-    let width = media.width.unwrap_or(1080);
-    let height = media.height.unwrap_or(1920);
-    let ratio = validate_aspect_ratio(width, height)?;
+    let (detected_mime, ext) = detect_video_mime(&raw_bytes)
+      .map_err(|e| format!("ARTIFACT_INVALID_VIDEO_MIME: {e}"))?;
+    let video_sha256 = compute_sha256(&raw_bytes);
 
     // Write file directly into canonical workflow directory
     let file_name = format!("{}_{}_{}.{}", job_id, step_id, attempt_id, ext);
@@ -356,12 +347,10 @@ pub async fn execute_grok_expand_9_16(
 
     // Register typed artifact through canonical ArtifactStore
     let metadata = serde_json::json!({
-      "sourceArtifactId": input.image_done_artifact.artifact_id,
-      "sha256": vertical_sha256,
-      "width": width,
-      "height": height,
-      "aspectRatio": ratio,
+      "sourceArtifactId": input.vertical_image_artifact.artifact_id,
+      "sha256": video_sha256,
       "mimeType": detected_mime,
+      "durationSec": media.duration_sec,
       "service": "grok"
     });
 
@@ -370,7 +359,7 @@ pub async fn execute_grok_expand_9_16(
       &job_id,
       StageId::StoryScript,
       "grok",
-      ArtifactKind::VerticalImage,
+      ArtifactKind::GeneratedVideo,
       &file_path,
       metadata,
     )
@@ -380,7 +369,7 @@ pub async fn execute_grok_expand_9_16(
       .to_artifact_ref(StageId::StoryScript)
       .map_err(|e| format!("ARTIFACT_REF_CONVERSION_FAILED: {e}"))?;
 
-    // Terminal Ownership Barrier: Must confirm lease ACTIVE before returning IMAGE_9_16_DONE
+    // Terminal Ownership Barrier: Must confirm lease ACTIVE before returning VIDEO_DONE
     let hb_check = heartbeat_lease(
       &lease_id,
       HeartbeatLeaseRequest {
@@ -393,7 +382,7 @@ pub async fn execute_grok_expand_9_16(
 
     match hb_check {
       Ok(hb_res) if hb_res.status == "ACTIVE" => {
-        info!("[GrokExpand916] Terminal heartbeat barrier passed. Lease {} ACTIVE.", lease_id);
+        info!("[GrokVideoGenerate] Terminal heartbeat barrier passed. Lease {} ACTIVE.", lease_id);
       }
       Ok(hb_res) => {
         let _ = std::fs::remove_file(&file_path);
@@ -410,7 +399,7 @@ pub async fn execute_grok_expand_9_16(
       }
     }
 
-    Ok((art_ref, vertical_sha256, width, height, ratio))
+    Ok((art_ref, video_sha256, media.duration_sec, detected_mime.to_string()))
   }
   .await;
 
@@ -419,26 +408,25 @@ pub async fn execute_grok_expand_9_16(
   lease_guard.release().await;
 
   match exec_result {
-    Ok((vertical_artifact, vertical_sha256, width, height, aspect_ratio)) => {
+    Ok((video_artifact, video_sha256, duration_sec, mime_type)) => {
       info!(
-        "[GrokExpand916] Success! Vertical 9:16 artifact materialized: path={} ({width}x{height}, ratio={aspect_ratio:.4})",
-        vertical_artifact.location
+        "[GrokVideoGenerate] Success! Video artifact materialized: path={}",
+        video_artifact.location
       );
-      Ok(GrokExpand916Output {
-        vertical_artifact,
+      Ok(GrokVideoGenerateOutput {
+        video_artifact,
         job_id,
         attempt_id: attempt_id.to_string(),
         lease_id,
         profile_id,
         source_sha256,
-        vertical_sha256,
-        width,
-        height,
-        aspect_ratio,
+        video_sha256,
+        duration_sec,
+        mime_type,
       })
     }
     Err(err) => {
-      error!("[GrokExpand916] Execution failed: {err}");
+      error!("[GrokVideoGenerate] Execution failed: {err}");
       Err(err)
     }
   }
@@ -449,41 +437,34 @@ mod tests {
   use super::*;
 
   #[test]
-  fn test_validate_aspect_ratio_standard_9_16() {
-    assert!(validate_aspect_ratio(1080, 1920).is_ok());
-    assert!(validate_aspect_ratio(720, 1280).is_ok());
-    assert!(validate_aspect_ratio(864, 1536).is_ok());
-  }
-
-  #[test]
-  fn test_validate_aspect_ratio_deviant_fails() {
-    assert!(validate_aspect_ratio(1920, 1080).is_err()); // 16:9 landscape
-    assert!(validate_aspect_ratio(1000, 1000).is_err()); // 1:1 square
-    assert!(validate_aspect_ratio(0, 1000).is_err());
+  fn test_detect_video_mime_mp4() {
+    let mp4_header = b"\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00isom";
+    let (mime, ext) = detect_video_mime(mp4_header).unwrap();
+    assert_eq!(mime, "video/mp4");
+    assert_eq!(ext, "mp4");
   }
 
   #[test]
   fn test_empty_workflow_root_rejected_fail_closed() {
-    let input = GrokExpand916Input {
-      job_id: "JOB_EXP_001".to_string(),
+    let input = GrokVideoGenerateInput {
+      job_id: "JOB_VID_001".to_string(),
       page_id: "PAGE_01".to_string(),
-      image_done_artifact: ArtifactRef {
-        artifact_id: "ART_GEN".to_string(),
-        kind: ArtifactKind::GeneratedImage,
+      vertical_image_artifact: ArtifactRef {
+        artifact_id: "ART_VERT".to_string(),
+        kind: ArtifactKind::VerticalImage,
         produced_by_stage: StageId::StoryScript,
         location: "/non_existent.png".to_string(),
         mime_type: Some("image/png".to_string()),
         metadata: serde_json::json!({}),
       },
-      prompt: "expand to 9:16".to_string(),
+      prompt: "generate video".to_string(),
       timeout_ms: Some(1000),
       workflow_root: std::path::PathBuf::from(""),
     };
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let outcome = rt.block_on(execute_grok_expand_9_16(input, "1"));
+    let outcome = rt.block_on(execute_grok_video_generate(input, "1"));
     assert!(outcome.is_err());
     assert!(outcome.unwrap_err().contains("WORKFLOW_ROOT_REQUIRED"));
   }
 }
-

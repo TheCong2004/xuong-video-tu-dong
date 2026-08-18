@@ -343,6 +343,140 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     return Ok(());
   }
 
+  // Production Grok Content Full Pipeline Workflow Call Site (Fail-Closed)
+  let is_grok_content_pipeline = workflow_mode == "grok_content_pipeline"
+    || workflow_mode == "grok_full"
+    || workflow_mode == "grok_pipeline"
+    || (workflow_mode == "grok" && input.get("method").is_none());
+
+  if is_grok_content_pipeline {
+    check_cancelled(&job_id_str, PipelineStage::ScriptGenerating)?;
+
+    // 1. Mandatory Page validation (fail-closed)
+    let page_id = input.get("page_id")
+      .or_else(|| input.get("page"))
+      .and_then(Value::as_str)
+      .ok_or_else(|| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_REQUIRED", "Grok content pipeline requires page_id".to_string()))?;
+
+    let page_name = input.get("page_name").and_then(Value::as_str).unwrap_or(page_id);
+    let output_root = input.get("output_root").and_then(Value::as_str).unwrap_or("D:\\");
+
+    // 2. Prompts resolution (custom or page default)
+    let image_prompt = input.get("image_prompt").and_then(Value::as_str).unwrap_or(&prompt);
+    if image_prompt.trim().is_empty() {
+      return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_PROMPT_REQUIRED", "Grok content pipeline requires a non-empty image prompt".to_string()).into());
+    }
+
+    let expand_prompt = input.get("expand_prompt")
+      .or_else(|| input.get("expand_9_16_prompt"))
+      .and_then(Value::as_str)
+      .unwrap_or("Expand image to 9:16 vertical ratio preserving subject and composition");
+
+    let video_prompt = input.get("video_prompt")
+      .and_then(Value::as_str)
+      .unwrap_or("Generate cinematic dynamic video animation preserving character and action");
+
+    // 3. Mandatory Source Image Artifact validation (fail-closed)
+    let source_image_artifact = if let Some(art_val) = input.get("source_image_artifact").or_else(|| input.get("source_artifact")) {
+      serde_json::from_value::<ArtifactRef>(art_val.clone())
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Invalid source image artifact: {e}")))?
+    } else if let Some(local_path) = local_file.as_deref() {
+      let src_path = std::path::Path::new(local_path);
+      if !src_path.exists() {
+        return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Source image file does not exist at {local_path}")).into());
+      }
+      let raw_bytes = std::fs::read(src_path)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Cannot read source image file: {e}")))?;
+      let (detected_mime, ext) = crate::services::pipeline::grok_image_edit_stage::detect_image_mime(&raw_bytes)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e))?;
+
+      let input_dir = work_dir.join("input");
+      std::fs::create_dir_all(&input_dir)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Cannot create input directory in workflow root: {e}")))?;
+      let target_file_path = input_dir.join(format!("source_image.{ext}"));
+      std::fs::write(&target_file_path, &raw_bytes)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", format!("Cannot write source image to workflow root: {e}")))?;
+
+      let stored = ArtifactStore::register_typed_artifact(
+        &work_dir,
+        &job_id_str,
+        StageId::StoryScript,
+        "input",
+        ArtifactKind::GeneratedImage,
+        &target_file_path,
+        serde_json::json!({ "mime_type": detected_mime }),
+      ).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?;
+      stored.to_artifact_ref(StageId::StoryScript)
+        .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", e.to_string()))?
+    } else if let Some(first_art) = context.artifact_refs.iter().find(|a| a.kind == ArtifactKind::GeneratedImage) {
+      first_art.clone()
+    } else {
+      return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", "Grok content pipeline requires a source image artifact".to_string()).into());
+    };
+
+    // Stage 1: Grok Image Edit
+    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::PreflightCheck, PipelineStage::ScriptGenerating, 25, "1/4 Grok Image Edit").await?;
+    let edit_output = run_grok_image_edit_stage(
+      &job_id_str,
+      page_id,
+      source_image_artifact,
+      image_prompt,
+      &work_dir,
+      "1",
+    ).await?;
+    context.artifact_refs.push(edit_output.generated_artifact.clone());
+    outputs["image_edit"] = serde_json::to_value(&edit_output).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_EDIT_SERIALIZATION_FAILED", e.to_string()))?;
+    outputs["status"] = json!("IMAGE_DONE");
+
+    // Stage 2: Grok 9:16 Expand
+    check_cancelled(&job_id_str, PipelineStage::ScriptReady)?;
+    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptGenerating, PipelineStage::ScriptReady, 50, "2/4 Grok 9:16 Vertical Expand").await?;
+    let expand_output = run_grok_expand_9_16_stage(
+      &job_id_str,
+      page_id,
+      edit_output.generated_artifact,
+      expand_prompt,
+      &work_dir,
+      "1",
+    ).await?;
+    context.artifact_refs.push(expand_output.vertical_artifact.clone());
+    outputs["expand_9_16"] = serde_json::to_value(&expand_output).map_err(|e| PipelineRunError::new(PipelineStage::ScriptReady, "EXPAND_916_SERIALIZATION_FAILED", e.to_string()))?;
+    outputs["status"] = json!("IMAGE_9_16_DONE");
+
+    // Stage 3: Grok Video Generate
+    check_cancelled(&job_id_str, PipelineStage::MediaTimeline)?;
+    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptReady, PipelineStage::MediaTimeline, 75, "3/4 Grok Video Generate").await?;
+    let video_output = run_grok_video_generate_stage(
+      &job_id_str,
+      page_id,
+      expand_output.vertical_artifact,
+      video_prompt,
+      &work_dir,
+      "1",
+    ).await?;
+    context.artifact_refs.push(video_output.video_artifact.clone());
+    outputs["video_generate"] = serde_json::to_value(&video_output).map_err(|e| PipelineRunError::new(PipelineStage::MediaTimeline, "VIDEO_GENERATE_SERIALIZATION_FAILED", e.to_string()))?;
+    outputs["status"] = json!("VIDEO_DONE");
+
+    // Stage 4: Local Save Policy (D:\<Page>\<DD-MM-YYYY>\<HH-mm-ss_shortId_video.mp4>)
+    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::MediaTimeline, PipelineStage::DraftSaving, 90, "4/4 Publishing output to Page directory").await?;
+    let target_dir = crate::services::pipeline::output_policy::OutputPathResolver::prepare_output_directory(output_root, page_name)
+      .map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "OUTPUT_DIR_PREPARATION_FAILED", e))?;
+    let filename = crate::services::pipeline::output_policy::OutputPathResolver::generate_final_filename(&job_id_str, "video", "mp4");
+    let video_file = std::path::Path::new(&video_output.video_artifact.location);
+    let published_path = crate::services::pipeline::output_policy::OutputPathResolver::publish_final_file(video_file, &target_dir, &filename)
+      .map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "OUTPUT_PUBLISH_FAILED", e))?;
+
+    let final_path_str = published_path.to_string_lossy().to_string();
+    outputs["final_video_path"] = json!(final_path_str);
+    outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "CONTEXT_SERIALIZATION_FAILED", e.to_string()))?;
+    outputs["status"] = json!("LOCAL_SAVED");
+
+    let serialized_outputs = serialize_outputs(&outputs)?;
+    finalize_video_done(app_handle, task_database, &job.id, &final_path_str, &serialized_outputs).await?;
+    return Ok(());
+  }
+
   if let Some(resume_from) = prepare_resume(&mut context).map_err(contract_pipeline_run_error)? {
     invalidate_output_values(&mut outputs, resume_from);
     info!("[JOB][RESUME] Resuming canonical pipeline at {resume_from}; valid upstream artifacts will be reused");
@@ -863,6 +997,13 @@ async fn finalize_image_done(app_handle: &AppHandle, task_database: &TaskDatabas
   update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string) }).await?;
   update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
   emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "image".to_string(), stage: PipelineStage::Completed.to_str().to_string(), progress: 100, draft_url: image_location.to_string(), video_url: None, rendering_supported: false });
+  Ok(())
+}
+
+async fn finalize_video_done(app_handle: &AppHandle, task_database: &TaskDatabase, job_id: &PipelineJobId, video_location: &str, outputs_string: &str) -> AnyhowResult<()> {
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string) }).await?;
+  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
+  emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "video".to_string(), stage: PipelineStage::Completed.to_str().to_string(), progress: 100, draft_url: video_location.to_string(), video_url: Some(video_location.to_string()), rendering_supported: false });
   Ok(())
 }
 
@@ -1431,6 +1572,48 @@ pub async fn run_grok_image_edit_stage(
   execute_grok_image_edit_stage(input, attempt_id)
     .await
     .map_err(|err| PipelineRunError::new(PipelineStage::ScriptGenerating, "GROK_IMAGE_EDIT_FAILED", err))
+}
+
+pub async fn run_grok_expand_9_16_stage(
+  job_id: &str,
+  page_id: &str,
+  image_done_artifact: ArtifactRef,
+  prompt: &str,
+  work_dir: &std::path::Path,
+  attempt_id: &str,
+) -> Result<crate::services::pipeline::grok_expand_9_16_stage::GrokExpand916Output, PipelineRunError> {
+  let input = crate::services::pipeline::grok_expand_9_16_stage::GrokExpand916Input {
+    job_id: job_id.to_string(),
+    page_id: page_id.to_string(),
+    image_done_artifact,
+    prompt: prompt.to_string(),
+    timeout_ms: Some(180000),
+    workflow_root: work_dir.to_path_buf(),
+  };
+  crate::services::pipeline::grok_expand_9_16_stage::execute_grok_expand_9_16(input, attempt_id)
+    .await
+    .map_err(|err| PipelineRunError::new(PipelineStage::ScriptReady, "GROK_EXPAND_9_16_FAILED", err))
+}
+
+pub async fn run_grok_video_generate_stage(
+  job_id: &str,
+  page_id: &str,
+  vertical_image_artifact: ArtifactRef,
+  prompt: &str,
+  work_dir: &std::path::Path,
+  attempt_id: &str,
+) -> Result<crate::services::pipeline::grok_video_generate_stage::GrokVideoGenerateOutput, PipelineRunError> {
+  let input = crate::services::pipeline::grok_video_generate_stage::GrokVideoGenerateInput {
+    job_id: job_id.to_string(),
+    page_id: page_id.to_string(),
+    vertical_image_artifact,
+    prompt: prompt.to_string(),
+    timeout_ms: Some(300000),
+    workflow_root: work_dir.to_path_buf(),
+  };
+  crate::services::pipeline::grok_video_generate_stage::execute_grok_video_generate(input, attempt_id)
+    .await
+    .map_err(|err| PipelineRunError::new(PipelineStage::MediaTimeline, "GROK_VIDEO_GENERATE_FAILED", err))
 }
 
 #[cfg(test)]
