@@ -125,11 +125,20 @@ export interface EnqueueFlowordWorkflowResponse {
 
 export interface GetFlowordWorkflowResponse {
   job_id: string;
+  page_id?: string | null;
+  page_snapshot?: Record<string, unknown> | null;
   status: string;
+  business_status: string;
   current_stage: string;
+  input_payload?: Record<string, unknown> | null;
   failure_message?: string | null;
+  failure_code?: string | null;
+  failure_stage?: string | null;
   stage_outputs?: string | null;
   stage_states?: FlowordStageState[];
+  created_at: number;
+  started_at?: number | null;
+  completed_at?: number | null;
 }
 
 export type FlowordStageStatus = 'pending' | 'running' | 'waiting_input' | 'retrying' | 'completed' | 'skipped' | 'failed' | 'cancelled';
@@ -165,6 +174,57 @@ export interface RetryFlowordStepResponse {
   step_retry_count: number;
 }
 
+export interface BrowserWorkerInfo {
+  worker_id: string;
+  profile_id?: string | null;
+  profile_name?: string | null;
+  state: string;
+  has_extension: boolean;
+  grok_logged_in: boolean;
+  last_heartbeat_at?: string | null;
+}
+
+export interface ArtifactRef {
+  artifact_id: string;
+  kind: string;
+  location: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  created_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface IngestFlowordSourceImageRequest {
+  file_path?: string;
+  base64_data?: string;
+  file_name?: string;
+  page_id?: string;
+}
+
+export interface IngestFlowordSourceImageResponse {
+  artifact: ArtifactRef;
+  preview_url: string;
+}
+
+export interface FlowordSettingsResponse {
+  max_concurrent_jobs: number;
+}
+
+export interface PipelineJobEvent {
+  id: string;
+  job_id: string;
+  sequence: number;
+  stage_id?: string | null;
+  business_status?: string | null;
+  event_type: string;
+  level: string;
+  message: string;
+  error_code?: string | null;
+  metadata_json?: string | null;
+  created_at: number;
+}
+
 export function enqueueFlowordWorkflow(request: EnqueueFlowordWorkflowRequest): Promise<EnqueueFlowordWorkflowResponse> {
   return invokeCommand<EnqueueFlowordWorkflowResponse>('enqueue_floword_workflow', { request });
 }
@@ -191,8 +251,36 @@ export function retryFlowordStep(jobId: string, stepId: string): Promise<RetryFl
   return invokeCommand<RetryFlowordStepResponse>('retry_floword_step', { request: { job_id: jobId, step_id: stepId } });
 }
 
+export function retryFlowordJobFromStart(jobId: string): Promise<RetryFlowordStepResponse> {
+  return invokeCommand<RetryFlowordStepResponse>('retry_floword_job_from_start', { request: { job_id: jobId } });
+}
+
 export function skipFlowordResearch(jobId: string): Promise<RetryFlowordStepResponse> {
   return invokeCommand<RetryFlowordStepResponse>('skip_floword_research', { request: { job_id: jobId } });
+}
+
+export function listBrowserWorkers(): Promise<BrowserWorkerInfo[]> {
+  return invokeCommand<{ workers: BrowserWorkerInfo[] }>('list_browser_workers_command').then(
+    (res) => res.workers ?? []
+  );
+}
+
+export function ingestFlowordSourceImage(request: IngestFlowordSourceImageRequest): Promise<IngestFlowordSourceImageResponse> {
+  return invokeCommand<IngestFlowordSourceImageResponse>('ingest_floword_source_image_command', { request });
+}
+
+export function getFlowordSettings(): Promise<FlowordSettingsResponse> {
+  return invokeCommand<FlowordSettingsResponse>('get_floword_settings_command');
+}
+
+export function updateFlowordSettings(maxConcurrentJobs: number): Promise<FlowordSettingsResponse> {
+  return invokeCommand<FlowordSettingsResponse>('update_floword_settings_command', { request: { max_concurrent_jobs: maxConcurrentJobs } });
+}
+
+export function listPipelineJobEvents(jobId: string): Promise<PipelineJobEvent[]> {
+  return invokeCommand<{ events: PipelineJobEvent[] }>('list_pipeline_job_events_command', { request: { job_id: jobId } }).then(
+    (res) => res.events ?? []
+  );
 }
 
 // Existing ArtCraft Tauri image action; no gateway or task lifecycle needed.
@@ -714,6 +802,7 @@ export interface ContentPage {
   default_tone?: string | null;
   default_aspect_ratio?: string | null;
   browser_profile_id?: string | null;
+  worker_pool_id?: string | null;
   default_image_prompt?: string | null;
   default_expand_9_16_prompt?: string | null;
   default_video_prompt?: string | null;
@@ -734,6 +823,7 @@ export interface CreateContentPageRequest {
   default_tone?: string;
   default_aspect_ratio?: string;
   browser_profile_id?: string;
+  worker_pool_id?: string;
   default_image_prompt?: string;
   default_expand_9_16_prompt?: string;
   default_video_prompt?: string;
@@ -751,6 +841,7 @@ export interface UpdateContentPageRequest {
   default_tone?: string;
   default_aspect_ratio?: string;
   browser_profile_id?: string;
+  worker_pool_id?: string;
   default_image_prompt?: string;
   default_expand_9_16_prompt?: string;
   default_video_prompt?: string;
@@ -804,4 +895,400 @@ export async function resolveFlowordOutputPath(outputRoot: string, pageName: str
     page_name: pageName,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Publishing Engine API
+// ---------------------------------------------------------------------------
+
+export interface ContentPagePublishTarget {
+  id: string;
+  page_id: string;
+  platform: 'facebook' | 'tiktok' | 'youtube';
+  enabled: boolean;
+  account_label?: string | null;
+  destination_id: string;
+  destination_handle?: string | null;
+  browser_profile_id: string;
+  post_mode: 'auto' | 'review';
+  default_slots_json: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export type PublicationStatus =
+  | 'NOT_STARTED'
+  | 'WAITING_APPROVAL'
+  | 'SCHEDULED'
+  | 'READY_TO_POST'
+  | 'POSTING'
+  | 'POSTED'
+  | 'POST_ERROR'
+  | 'AUTH_REQUIRED'
+  | 'VERIFY_REQUIRED'
+  | 'CANCELLED';
+
+export interface JobPublication {
+  id: string;
+  job_id: string;
+  page_id: string;
+  platform: 'facebook' | 'tiktok' | 'youtube';
+  target_config_id?: string | null;
+  browser_profile_id: string;
+  status: PublicationStatus;
+  scheduled_at?: number | null;
+  approved_at?: number | null;
+  started_at?: number | null;
+  posted_at?: number | null;
+  attempt_count: number;
+  idempotency_key: string;
+  platform_post_id?: string | null;
+  post_url?: string | null;
+  title?: string | null;
+  caption?: string | null;
+  hashtags_json?: string | null;
+  description?: string | null;
+  video_path?: string | null;
+  last_error_code?: string | null;
+  last_error_message?: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ListJobPublicationsRequest {
+  job_id?: string;
+  page_id?: string;
+  platform?: string;
+  status?: string;
+  limit?: number;
+}
+
+export async function listJobPublications(request: ListJobPublicationsRequest = {}): Promise<JobPublication[]> {
+  const res = await invokeCommand<{ publications: JobPublication[] }>('list_job_publications_command', {
+    request,
+  });
+  return res.publications ?? [];
+}
+
+export async function approvePublication(publicationId: string, scheduledAt?: number): Promise<JobPublication> {
+  const res = await invokeCommand<{ publication: JobPublication }>('approve_publication_command', {
+    request: {
+      publication_id: publicationId,
+      scheduled_at: scheduledAt,
+    },
+  });
+  return res.publication;
+}
+
+export async function rejectPublication(publicationId: string, reason?: string): Promise<JobPublication> {
+  const res = await invokeCommand<{ publication: JobPublication }>('reject_publication_command', {
+    request: {
+      publication_id: publicationId,
+      reason,
+    },
+  });
+  return res.publication;
+}
+
+export async function schedulePublication(publicationId: string, scheduledAt?: number, usePageDefaultSlot?: boolean): Promise<JobPublication> {
+  const res = await invokeCommand<{ publication: JobPublication }>('schedule_publication_command', {
+    request: {
+      publication_id: publicationId,
+      scheduled_at: scheduledAt,
+      use_page_default_slot: usePageDefaultSlot,
+    },
+  });
+  return res.publication;
+}
+
+export async function retryPublication(publicationId: string): Promise<JobPublication> {
+  const res = await invokeCommand<{ publication: JobPublication }>('retry_publication_command', {
+    request: {
+      publication_id: publicationId,
+    },
+  });
+  return res.publication;
+}
+
+export async function postNowPublication(publicationId: string): Promise<JobPublication> {
+  const res = await invokeCommand<{ publication: JobPublication }>('post_now_publication_command', {
+    request: {
+      publication_id: publicationId,
+    },
+  });
+  return res.publication;
+}
+
+export async function listContentPagePublishTargets(pageId: string): Promise<ContentPagePublishTarget[]> {
+  const res = await invokeCommand<{ targets: ContentPagePublishTarget[] }>('list_content_page_publish_targets_command', {
+    request: {
+      page_id: pageId,
+    },
+  });
+  return res.targets ?? [];
+}
+
+export interface UpsertContentPagePublishTargetRequest {
+  id?: string;
+  page_id: string;
+  platform: string;
+  enabled: boolean;
+  account_label?: string;
+  destination_id: string;
+  destination_handle?: string;
+  browser_profile_id: string;
+  post_mode?: string;
+  default_slots_json?: string;
+}
+
+export async function upsertContentPagePublishTarget(request: UpsertContentPagePublishTargetRequest): Promise<ContentPagePublishTarget> {
+  const res = await invokeCommand<{ target: ContentPagePublishTarget }>('upsert_content_page_publish_target_command', {
+    request,
+  });
+  return res.target;
+}
+
+export async function deleteContentPagePublishTarget(id: string): Promise<boolean> {
+  const res = await invokeCommand<{ success: boolean }>('delete_content_page_publish_target_command', {
+    request: { id },
+  });
+  return res.success;
+}
+
+// ---------------------------------------------------------------------------
+// Scale & Operations APIs
+// ---------------------------------------------------------------------------
+
+export interface DashboardSummary {
+  total_jobs: number;
+  queued: number;
+  waiting_worker: number;
+  generating_image: number;
+  converting_9_16: number;
+  generating_video: number;
+  downloading: number;
+  saving_local: number;
+  ready_to_post: number;
+  scheduled: number;
+  posting: number;
+  done: number;
+  error: number;
+  auth_required: number;
+
+  publications_facebook: number;
+  publications_tiktok: number;
+  publications_youtube: number;
+  publications_posted: number;
+  publications_scheduled: number;
+  publications_waiting_approval: number;
+  publications_error: number;
+}
+
+export interface DashboardSummaryRequest {
+  page_id?: string;
+  date_from?: number;
+  date_to?: number;
+  status?: string;
+  platform?: string;
+}
+
+export async function getDashboardSummary(request: DashboardSummaryRequest = {}): Promise<DashboardSummary> {
+  const res = await invokeCommand<{ summary: DashboardSummary }>('floword_dashboard_summary_command', {
+    request,
+  });
+  return res.summary;
+}
+
+export interface ListPipelineJobsPaginatedRequest {
+  page_id?: string;
+  status?: string;
+  date_from?: number;
+  date_to?: number;
+  search_query?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedPipelineJobsResult {
+  jobs: Array<{
+    id: { pipeline_job_id: string } | string;
+    status: string;
+    current_stage: string;
+    maybe_page_id?: string;
+    maybe_input_payload?: string;
+    maybe_stage_outputs?: string;
+    maybe_on_failure_message?: string;
+    maybe_page_snapshot?: string;
+    maybe_business_status?: string;
+    maybe_started_at?: number;
+    maybe_failure_code?: string;
+    maybe_failure_stage?: string;
+    created_at: number;
+    updated_at: number;
+    maybe_completed_at?: number;
+  }>;
+  total_count: number;
+  limit: number;
+  offset: number;
+}
+
+export async function listPipelineJobsPaginated(request: ListPipelineJobsPaginatedRequest = {}): Promise<PaginatedPipelineJobsResult> {
+  const res = await invokeCommand<{ result: PaginatedPipelineJobsResult }>('list_pipeline_jobs_paginated_command', {
+    request,
+  });
+  return res.result;
+}
+
+export interface BulkImportRow {
+  row_index: number;
+  page_id: string;
+  source_image?: string;
+  image_prompt?: string;
+  expand_916_prompt?: string;
+  video_prompt?: string;
+  title?: string;
+  caption?: string;
+  hashtags: string[];
+  platforms: string[];
+  post_mode?: string;
+  post_time?: string;
+  output_override?: string;
+}
+
+export interface BulkValidationError {
+  row_index: number;
+  field: string;
+  code: string;
+  message: string;
+}
+
+export interface BulkValidationSummary {
+  total_rows: number;
+  valid_count: number;
+  invalid_count: number;
+  valid_rows: BulkImportRow[];
+  errors: BulkValidationError[];
+}
+
+export interface BulkCommitResponse {
+  batch_id: string;
+  total_created: number;
+  created_job_ids: string[];
+}
+
+export async function validateBulkImport(params: { csv_content?: string; rows?: BulkImportRow[] }): Promise<BulkValidationSummary> {
+  const res = await invokeCommand<{ validation: BulkValidationSummary }>('validate_bulk_import_command', {
+    request: params,
+  });
+  return res.validation;
+}
+
+export async function commitBulkImport(rows: BulkImportRow[]): Promise<BulkCommitResponse> {
+  const res = await invokeCommand<{ result: BulkCommitResponse }>('commit_bulk_import_command', {
+    request: { rows },
+  });
+  return res.result;
+}
+
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  image_prompt: string;
+  expand_prompt?: string;
+  video_prompt: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export async function listPromptTemplates(): Promise<PromptTemplate[]> {
+  const res = await invokeCommand<{ templates: PromptTemplate[] }>('list_prompt_templates_command', {});
+  return res.templates ?? [];
+}
+
+export interface UpsertPromptTemplateRequest {
+  id?: string;
+  name: string;
+  image_prompt: string;
+  expand_prompt?: string;
+  video_prompt: string;
+}
+
+export async function upsertPromptTemplate(request: UpsertPromptTemplateRequest): Promise<PromptTemplate> {
+  const res = await invokeCommand<{ template: PromptTemplate }>('upsert_prompt_template_command', {
+    request,
+  });
+  return res.template;
+}
+
+export async function deletePromptTemplate(id: string): Promise<boolean> {
+  const res = await invokeCommand<{ success: boolean }>('delete_prompt_template_command', {
+    request: { id },
+  });
+  return res.success;
+}
+
+export interface FlowordSetting {
+  key: string;
+  value_json: string;
+  updated_at: number;
+}
+
+export async function getFlowordSystemSetting(key: string): Promise<FlowordSetting | null> {
+  const res = await invokeCommand<{ setting: FlowordSetting | null }>('get_floword_system_setting_command', {
+    request: { key },
+  });
+  return res.setting ?? null;
+}
+
+export async function updateFlowordSystemSetting(key: string, valueJson: string): Promise<FlowordSetting> {
+  const res = await invokeCommand<{ setting: FlowordSetting }>('update_floword_system_setting_command', {
+    request: { key, value_json: valueJson },
+  });
+  return res.setting;
+}
+
+export interface StorageHealthReport {
+  page_id: string;
+  target_path: string;
+  exists: boolean;
+  writable: boolean;
+  free_space_bytes?: number;
+  last_save_success: boolean;
+  error_message?: string;
+}
+
+export async function checkStorageHealth(pageId: string): Promise<StorageHealthReport> {
+  const res = await invokeCommand<{ report: StorageHealthReport }>('check_storage_health_command', {
+    request: { page_id: pageId },
+  });
+  return res.report;
+}
+
+export interface ProbeDetail {
+  service: string;
+  ready: boolean;
+  message: string;
+  latency_ms?: number;
+}
+
+export interface SystemReadinessReport {
+  overall_ready: boolean;
+  sqlite_ready: boolean;
+  artifact_storage_ready: boolean;
+  floword_scheduler_ready: boolean;
+  publishing_worker_ready: boolean;
+  donut_ready: boolean;
+  workers_online_count: number;
+  grok_profile_ready: boolean;
+  facebook_profile_ready: boolean;
+  tiktok_profile_ready: boolean;
+  youtube_profile_ready: boolean;
+  details: ProbeDetail[];
+}
+
+export async function checkSystemReadiness(): Promise<SystemReadinessReport> {
+  const res = await invokeCommand<{ report: SystemReadinessReport }>('check_system_readiness_command', {});
+  return res.report;
+}
+
+
 

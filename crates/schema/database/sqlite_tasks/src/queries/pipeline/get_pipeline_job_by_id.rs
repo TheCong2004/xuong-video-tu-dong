@@ -23,7 +23,15 @@ pub async fn get_pipeline_job_by_id(args: GetPipelineJobByIdArgs<'_>) -> Result<
       page_id,
       input_payload,
       stage_outputs,
-      on_failure_message
+      on_failure_message,
+      page_snapshot,
+      business_status,
+      started_at,
+      failure_code,
+      failure_stage,
+      created_at,
+      updated_at,
+      completed_at
     FROM pipeline_jobs
     WHERE id =
   "#,

@@ -27,6 +27,7 @@ pub struct AcquireWorkerRequest {
   pub attempt_id: String,
   pub capability: String,
   pub pool_id: Option<String>,
+  pub profile_id: Option<String>,
   pub ttl_seconds: Option<u64>,
 }
 
@@ -62,10 +63,17 @@ pub struct ReleaseLeaseResponse {
 pub struct BrowserWorkerInfo {
   pub worker_id: String,
   pub profile_id: String,
+  pub pool_id: Option<String>,
   pub state: String,
   pub capabilities: Vec<String>,
   pub extension_ready: bool,
+  pub extension_version: Option<String>,
+  pub protocol_version: Option<u32>,
   pub grok_logged_in: Option<bool>,
+  pub current_lease_id: Option<String>,
+  pub current_job_id: Option<String>,
+  pub last_heartbeat_at: Option<String>,
+  pub last_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,7 +91,10 @@ pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerRe
     .map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
   let url = format!("{base_url}/v1/workers/acquire");
-  info!("[BrowserRuntime] Acquiring worker: url={url} job_id={} capability={}", req.job_id, req.capability);
+  info!(
+    "[BrowserRuntime] Acquiring worker: url={url} job_id={} capability={} profile_id={:?}",
+    req.job_id, req.capability, req.profile_id
+  );
 
   let resp = client
     .post(&url)

@@ -26,14 +26,17 @@ use errors::AnyhowResult;
 use log::{error, info, warn};
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
+use sqlite_tasks::queries::app_settings::get_app_setting::{get_app_setting, GetAppSettingArgs};
 use sqlite_tasks::queries::content_pages::get_content_page_by_id::{get_content_page_by_id, GetContentPageByIdArgs};
+use sqlite_tasks::queries::pipeline::claim_pipeline_job::{claim_pipeline_job, ClaimPipelineJobArgs};
 use sqlite_tasks::queries::pipeline::fail_pipeline_job::{fail_pipeline_job, FailPipelineJobArgs};
 use sqlite_tasks::queries::pipeline::list_pending_pipeline_jobs::{list_pending_pipeline_jobs, ListPendingPipelineJobsArgs};
 use sqlite_tasks::queries::pipeline::pipeline_job::PipelineJob;
 use sqlite_tasks::queries::pipeline::update_pipeline_job_stage::{update_pipeline_job_stage, UpdatePipelineJobStageArgs};
 use sqlite_tasks::queries::pipeline::update_pipeline_job_status::{update_pipeline_job_status, UpdatePipelineJobStatusArgs};
+use sqlite_tasks::queries::pipeline_job_events::insert_pipeline_job_event::{insert_pipeline_job_event, InsertPipelineJobEventArgs};
 use crate::services::pipeline::output_policy::OutputPathResolver;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::AppHandle;
@@ -129,59 +132,175 @@ pub async fn pipeline_worker_thread(app_handle: AppHandle, app_data_root: AppDat
 }
 
 async fn worker_loop(app_handle: &AppHandle, task_database: &TaskDatabase, dispatcher: &CommandDispatcher, artifacts_root: &std::path::Path) -> AnyhowResult<()> {
+  let mut active_tasks: HashMap<String, tokio::task::JoinHandle<()>> = HashMap::new();
+
   loop {
-    let pending = list_pending_pipeline_jobs(ListPendingPipelineJobsArgs { db: task_database.get_connection(), statuses: &PIPELINE_PENDING_STATUSES }).await?;
-
-    if pending.jobs.is_empty() {
-      tokio::time::sleep(std::time::Duration::from_millis(IDLE_SLEEP_MS)).await;
-      continue;
-    }
-
-    for job in pending.jobs {
-      let job_id = job.id.clone();
-
-      // Atomic job claim: update status from Pending -> Started
-      let claimed = update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &job_id, status: TaskStatus::Started }).await?;
-
-      if !claimed {
-        warn!("[JOB][CLAIM_SKIP] Job {} was already claimed by another process", job_id.as_str());
-        continue;
+    // 1. Clean up finished async tasks
+    active_tasks.retain(|job_id, handle| {
+      if handle.is_finished() {
+        clear_job(job_id);
+        false
+      } else {
+        true
       }
+    });
 
-      // Register a cancellation flag for this run so `cancel_floword_workflow`
-      // can abort in-flight adapter work (render polling + between-stage checks).
-      let cancel_flag = register_job(job_id.as_str());
+    // 2. Read configured concurrency from SQLite app_settings
+    let max_concurrency: usize = get_app_setting(GetAppSettingArgs {
+      db: task_database.get_connection(),
+      key: "floword.max_concurrent_jobs",
+    })
+    .await
+    .ok()
+    .flatten()
+    .and_then(|v| v.parse::<usize>().ok())
+    .unwrap_or(3)
+    .clamp(1, 20);
 
-      let result = run_job_pipeline(app_handle, task_database, dispatcher, &job, &cancel_flag, artifacts_root).await;
+    let active_count = active_tasks.len();
+    let available_slots = if max_concurrency > active_count {
+      max_concurrency - active_count
+    } else {
+      0
+    };
 
-      if let Err(err) = result {
-        let run_error = extract_pipeline_error(&err);
+    if available_slots > 0 {
+      let pending = list_pending_pipeline_jobs(ListPendingPipelineJobsArgs {
+        db: task_database.get_connection(),
+        statuses: &PIPELINE_PENDING_STATUSES,
+      }).await?;
 
-        if run_error.error_code == "RESEARCH_AUTH_REQUIRED" {
-          info!("[JOB][WAITING_INPUT] Job {} is waiting for interactive Research authentication", job_id.as_str());
-          update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &job_id, status: TaskStatus::WaitingInput }).await?;
-          clear_job(job_id.as_str());
+      let mut slots_left = available_slots;
+
+      for job in pending.jobs {
+        if slots_left == 0 {
+          break;
+        }
+
+        let job_id = job.id.clone();
+        let job_id_str = job_id.as_str().to_string();
+
+        if active_tasks.contains_key(&job_id_str) {
           continue;
         }
 
-        // A cancellation is a terminal state, not a failure.
-        if run_error.error_code == "RENDER_CANCELLED" || is_cancelled(job_id.as_str()) {
-          info!("[JOB][CANCELLED] Job {} cancelled by user", job_id.as_str());
-          let _ = update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &job_id, status: TaskStatus::CancelledByUser }).await;
-          clear_job(job_id.as_str());
+        // Atomic job claim
+        let claimed = claim_pipeline_job(ClaimPipelineJobArgs {
+          db: task_database.get_connection(),
+          pipeline_job_id: &job_id,
+        }).await?;
+
+        if !claimed {
+          warn!("[JOB][CLAIM_SKIP] Job {} was already claimed by another worker task", job_id_str);
           continue;
         }
 
-        let err_str = run_error.error_message.clone();
-        error!("[JOB][FAILED] Job {} failed at {}: {} (code={})", job_id.as_str(), run_error.stage.to_str(), err_str, run_error.error_code);
+        slots_left -= 1;
+        let cancel_flag = register_job(&job_id_str);
 
-        fail_pipeline_job(FailPipelineJobArgs { db: task_database.get_connection(), pipeline_job_id: &job_id, failure_message: &err_str }).await?;
+        let app_handle_clone = app_handle.clone();
+        let task_db_clone = task_database.clone();
+        let dispatcher_clone = dispatcher.clone();
+        let artifacts_root_clone = artifacts_root.to_path_buf();
+        let job_clone = job.clone();
+        let job_id_for_task = job_id_str.clone();
 
-        emit_job_failed(app_handle, JobFailedPayload { job_id: job_id.as_str().to_string(), failed_stage: run_error.stage.to_str().to_string(), error_code: run_error.error_code, error_message: err_str });
+        let handle = tokio::spawn(async move {
+          info!("[JOB][CLAIMED] Job {} started in bounded concurrent worker (active={})", job_id_for_task, active_count + 1);
+
+          let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+            db: task_db_clone.get_connection(),
+            id: None,
+            job_id: &job_id_for_task,
+            sequence: 2,
+            stage_id: Some("JOB_CLAIMED"),
+            business_status: Some("WAITING_WORKER"),
+            event_type: "JOB_CLAIMED",
+            level: "INFO",
+            message: "Job claimed by bounded concurrent worker scheduler",
+            error_code: None,
+            metadata_json: None,
+          }).await;
+
+          let result = run_job_pipeline(&app_handle_clone, &task_db_clone, &dispatcher_clone, &job_clone, &cancel_flag, &artifacts_root_clone).await;
+
+          if let Err(err) = result {
+            let run_error = extract_pipeline_error(&err);
+
+            if run_error.error_code == "RESEARCH_AUTH_REQUIRED" {
+              info!("[JOB][WAITING_INPUT] Job {} is waiting for interactive Research authentication", job_id_for_task);
+              let _ = update_pipeline_job_status(UpdatePipelineJobStatusArgs {
+                db: task_db_clone.get_connection(),
+                pipeline_job_id: &job_clone.id,
+                status: TaskStatus::WaitingInput,
+                maybe_business_status: Some("AUTH_REQUIRED"),
+              }).await;
+              return;
+            }
+
+            if run_error.error_code == "RENDER_CANCELLED" || is_cancelled(&job_id_for_task) {
+              info!("[JOB][CANCELLED] Job {} cancelled by user", job_id_for_task);
+              let _ = update_pipeline_job_status(UpdatePipelineJobStatusArgs {
+                db: task_db_clone.get_connection(),
+                pipeline_job_id: &job_clone.id,
+                status: TaskStatus::CancelledByUser,
+                maybe_business_status: Some("CANCELLED"),
+              }).await;
+              let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+                db: task_db_clone.get_connection(),
+                id: None,
+                job_id: &job_id_for_task,
+                sequence: 99,
+                stage_id: Some("CANCELLED"),
+                business_status: Some("CANCELLED"),
+                event_type: "JOB_CANCELLED",
+                level: "WARN",
+                message: "Job cancelled by user",
+                error_code: Some("RENDER_CANCELLED"),
+                metadata_json: None,
+              }).await;
+              return;
+            }
+
+            let err_str = run_error.error_message.clone();
+            error!("[JOB][FAILED] Job {} failed at {}: {} (code={})", job_id_for_task, run_error.stage.to_str(), err_str, run_error.error_code);
+
+            let _ = fail_pipeline_job(FailPipelineJobArgs {
+              db: task_db_clone.get_connection(),
+              pipeline_job_id: &job_clone.id,
+              failure_message: &err_str,
+              maybe_failure_code: Some(&run_error.error_code),
+              maybe_failure_stage: Some(run_error.stage.to_str()),
+            }).await;
+
+            let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+              db: task_db_clone.get_connection(),
+              id: None,
+              job_id: &job_id_for_task,
+              sequence: 99,
+              stage_id: Some(run_error.stage.to_str()),
+              business_status: Some("ERROR"),
+              event_type: "JOB_FAILED",
+              level: "ERROR",
+              message: &err_str,
+              error_code: Some(&run_error.error_code),
+              metadata_json: None,
+            }).await;
+
+            emit_job_failed(&app_handle_clone, JobFailedPayload {
+              job_id: job_id_for_task,
+              failed_stage: run_error.stage.to_str().to_string(),
+              error_code: run_error.error_code,
+              error_message: err_str,
+            });
+          }
+        });
+
+        active_tasks.insert(job_id_str, handle);
       }
-
-      clear_job(job_id.as_str());
     }
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
   }
 }
 
@@ -341,6 +460,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     let edit_output = run_grok_image_edit_stage(
       &job_id_str,
       page_id,
+      content_page.browser_profile_id.clone(),
       source_image_artifact,
       final_prompt,
       &work_dir,
@@ -386,6 +506,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_OUTPUT_ROOT_MISSING", format!("ContentPage '{page_name}' has empty output_root in database")).into());
     }
     let output_root = &content_page.output_root;
+    let browser_profile_id = content_page.browser_profile_id.clone();
 
     // 2. Authoritative Prompts resolution (Job override -> ContentPage default -> safe system fallback/fail-closed)
     let image_prompt: &str = if let Some(p) = input.get("image_prompt").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
@@ -476,11 +597,35 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     } else {
       let image_attempts: u32 = outputs.get("image_edit_attempts").and_then(Value::as_u64).unwrap_or(0) as u32 + 1;
       outputs["image_edit_attempts"] = json!(image_attempts);
+
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs {
+        db: task_database.get_connection(),
+        pipeline_job_id: &job.id,
+        current_stage: PipelineStage::ScriptGenerating,
+        maybe_stage_outputs: None,
+        maybe_business_status: Some("GENERATING_IMAGE"),
+      }).await;
+
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+        db: task_database.get_connection(),
+        id: None,
+        job_id: &job_id_str,
+        sequence: 3,
+        stage_id: Some("GENERATING_IMAGE"),
+        business_status: Some("GENERATING_IMAGE"),
+        event_type: "IMAGE_STARTED",
+        level: "INFO",
+        message: &format!("Stage 1/4: Generating/editing image (Attempt {image_attempts})"),
+        error_code: None,
+        metadata_json: None,
+      }).await;
+
       emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::PreflightCheck, PipelineStage::ScriptGenerating, 25, &format!("1/4 Grok Image Edit (Attempt {image_attempts})")).await?;
 
       let out = run_grok_image_edit_stage(
         &job_id_str,
         page_id,
+        browser_profile_id.clone(),
         source_image_artifact,
         image_prompt,
         &work_dir,
@@ -493,6 +638,29 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "CONTEXT_SERIALIZATION_FAILED", e.to_string()))?;
       outputs["status"] = json!("IMAGE_DONE");
       persist_stage_checkpoint(task_database, &job.id, PipelineStage::ScriptGenerating, &outputs).await?;
+
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs {
+        db: task_database.get_connection(),
+        pipeline_job_id: &job.id,
+        current_stage: PipelineStage::ScriptGenerating,
+        maybe_stage_outputs: None,
+        maybe_business_status: Some("IMAGE_DONE"),
+      }).await;
+
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+        db: task_database.get_connection(),
+        id: None,
+        job_id: &job_id_str,
+        sequence: 4,
+        stage_id: Some("IMAGE_DONE"),
+        business_status: Some("IMAGE_DONE"),
+        event_type: "IMAGE_COMPLETED",
+        level: "INFO",
+        message: "Stage 1/4: Image edit completed successfully",
+        error_code: None,
+        metadata_json: None,
+      }).await;
+
       out
     };
 
@@ -504,11 +672,35 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     } else {
       let expand_attempts: u32 = outputs.get("expand_attempts").and_then(Value::as_u64).unwrap_or(0) as u32 + 1;
       outputs["expand_attempts"] = json!(expand_attempts);
+
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs {
+        db: task_database.get_connection(),
+        pipeline_job_id: &job.id,
+        current_stage: PipelineStage::ScriptReady,
+        maybe_stage_outputs: None,
+        maybe_business_status: Some("CONVERTING_9_16"),
+      }).await;
+
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+        db: task_database.get_connection(),
+        id: None,
+        job_id: &job_id_str,
+        sequence: 5,
+        stage_id: Some("CONVERTING_9_16"),
+        business_status: Some("CONVERTING_9_16"),
+        event_type: "EXPAND_916_STARTED",
+        level: "INFO",
+        message: &format!("Stage 2/4: Expanding to 9:16 ratio (Attempt {expand_attempts})"),
+        error_code: None,
+        metadata_json: None,
+      }).await;
+
       emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptGenerating, PipelineStage::ScriptReady, 50, &format!("2/4 Grok 9:16 Vertical Expand (Attempt {expand_attempts})")).await?;
 
       let out = run_grok_expand_9_16_stage(
         &job_id_str,
         page_id,
+        browser_profile_id.clone(),
         edit_output.generated_artifact,
         expand_prompt,
         &work_dir,
@@ -521,6 +713,29 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::ScriptReady, "CONTEXT_SERIALIZATION_FAILED", e.to_string()))?;
       outputs["status"] = json!("IMAGE_9_16_DONE");
       persist_stage_checkpoint(task_database, &job.id, PipelineStage::ScriptReady, &outputs).await?;
+
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs {
+        db: task_database.get_connection(),
+        pipeline_job_id: &job.id,
+        current_stage: PipelineStage::ScriptReady,
+        maybe_stage_outputs: None,
+        maybe_business_status: Some("IMAGE_9_16_DONE"),
+      }).await;
+
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+        db: task_database.get_connection(),
+        id: None,
+        job_id: &job_id_str,
+        sequence: 6,
+        stage_id: Some("IMAGE_9_16_DONE"),
+        business_status: Some("IMAGE_9_16_DONE"),
+        event_type: "EXPAND_916_COMPLETED",
+        level: "INFO",
+        message: "Stage 2/4: 9:16 expand completed successfully",
+        error_code: None,
+        metadata_json: None,
+      }).await;
+
       out
     };
 
@@ -532,11 +747,35 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     } else {
       let video_attempts: u32 = outputs.get("video_attempts").and_then(Value::as_u64).unwrap_or(0) as u32 + 1;
       outputs["video_attempts"] = json!(video_attempts);
+
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs {
+        db: task_database.get_connection(),
+        pipeline_job_id: &job.id,
+        current_stage: PipelineStage::MediaTimeline,
+        maybe_stage_outputs: None,
+        maybe_business_status: Some("GENERATING_VIDEO"),
+      }).await;
+
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+        db: task_database.get_connection(),
+        id: None,
+        job_id: &job_id_str,
+        sequence: 7,
+        stage_id: Some("GENERATING_VIDEO"),
+        business_status: Some("GENERATING_VIDEO"),
+        event_type: "VIDEO_STARTED",
+        level: "INFO",
+        message: &format!("Stage 3/4: Generating video with Grok (Attempt {video_attempts})"),
+        error_code: None,
+        metadata_json: None,
+      }).await;
+
       emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptReady, PipelineStage::MediaTimeline, 75, &format!("3/4 Grok Video Generate (Attempt {video_attempts})")).await?;
 
       let out = run_grok_video_generate_stage(
         &job_id_str,
         page_id,
+        browser_profile_id.clone(),
         expand_output.vertical_artifact,
         video_prompt,
         &work_dir,
@@ -549,10 +788,55 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::MediaTimeline, "CONTEXT_SERIALIZATION_FAILED", e.to_string()))?;
       outputs["status"] = json!("VIDEO_DONE");
       persist_stage_checkpoint(task_database, &job.id, PipelineStage::MediaTimeline, &outputs).await?;
+
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs {
+        db: task_database.get_connection(),
+        pipeline_job_id: &job.id,
+        current_stage: PipelineStage::MediaTimeline,
+        maybe_stage_outputs: None,
+        maybe_business_status: Some("VIDEO_DONE"),
+      }).await;
+
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+        db: task_database.get_connection(),
+        id: None,
+        job_id: &job_id_str,
+        sequence: 8,
+        stage_id: Some("VIDEO_DONE"),
+        business_status: Some("VIDEO_DONE"),
+        event_type: "VIDEO_COMPLETED",
+        level: "INFO",
+        message: "Stage 3/4: Video generation completed successfully",
+        error_code: None,
+        metadata_json: None,
+      }).await;
+
       out
     };
 
     // Stage 4: Local Save Policy (D:\<Page>\<DD-MM-YYYY>\<HH-mm-ss_shortId_video.mp4/webm>)
+    let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs {
+      db: task_database.get_connection(),
+      pipeline_job_id: &job.id,
+      current_stage: PipelineStage::DraftSaving,
+      maybe_stage_outputs: None,
+      maybe_business_status: Some("SAVING_LOCAL"),
+    }).await;
+
+    let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+      db: task_database.get_connection(),
+      id: None,
+      job_id: &job_id_str,
+      sequence: 9,
+      stage_id: Some("SAVING_LOCAL"),
+      business_status: Some("SAVING_LOCAL"),
+      event_type: "SAVING_LOCAL",
+      level: "INFO",
+      message: "Stage 4/4: Saving final video to Page date directory",
+      error_code: None,
+      metadata_json: None,
+    }).await;
+
     emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::MediaTimeline, PipelineStage::DraftSaving, 90, "4/4 Publishing output to Page directory").await?;
     let target_dir = crate::services::pipeline::output_policy::OutputPathResolver::prepare_output_directory(output_root, page_name)
       .map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "OUTPUT_DIR_PREPARATION_FAILED", e))?;
@@ -569,8 +853,65 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     outputs["status"] = json!("LOCAL_SAVED");
     persist_stage_checkpoint(task_database, &job.id, PipelineStage::DraftSaving, &outputs).await?;
 
+    let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+      db: task_database.get_connection(),
+      id: None,
+      job_id: &job_id_str,
+      sequence: 10,
+      stage_id: Some("LOCAL_SAVED"),
+      business_status: Some("READY_TO_POST"),
+      event_type: "LOCAL_SAVE_COMPLETED",
+      level: "INFO",
+      message: &format!("Local save completed: {}", final_path_str),
+      error_code: None,
+      metadata_json: None,
+    }).await;
+
+    let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
+      db: task_database.get_connection(),
+      id: None,
+      job_id: &job_id_str,
+      sequence: 11,
+      stage_id: Some("READY_TO_POST"),
+      business_status: Some("READY_TO_POST"),
+      event_type: "JOB_READY_TO_POST",
+      level: "INFO",
+      message: "Job is ready for Phase 2 publishing",
+      error_code: None,
+      metadata_json: None,
+    }).await;
+
     let serialized_outputs = serialize_outputs(&outputs)?;
     finalize_video_done(app_handle, task_database, &job.id, &final_path_str, &serialized_outputs).await?;
+
+    let (pub_title, pub_caption, pub_hashtags) = if let Some(payload_str) = &job.maybe_input_payload {
+      if let Ok(v) = serde_json::from_str::<serde_json::Value>(payload_str) {
+        let t = v.get("topic").or_else(|| v.get("title")).and_then(|s| s.as_str()).map(|s| s.to_string());
+        let c = v.get("caption").or_else(|| v.get("custom_prompt")).and_then(|s| s.as_str()).map(|s| s.to_string());
+        let h: Vec<String> = v.get("hashtags").and_then(|arr| arr.as_array())
+          .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+          .unwrap_or_default();
+        (t, c, h)
+      } else {
+        (None, None, Vec::new())
+      }
+    } else {
+      (None, None, Vec::new())
+    };
+
+    let page_id_val = job.maybe_page_id.clone().unwrap_or_else(|| "general".to_string());
+
+    let _ = crate::services::publishing::publication_manager::create_publications_for_completed_job(
+      task_database.get_connection(),
+      job.id.as_str(),
+      &page_id_val,
+      &final_path_str,
+      pub_title.as_deref(),
+      pub_caption.as_deref(),
+      &pub_hashtags,
+      None,
+    ).await;
+
     return Ok(());
   }
 
@@ -1077,29 +1418,29 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
 }
 
 async fn finalize_completed(app_handle: &AppHandle, task_database: &TaskDatabase, job_id: &PipelineJobId, draft_url: &str, video_url: &str, outputs_string: &str) -> AnyhowResult<()> {
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string) }).await?;
-  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string), maybe_business_status: Some("READY_TO_POST") }).await?;
+  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess, maybe_business_status: Some("READY_TO_POST") }).await?;
   emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "video".to_string(), stage: PipelineStage::Completed.to_str().to_string(), progress: 100, draft_url: draft_url.to_string(), video_url: Some(video_url.to_string()), rendering_supported: true });
   Ok(())
 }
 
 async fn finalize_draft_ready(app_handle: &AppHandle, task_database: &TaskDatabase, job_id: &PipelineJobId, draft_url: &str, outputs_string: &str) -> AnyhowResult<()> {
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::DraftReady, maybe_stage_outputs: Some(outputs_string) }).await?;
-  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::DraftReady, maybe_stage_outputs: Some(outputs_string), maybe_business_status: Some("READY_TO_POST") }).await?;
+  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess, maybe_business_status: Some("READY_TO_POST") }).await?;
   emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "draft".to_string(), stage: PipelineStage::DraftReady.to_str().to_string(), progress: 100, draft_url: draft_url.to_string(), video_url: None, rendering_supported: false });
   Ok(())
 }
 
 async fn finalize_image_done(app_handle: &AppHandle, task_database: &TaskDatabase, job_id: &PipelineJobId, image_location: &str, outputs_string: &str) -> AnyhowResult<()> {
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string) }).await?;
-  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string), maybe_business_status: Some("IMAGE_DONE") }).await?;
+  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess, maybe_business_status: Some("IMAGE_DONE") }).await?;
   emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "image".to_string(), stage: PipelineStage::Completed.to_str().to_string(), progress: 100, draft_url: image_location.to_string(), video_url: None, rendering_supported: false });
   Ok(())
 }
 
 async fn finalize_video_done(app_handle: &AppHandle, task_database: &TaskDatabase, job_id: &PipelineJobId, video_location: &str, outputs_string: &str) -> AnyhowResult<()> {
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string) }).await?;
-  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess }).await?;
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: PipelineStage::Completed, maybe_stage_outputs: Some(outputs_string), maybe_business_status: Some("READY_TO_POST") }).await?;
+  update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: job_id, status: TaskStatus::CompleteSuccess, maybe_business_status: Some("READY_TO_POST") }).await?;
   emit_job_complete(app_handle, JobCompletePayload { job_id: job_id.as_str().to_string(), result_type: "video".to_string(), stage: PipelineStage::Completed.to_str().to_string(), progress: 100, draft_url: video_location.to_string(), video_url: Some(video_location.to_string()), rendering_supported: false });
   Ok(())
 }
@@ -1116,6 +1457,7 @@ async fn persist_stage_checkpoint(
     pipeline_job_id: job_id,
     current_stage: stage,
     maybe_stage_outputs: Some(&outputs_string),
+    maybe_business_status: None,
   })
   .await
   .map_err(|e| PipelineRunError::new(stage, "CHECKPOINT_PERSISTENCE_FAILED", e.to_string()))?;
@@ -1642,7 +1984,7 @@ fn research_contract_pipeline_run_error(error: impl std::fmt::Display) -> Pipeli
 }
 
 async fn emit_stage_progress(app_handle: &AppHandle, task_database: &TaskDatabase, job_id: &PipelineJobId, current: PipelineStage, next: PipelineStage, progress: u32, message: &str) -> AnyhowResult<()> {
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: next, maybe_stage_outputs: None }).await?;
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: next, maybe_stage_outputs: None, maybe_business_status: None }).await?;
 
   emit_stage_complete(app_handle, StageCompletePayload { job_id: job_id.as_str().to_string(), completed_stage: current.to_str().to_string(), next_stage: next.to_str().to_string(), progress, stage_message: Some(message.to_string()) });
 
@@ -1650,7 +1992,7 @@ async fn emit_stage_progress(app_handle: &AppHandle, task_database: &TaskDatabas
 }
 
 async fn persist_outputs(task_database: &TaskDatabase, job_id: &PipelineJobId, stage: PipelineStage, stage_outputs: &str) -> AnyhowResult<()> {
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: stage, maybe_stage_outputs: Some(stage_outputs) }).await?;
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: job_id, current_stage: stage, maybe_stage_outputs: Some(stage_outputs), maybe_business_status: None }).await?;
   Ok(())
 }
 
@@ -1669,6 +2011,7 @@ fn parse_stage_outputs(job: &PipelineJob) -> Value {
 pub async fn run_grok_image_edit_stage(
   job_id: &str,
   page_id: &str,
+  browser_profile_id: Option<String>,
   source_image_artifact: ArtifactRef,
   prompt: &str,
   work_dir: &std::path::Path,
@@ -1678,6 +2021,7 @@ pub async fn run_grok_image_edit_stage(
   let input = GrokImageEditInput {
     job_id: job_id.to_string(),
     page_id: page_id.to_string(),
+    browser_profile_id,
     source_image_artifact,
     prompt: prompt.to_string(),
     timeout_ms: Some(180000),
@@ -1691,6 +2035,7 @@ pub async fn run_grok_image_edit_stage(
 pub async fn run_grok_expand_9_16_stage(
   job_id: &str,
   page_id: &str,
+  browser_profile_id: Option<String>,
   image_done_artifact: ArtifactRef,
   prompt: &str,
   work_dir: &std::path::Path,
@@ -1700,6 +2045,7 @@ pub async fn run_grok_expand_9_16_stage(
   let input = crate::services::pipeline::grok_expand_9_16_stage::GrokExpand916Input {
     job_id: job_id.to_string(),
     page_id: page_id.to_string(),
+    browser_profile_id,
     image_done_artifact,
     prompt: prompt.to_string(),
     timeout_ms: Some(180000),
@@ -1713,6 +2059,7 @@ pub async fn run_grok_expand_9_16_stage(
 pub async fn run_grok_video_generate_stage(
   job_id: &str,
   page_id: &str,
+  browser_profile_id: Option<String>,
   vertical_image_artifact: ArtifactRef,
   prompt: &str,
   work_dir: &std::path::Path,
@@ -1722,6 +2069,7 @@ pub async fn run_grok_video_generate_stage(
   let input = crate::services::pipeline::grok_video_generate_stage::GrokVideoGenerateInput {
     job_id: job_id.to_string(),
     page_id: page_id.to_string(),
+    browser_profile_id,
     vertical_image_artifact,
     prompt: prompt.to_string(),
     timeout_ms: Some(300000),

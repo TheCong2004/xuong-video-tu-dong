@@ -24,7 +24,15 @@ pub async fn list_pending_pipeline_jobs(args: ListPendingPipelineJobsArgs<'_>) -
       page_id,
       input_payload,
       stage_outputs,
-      on_failure_message
+      on_failure_message,
+      page_snapshot,
+      business_status,
+      started_at,
+      failure_code,
+      failure_stage,
+      created_at,
+      updated_at,
+      completed_at
     FROM pipeline_jobs
   "#,
   );

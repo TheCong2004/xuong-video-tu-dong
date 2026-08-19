@@ -11,6 +11,8 @@ pub struct CreatePipelineJobArgs<'a> {
   pub current_stage: PipelineStage,
   pub maybe_page_id: Option<&'a str>,
   pub maybe_input_payload: Option<&'a str>,
+  pub maybe_page_snapshot: Option<&'a str>,
+  pub maybe_business_status: Option<&'a str>,
 }
 
 pub async fn create_pipeline_job(args: CreatePipelineJobArgs<'_>) -> Result<PipelineJobId, SqliteTasksError> {
@@ -21,6 +23,8 @@ pub async fn create_pipeline_job(args: CreatePipelineJobArgs<'_>) -> Result<Pipe
   let current_stage = args.current_stage.to_str().to_string();
   let page_id = args.maybe_page_id.map(|s| s.to_string());
   let input_payload = args.maybe_input_payload.map(|s| s.to_string());
+  let page_snapshot = args.maybe_page_snapshot.map(|s| s.to_string());
+  let business_status = args.maybe_business_status.map(|s| s.to_string()).unwrap_or_else(|| "QUEUED".to_string());
 
   let mut query_builder: QueryBuilder<Sqlite> = QueryBuilder::new(
     r#"
@@ -29,7 +33,9 @@ pub async fn create_pipeline_job(args: CreatePipelineJobArgs<'_>) -> Result<Pipe
       status,
       current_stage,
       page_id,
-      input_payload
+      input_payload,
+      page_snapshot,
+      business_status
     )
     VALUES (
   "#,
@@ -41,6 +47,8 @@ pub async fn create_pipeline_job(args: CreatePipelineJobArgs<'_>) -> Result<Pipe
   separated.push_bind(current_stage);
   separated.push_bind(page_id);
   separated.push_bind(input_payload);
+  separated.push_bind(page_snapshot);
+  separated.push_bind(business_status);
   separated.push_unseparated(")");
 
   let query = query_builder.build();

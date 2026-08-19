@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -17,9 +17,12 @@ import {
   Upload,
   Video,
   Wand2,
+  Trash2,
+  Copy,
 } from 'lucide-react';
-import { ContentPage } from '../../api/flowordClient';
-import { WorkflowInput, WorkflowRun } from '../../services/workflowEngine';
+import toast from 'react-hot-toast';
+import { ContentPage, IngestFlowordSourceImageResponse, ingestFlowordSourceImage, ArtifactRef as FlowordArtifactRef } from '../../api/flowordClient';
+import { WorkflowInput, WorkflowRun, ArtifactRef } from '../../services/workflowEngine';
 
 interface StudioViewProps {
   pages: ContentPage[];
@@ -43,31 +46,134 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const [pipelineType, setPipelineType] = useState<'grok_content_pipeline' | 'grok_image_edit' | 'floword_video_pipeline'>('grok_content_pipeline');
   const [mode, setMode] = useState<'simple' | 'advanced'>('simple');
   const [topic, setTopic] = useState<string>('Top 5 Hidden Gems in Action Cinema 2026');
-  const [sourceImagePath, setSourceImagePath] = useState<string>('D:\\source_hero.png');
-  const [imagePrompt, setImagePrompt] = useState<string>('Cinematic hero poster, dynamic rim light, 8k resolution');
-  const [expand916Prompt, setExpand916Prompt] = useState<string>('Expand image to 9:16 vertical ratio preserving subject and composition');
-  const [videoPrompt, setVideoPrompt] = useState<string>('Smooth drone zooming into cinematic cityscape, hyper-realistic');
+  
+  // Ingested Source Image State
+  const [sourceImagePath, setSourceImagePath] = useState<string>('');
+  const [sourceImagePreviewUrl, setSourceImagePreviewUrl] = useState<string>('');
+  const [sourceImageArtifact, setSourceImageArtifact] = useState<FlowordArtifactRef | null>(null);
+  const [isIngesting, setIsIngesting] = useState<boolean>(false);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Prompts
+  const [imagePrompt, setImagePrompt] = useState<string>('');
+  const [expand916Prompt, setExpand916Prompt] = useState<string>('');
+  const [videoPrompt, setVideoPrompt] = useState<string>('');
   const [caption, setCaption] = useState<string>('Khám phá ngay danh sách siêu phẩm không thể bỏ lỡ! #cinema #review #movies');
-  const [skipResearch, setSkipResearch] = useState<boolean>(true);
-  const [preferredWorkerPool, setPreferredWorkerPool] = useState<string>('grok_browser_pool_01');
 
   const selectedPage = pages.find((p) => p.id === activePageId) || pages[0];
 
+  // Helper to ingest file from bytes/base64 or local path
+  const handleIngestFile = useCallback(async (file: File) => {
+    setIsIngesting(true);
+    const toastId = toast.loading(`Đang tải ảnh: ${file.name}...`);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Data = e.target?.result as string;
+        try {
+          const res: IngestFlowordSourceImageResponse = await ingestFlowordSourceImage({
+            base64_data: base64Data,
+            file_name: file.name,
+            page_id: selectedPage?.id,
+          });
+          setSourceImageArtifact(res.artifact);
+          setSourceImagePath(res.artifact.location);
+          setSourceImagePreviewUrl(res.preview_url);
+          toast.success('Đã lưu ảnh nguồn vào storage!', { id: toastId });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          toast.error(`Lỗi tải ảnh: ${msg}`, { id: toastId });
+        } finally {
+          setIsIngesting(false);
+        }
+      };
+      reader.onerror = () => {
+        toast.error('Không thể đọc file ảnh', { id: toastId });
+        setIsIngesting(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      setIsIngesting(false);
+      toast.error('Lỗi khi tải ảnh', { id: toastId });
+    }
+  }, [selectedPage?.id]);
+
+  // Global paste handler
+  useEffect(() => {
+    const onPaste = (evt: ClipboardEvent) => {
+      const items = evt.clipboardData?.items;
+      if (!items) return;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            evt.preventDefault();
+            handleIngestFile(file);
+            break;
+          }
+        }
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [handleIngestFile]);
+
+  // Drag & drop handlers
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const onDragLeave = () => setIsDragging(false);
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        handleIngestFile(file);
+      } else {
+        toast.error('Vui lòng kéo thả file ảnh hợp lệ (PNG, JPG, WEBP).');
+      }
+    }
+  };
+
   const handleStartRun = async () => {
+    if (!selectedPage) {
+      toast.error('Vui lòng chọn Page trước khi khởi chạy.');
+      return;
+    }
+
+    const hasSource = sourceImagePath.trim().length > 0 || sourceImageArtifact !== null;
+    if (!hasSource) {
+      toast.error('Vui lòng tải lên hoặc dán Source Image trước khi khởi chạy.');
+      return;
+    }
+
+    const effImagePrompt = imagePrompt.trim() || selectedPage.default_image_prompt || '';
+    if (!effImagePrompt) {
+      toast.error('Vui lòng nhập Image Prompt hoặc cấu hình sẵn trong Page.');
+      return;
+    }
+
+    const effExpandPrompt = expand916Prompt.trim() || selectedPage.default_expand_9_16_prompt || undefined;
+    const effVideoPrompt = videoPrompt.trim() || selectedPage.default_video_prompt || undefined;
+
     await onRunWorkflow({
       workflowMode: pipelineType,
       workflowName: pipelineType,
-      pageId: selectedPage?.id,
-      prompt: imagePrompt.trim() || selectedPage?.default_image_prompt || '',
-      imagePrompt: imagePrompt.trim() || selectedPage?.default_image_prompt || undefined,
-      expand916Prompt: expand916Prompt.trim() || selectedPage?.default_expand_9_16_prompt || undefined,
-      videoPrompt: videoPrompt.trim() || selectedPage?.default_video_prompt || undefined,
+      pageId: selectedPage.id,
+      prompt: effImagePrompt,
+      imagePrompt: effImagePrompt,
+      expand916Prompt: effExpandPrompt,
+      videoPrompt: effVideoPrompt,
       sourceFiles: sourceImagePath.trim() ? [sourceImagePath.trim()] : [],
+      sourceImageArtifact: sourceImageArtifact || undefined,
       sourceUrls: [],
-      targetPlatform: 'tiktok',
+      targetPlatform: (selectedPage.target_platform as any) || 'tiktok',
       targetDurationSeconds: 45,
-      language: selectedPage?.default_language || 'vi',
-      tone: (selectedPage?.default_tone as any) || 'professional',
+      language: selectedPage.default_language || 'vi',
+      tone: (selectedPage.default_tone as any) || 'professional',
       aspectRatio: '9:16',
       scriptMode: 'original',
       outputMode: 'render_video',
@@ -76,35 +182,30 @@ export const StudioView: React.FC<StudioViewProps> = ({
       researchQuery: '',
       researchMode: 'search',
       topic,
-      customPrompt: imagePrompt,
-      platform: 'tiktok',
+      customPrompt: effImagePrompt,
+      platform: selectedPage.target_platform || 'tiktok',
       targetDurationSec: 45,
       voiceTone: 'cinematic_narrator',
-      skipResearch,
       generateImage: true,
       generateDraft: true,
     });
   };
 
   const GROK_STAGES = [
-    { key: 'input', label: '1. Ingest / Page', desc: 'Target Page & Source Image input' },
-    { key: 'IMAGE', label: '2. Grok Image Edit', desc: 'Synthesize edited image via Grok' },
-    { key: '9_16', label: '3. 9:16 Outpaint', desc: 'Expand canvas to vertical 9:16' },
-    { key: 'VIDEO', label: '4. Video Synthesis', desc: 'Grok dynamic video motion' },
-    { key: 'SAVING', label: '5. Save Storage', desc: 'Publish to Page output root' },
-    { key: 'complete', label: '6. Ready to Publish', desc: 'Final video verified' },
+    { key: 'QUEUED', label: '1. Ingest & Page Affinity', desc: 'Immutable snapshot & worker assignment' },
+    { key: 'GENERATING_IMAGE', label: '2. Grok Image Edit', desc: 'Synthesize edited image via Grok' },
+    { key: 'CONVERTING_9_16', label: '3. Grok 9:16 Expand', desc: 'Expand canvas to vertical 9:16' },
+    { key: 'GENERATING_VIDEO', label: '4. Grok Video Synthesis', desc: 'Diffusion motion synthesis' },
+    { key: 'SAVING_LOCAL', label: '5. Save Storage', desc: 'Persist to Page output root' },
+    { key: 'READY_TO_POST', label: '6. Ready to Post', desc: 'Verified local master video' },
   ];
 
-  const LEGACY_STAGES = [
-    { key: 'input', label: '1. Ingest / Input', desc: 'Page & topic initialization' },
-    { key: 'image', label: '2. Image AI', desc: 'High-res image generation' },
-    { key: 'aspect', label: '3. 9:16 Transform', desc: 'Short-form framing outpaint' },
-    { key: 'video', label: '4. Video Synthesis', desc: 'Video diffusion & motion' },
-    { key: 'download', label: '5. Download & Merge', desc: 'Asset pack creation' },
-    { key: 'publish', label: '6. Ready to Publish', desc: 'Inbox review & schedule' },
-  ];
-
-  const STAGES = pipelineType.includes('grok') ? GROK_STAGES : LEGACY_STAGES;
+  const latestVideoArtifact = activeRun?.artifacts?.find(
+    (a) => a.type === 'video' || a.type === 'rendered_video' || a.name.endsWith('.mp4')
+  );
+  const latestImageArtifact = activeRun?.artifacts?.find(
+    (a) => a.type === 'image' || a.name.endsWith('.png') || a.name.endsWith('.jpg')
+  );
 
   return (
     <div className="flex flex-col h-full max-w-7xl mx-auto p-6 space-y-4 overflow-hidden">
@@ -120,9 +221,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/[0.06] text-zinc-300">
                 {selectedPage?.name || 'General Production'}
               </span>
+              {selectedPage?.browser_profile_id && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  Profile: {selectedPage.browser_profile_id}
+                </span>
+              )}
             </div>
             <div className="text-[11px] text-zinc-400 mt-0.5">
-              Create, configure, and synthesize automated short-form video pipelines.
+              Production Phase 1: Ingest Image &rarr; Grok Edit &rarr; 9:16 &rarr; Video &rarr; Local Save.
             </div>
           </div>
         </div>
@@ -179,13 +285,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
           <div>
             <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
               <Layers className="h-4 w-4 text-rose-400" />
-              Pipeline Stages
+              Grok Pipeline Stages
             </div>
 
             <div className="space-y-2">
-              {STAGES.map((st, idx) => {
-                const isCurrent = isRunning && activeRun?.currentStage?.includes(st.key);
-                const isDone = activeRun?.status === 'completed' || (activeRun?.progressPercent && activeRun.progressPercent >= (idx + 1) * 18);
+              {GROK_STAGES.map((st, idx) => {
+                const bStatus = activeRun?.businessStatus || '';
+                const isCurrent = isRunning && (bStatus === st.key || bStatus.includes(st.key));
+                const isDone = bStatus === 'READY_TO_POST' || bStatus === 'LOCAL_SAVED' || (activeRun?.progressPercent && activeRun.progressPercent >= (idx + 1) * 18);
 
                 return (
                   <div
@@ -200,7 +307,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-white">{st.label}</span>
-                      <span className={`text-[11px] ${isDone ? 'text-emerald-400' : isCurrent ? 'text-blue-400' : 'text-zinc-600'}`}>
+                      <span className={`text-[11px] ${isDone ? 'text-emerald-400 font-bold' : isCurrent ? 'text-blue-400 font-bold animate-pulse' : 'text-zinc-600'}`}>
                         {isDone ? '✓' : isCurrent ? '●' : '○'}
                       </span>
                     </div>
@@ -211,10 +318,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
             </div>
           </div>
 
-          <div className="mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-[11px] text-zinc-400">
+          <div className="mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-[11px] text-zinc-400 space-y-1">
             <div className="flex items-center justify-between">
-              <span>Auto-Recovery:</span>
-              <span className="text-emerald-400 font-semibold">Enabled (3 Retries)</span>
+              <span>Profile Affinity:</span>
+              <span className="text-blue-400 font-mono font-medium">{selectedPage?.browser_profile_id || 'Default Pool'}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Output Path:</span>
+              <span className="text-zinc-400 font-mono text-[10px] truncate max-w-[140px]">{selectedPage?.output_root || 'Not set'}</span>
             </div>
           </div>
         </div>
@@ -233,9 +344,8 @@ export const StudioView: React.FC<StudioViewProps> = ({
               onChange={(e) => setPipelineType(e.target.value as any)}
               className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 font-semibold"
             >
-              <option value="grok_content_pipeline">Grok Full Production (Image Edit &rarr; 9:16 &rarr; Video)</option>
+              <option value="grok_content_pipeline">Grok Full Production (Image Edit &rarr; 9:16 &rarr; Video &rarr; Local Save)</option>
               <option value="grok_image_edit">Grok Image Edit Only</option>
-              <option value="floword_video_pipeline">Floword Legacy Video Pipeline</option>
             </select>
           </div>
 
@@ -248,26 +358,88 @@ export const StudioView: React.FC<StudioViewProps> = ({
             >
               {pages.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({p.target_platform || 'tiktok'})
+                  {p.name} ({p.target_platform || 'tiktok'}) {p.browser_profile_id ? `[${p.browser_profile_id}]` : ''}
                 </option>
               ))}
             </select>
-            {selectedPage?.default_image_prompt && (
-              <p className="text-[10px] text-zinc-500 mt-1">
-                Default image prompt configured in Page: <span className="italic text-zinc-400 font-mono">{selectedPage.default_image_prompt.slice(0, 50)}...</span>
-              </p>
-            )}
           </div>
 
+          {/* DRAG / DROP / PASTE SOURCE IMAGE BOX */}
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Source Image Path <span className="text-rose-400">*</span></label>
+            <label className="block text-zinc-400 mb-1 font-medium">
+              Source Image <span className="text-rose-400">* (Kéo thả, Paste Ctrl+V hoặc chọn file)</span>
+            </label>
+
             <input
-              type="text"
-              value={sourceImagePath}
-              onChange={(e) => setSourceImagePath(e.target.value)}
-              placeholder="e.g. D:\images\source_hero.png"
-              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 font-mono text-[11px]"
+              type="file"
+              ref={fileInputRef}
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  handleIngestFile(e.target.files[0]);
+                }
+              }}
             />
+
+            <div
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
+                isDragging
+                  ? 'border-rose-500 bg-rose-500/10'
+                  : sourceImagePreviewUrl
+                  ? 'border-emerald-500/40 bg-emerald-500/[0.02]'
+                  : 'border-white/[0.12] hover:border-white/[0.25] bg-white/[0.02]'
+              }`}
+            >
+              {sourceImagePreviewUrl ? (
+                <div className="flex items-center gap-3 w-full">
+                  <img
+                    src={sourceImagePreviewUrl}
+                    alt="Source Preview"
+                    className="h-16 w-16 object-cover rounded-xl border border-white/[0.1]"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Source Image Ready
+                    </div>
+                    <div className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
+                      {sourceImagePath}
+                    </div>
+                    {sourceImageArtifact && (
+                      <div className="text-[9px] text-zinc-500 font-mono mt-0.5">
+                        SHA256: {sourceImageArtifact.sha256?.slice(0, 16)}... | {(sourceImageArtifact.size_bytes / 1024).toFixed(1)} KB
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSourceImagePath('');
+                      setSourceImagePreviewUrl('');
+                      setSourceImageArtifact(null);
+                    }}
+                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-900/30 text-zinc-400 hover:text-rose-400 transition"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center text-center py-2">
+                  <Upload className={`h-6 w-6 mb-2 ${isDragging ? 'text-rose-400' : 'text-zinc-500'}`} />
+                  <div className="text-xs font-semibold text-zinc-200">
+                    {isIngesting ? 'Đang lưu ảnh nguồn...' : 'Kéo thả ảnh hoặc dán Ctrl+V tại đây'}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5">
+                    Hỗ trợ PNG, JPG, WEBP &bull; Nhấp để duyệt file
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -281,24 +453,34 @@ export const StudioView: React.FC<StudioViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Image Edit Prompt (Grok FLUX)</label>
+            <label className="block text-zinc-400 mb-1 font-medium">
+              Image Edit Prompt (Grok FLUX)
+              {selectedPage?.default_image_prompt && !imagePrompt && (
+                <span className="text-[10px] text-zinc-500 ml-2">(Kế thừa từ Page)</span>
+              )}
+            </label>
             <textarea
               rows={3}
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
-              placeholder={selectedPage?.default_image_prompt || 'Enter custom image prompt...'}
+              placeholder={selectedPage?.default_image_prompt || 'Nhập prompt chỉnh sửa ảnh Grok...'}
               className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
             />
           </div>
 
           {pipelineType === 'grok_content_pipeline' && (
             <div>
-              <label className="block text-zinc-400 mb-1 font-medium">9:16 Vertical Outpaint Prompt</label>
+              <label className="block text-zinc-400 mb-1 font-medium">
+                9:16 Vertical Outpaint Prompt
+                {selectedPage?.default_expand_9_16_prompt && !expand916Prompt && (
+                  <span className="text-[10px] text-zinc-500 ml-2">(Kế thừa từ Page)</span>
+                )}
+              </label>
               <textarea
                 rows={2}
                 value={expand916Prompt}
                 onChange={(e) => setExpand916Prompt(e.target.value)}
-                placeholder={selectedPage?.default_expand_9_16_prompt || 'Enter 9:16 expand prompt...'}
+                placeholder={selectedPage?.default_expand_9_16_prompt || 'Nhập prompt mở rộng khung hình 9:16...'}
                 className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
               />
             </div>
@@ -306,12 +488,17 @@ export const StudioView: React.FC<StudioViewProps> = ({
 
           {pipelineType === 'grok_content_pipeline' && (
             <div>
-              <label className="block text-zinc-400 mb-1 font-medium">Video Motion Animation Prompt</label>
+              <label className="block text-zinc-400 mb-1 font-medium">
+                Video Motion Animation Prompt
+                {selectedPage?.default_video_prompt && !videoPrompt && (
+                  <span className="text-[10px] text-zinc-500 ml-2">(Kế thừa từ Page)</span>
+                )}
+              </label>
               <textarea
                 rows={2}
                 value={videoPrompt}
                 onChange={(e) => setVideoPrompt(e.target.value)}
-                placeholder={selectedPage?.default_video_prompt || 'Enter video motion prompt...'}
+                placeholder={selectedPage?.default_video_prompt || 'Nhập prompt chuyển động video Grok...'}
                 className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
               />
             </div>
@@ -326,38 +513,6 @@ export const StudioView: React.FC<StudioViewProps> = ({
               className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none"
             />
           </div>
-
-          {mode === 'advanced' && (
-            <div className="pt-3 border-t border-white/[0.08] space-y-3 animate-in fade-in">
-              <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Settings2 className="h-3.5 w-3.5" />
-                Advanced Engine Overrides
-              </div>
-
-              <div>
-                <label className="block text-zinc-400 mb-1 font-medium">Worker Pool</label>
-                <select
-                  value={preferredWorkerPool}
-                  onChange={(e) => setPreferredWorkerPool(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-xl bg-[#171b26] border border-white/[0.1] text-zinc-300 font-mono text-[11px]"
-                >
-                  <option value="grok_browser_pool_01">Grok Extension Pool (10 Profiles)</option>
-                  <option value="local_openmontage_pool">OpenMontage Local Fast</option>
-                  <option value="omniroute_cloud_pool">OmniRoute Direct Cloud API</option>
-                </select>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-xl bg-white/[0.02]">
-                <span className="text-zinc-400">Skip Research Crawl</span>
-                <input
-                  type="checkbox"
-                  checked={skipResearch}
-                  onChange={(e) => setSkipResearch(e.target.checked)}
-                  className="h-4 w-4 rounded accent-rose-500"
-                />
-              </div>
-            </div>
-          )}
         </div>
 
         {/* PANE 3 & 4: Live Preview & Activity Log (4 cols) */}
@@ -369,30 +524,62 @@ export const StudioView: React.FC<StudioViewProps> = ({
               Live Stage Preview
             </div>
 
-            <div className="flex-1 rounded-xl bg-black/40 border border-white/[0.05] flex flex-col items-center justify-center p-4 text-center">
-              <Video className="h-8 w-8 text-zinc-600 mb-2" />
-              <div className="text-xs font-medium text-zinc-400">
-                {isRunning ? 'Synthesizing 9:16 Video Canvas...' : 'Ready for generation preview'}
-              </div>
-              <p className="text-[10px] text-zinc-600 mt-1 max-w-xs">
-                Generated frames and video timeline drafts will stream directly into this view.
-              </p>
+            <div className="flex-1 rounded-xl bg-black/40 border border-white/[0.05] flex flex-col items-center justify-center p-3 text-center overflow-hidden">
+              {latestVideoArtifact ? (
+                <div className="w-full h-full flex flex-col items-center justify-center">
+                  <div className="text-[11px] font-semibold text-emerald-400 mb-1 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Video Ready: {latestVideoArtifact.name}
+                  </div>
+                  <div className="text-[9px] text-zinc-400 font-mono truncate max-w-full px-2">
+                    {latestVideoArtifact.path}
+                  </div>
+                </div>
+              ) : latestImageArtifact ? (
+                <div className="w-full h-full flex flex-col items-center justify-center">
+                  <div className="text-[11px] font-semibold text-blue-400 mb-1">
+                    Generated Frame: {latestImageArtifact.name}
+                  </div>
+                  <div className="text-[9px] text-zinc-400 font-mono truncate max-w-full px-2">
+                    {latestImageArtifact.path}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <Video className="h-8 w-8 text-zinc-600 mb-2" />
+                  <div className="text-xs font-medium text-zinc-400">
+                    {isRunning ? `Stage: ${activeRun?.businessStatus || activeRun?.currentStage}...` : 'Ready for generation preview'}
+                  </div>
+                  <p className="text-[10px] text-zinc-600 mt-1 max-w-xs">
+                    Generated frames and video timeline will stream directly into this view.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
           {/* Activity / Diagnostic Logs */}
           <div className="h-48 rounded-2xl bg-[#0d1017] border border-white/[0.08] p-3 flex flex-col font-mono text-[11px] overflow-hidden">
-            <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
-              <Terminal className="h-3.5 w-3.5" />
-              Execution Activity Log
+            <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Terminal className="h-3.5 w-3.5" />
+                Execution Activity Log
+              </span>
+              {activeRun?.businessStatus && (
+                <span className="text-rose-400 font-bold">{activeRun.businessStatus}</span>
+              )}
             </div>
             <div className="flex-1 overflow-y-auto space-y-1 text-zinc-400 pt-1">
               <div className="text-zinc-600">[00:00] Floword Engine Ready.</div>
-              <div className="text-zinc-600">[00:01] Target Profile Bound: {selectedPage?.name}</div>
-              {isRunning && (
+              {selectedPage && (
+                <div className="text-zinc-600">[00:01] Target Page Bound: {selectedPage.name}</div>
+              )}
+              {activeRun && (
                 <>
-                  <div className="text-blue-400">[00:02] Initializing image diffusion pipeline...</div>
-                  <div className="text-blue-400">[00:05] Applying 9:16 outpainting mask...</div>
+                  <div className="text-blue-400">[JOB] ID: {activeRun.id}</div>
+                  <div className="text-emerald-400">[STATUS] {activeRun.businessStatus || activeRun.status}</div>
+                  {activeRun.errorMessage && (
+                    <div className="text-rose-400">[ERROR] {activeRun.errorMessage}</div>
+                  )}
                 </>
               )}
             </div>

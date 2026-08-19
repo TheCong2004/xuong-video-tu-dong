@@ -44,6 +44,8 @@ async fn enqueue(task_database: &TaskDatabase, prompt: &str) -> AnyhowResult<Str
     current_stage: PipelineStage::Queued,
     maybe_page_id: None,
     maybe_input_payload: Some(&input_payload),
+    maybe_page_snapshot: None,
+    maybe_business_status: Some("QUEUED"),
   }).await?;
 
   Ok(job_id.as_str().to_string())

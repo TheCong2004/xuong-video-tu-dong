@@ -147,6 +147,9 @@ export interface StepError {
 export interface WorkflowRun {
   id: string;
   pageId?: string;
+  pageName?: string;
+  pageSnapshot?: Record<string, unknown> | null;
+  businessStatus?: string;
   workflowName?: string;
   input: WorkflowInput;
   status: WorkflowStatus;
@@ -155,13 +158,15 @@ export interface WorkflowRun {
   progress?: number;
   progressPercent?: number;
   isPublished?: boolean;
-  createdAt?: string;
-  startedAt?: string;
-  completedAt?: string;
+  createdAt?: string | number;
+  startedAt?: string | number;
+  completedAt?: string | number;
   steps?: StepRun[];
   artifacts: ArtifactRef[];
   errorCode?: string;
   errorMessage?: string;
+  failureCode?: string;
+  failureStage?: string;
   resultType?: 'draft' | 'video';
   finalDraftId?: string;
   finalDraftPath?: string;

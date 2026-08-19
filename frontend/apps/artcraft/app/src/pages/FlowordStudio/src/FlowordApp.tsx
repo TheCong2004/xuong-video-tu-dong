@@ -6,8 +6,10 @@ import { DashboardView } from './components/views/DashboardView';
 import { JobsView } from './components/views/JobsView';
 import { PagesView } from './components/views/PagesView';
 import { StudioView } from './components/views/StudioView';
+import { BulkImportView } from './components/views/BulkImportView';
 import { PublishView } from './components/views/PublishView';
-import { SettingsDevView } from './components/views/SettingsDevView';
+import { HistoryView } from './components/views/HistoryView';
+import { SettingsView } from './components/views/SettingsView';
 import { ConfigureDrawer } from './components/ConfigureDrawer';
 import { StepDetailModal } from './components/StepDetailModal';
 import { PageManagementModal } from './components/PageManagementModal';
@@ -233,7 +235,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       const workflows = await listFlowordWorkflows();
       const hydratedRuns: WorkflowRun[] = workflows.map((wf) => {
         const outputs = parseWorkflowOutputs(wf.stage_outputs);
-        const percent = backendProgress(wf.current_stage, wf.status);
+        const percent = backendProgress(wf.business_status || wf.current_stage, wf.status);
         const isSuccess = wf.status === 'complete_success';
         const isFailure = wf.status === 'complete_failure';
         const isCancelled = wf.status.includes('cancelled');
@@ -245,22 +247,40 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           ? 'cancelled'
           : 'running';
 
+        const pageSnap = (wf.page_snapshot as Record<string, unknown> | null) ?? null;
+        const pageId = wf.page_id ?? (pageSnap?.page_id as string | undefined) ?? 'general';
+        const pageName = (pageSnap?.page_name as string | undefined) ?? undefined;
+        const inputPayload = (wf.input_payload as Partial<WorkflowInput> | null) ?? null;
+
         return {
           id: wf.job_id,
-          pageId: activePageId ?? 'general',
-          input: workflowInput,
+          pageId,
+          pageName,
+          pageSnapshot: pageSnap,
+          businessStatus: wf.business_status,
+          input: {
+            ...workflowInput,
+            ...(inputPayload ?? {}),
+          },
           currentStage: wf.current_stage,
           status: statusStr,
           progressPercent: percent,
           artifacts: outputs.artifacts,
           finalDraftUrl: outputs.draftUrl,
+          finalVideoUrl: outputs.videoUrl,
+          errorMessage: wf.failure_message ?? undefined,
+          failureCode: wf.failure_code ?? undefined,
+          failureStage: wf.failure_stage ?? undefined,
+          createdAt: wf.created_at,
+          startedAt: wf.started_at ?? undefined,
+          completedAt: wf.completed_at ?? undefined,
         };
       });
       setAllRuns(hydratedRuns);
     } catch (err) {
       console.error('[Floword] Failed to hydrate jobs from SQLite DB:', err);
     }
-  }, [activePageId, workflowInput]);
+  }, [workflowInput]);
 
   const refreshPages = useCallback(async () => {
     try {
@@ -290,7 +310,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       try {
         const res: GetFlowordWorkflowResponse = await getFlowordWorkflow(jobId);
         const outputs = parseWorkflowOutputs(res.stage_outputs);
-        const percent = backendProgress(res.current_stage, res.status);
+        const percent = backendProgress(res.business_status || res.current_stage, res.status);
         const isSuccess = res.status === 'complete_success';
         const isFailure = res.status === 'complete_failure';
         const isCancelled = res.status.includes('cancelled');
@@ -302,15 +322,33 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           ? 'cancelled'
           : 'running';
 
+        const pageSnap = (res.page_snapshot as Record<string, unknown> | null) ?? null;
+        const pageId = res.page_id ?? (pageSnap?.page_id as string | undefined) ?? activePageId ?? 'general';
+        const pageName = (pageSnap?.page_name as string | undefined) ?? undefined;
+        const inputPayload = (res.input_payload as Partial<WorkflowInput> | null) ?? null;
+
         const updatedRun: WorkflowRun = {
           id: jobId,
-          pageId: activePageId ?? 'general',
-          input: workflowInput,
+          pageId,
+          pageName,
+          pageSnapshot: pageSnap,
+          businessStatus: res.business_status,
+          input: {
+            ...workflowInput,
+            ...(inputPayload ?? {}),
+          },
           currentStage: res.current_stage,
           status: statusStr,
           progressPercent: percent,
           artifacts: outputs.artifacts,
           finalDraftUrl: outputs.draftUrl,
+          finalVideoUrl: outputs.videoUrl,
+          errorMessage: res.failure_message ?? undefined,
+          failureCode: res.failure_code ?? undefined,
+          failureStage: res.failure_stage ?? undefined,
+          createdAt: res.created_at,
+          startedAt: res.started_at ?? undefined,
+          completedAt: res.completed_at ?? undefined,
         };
 
         setActiveWorkflowRun(updatedRun);
@@ -571,34 +609,25 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           onConfigure={() => setConfigureOpen(true)}
         />
 
-        {/* Dynamic 6 Views Router */}
+        {/* Dynamic Views Router */}
         <main className="flex-1 overflow-y-auto">
-          {activeView === 'dashboard' && (
-            <DashboardView
-              readiness={readiness}
-              activeRuns={allRuns}
+          {activeView === 'dashboard' && <DashboardView />}
+
+          {activeView === 'studio' && (
+            <StudioView
               pages={pages}
-              onNewJob={() => setActiveView('studio')}
-              onNavigateTab={(tab) => setActiveView(tab)}
-              onSelectJob={(id) => {
-                setSelectedJobId(id);
-                setActiveView('jobs');
-              }}
-              onRefresh={() => fetchDetailedReadiness().then(setReadiness)}
+              activePageId={activePageId || undefined}
+              onSelectPage={(id) => setActivePageId(id)}
+              activeRun={activeWorkflowRun}
+              isRunning={running}
+              onRunWorkflow={handleExecuteWorkflow}
+              onCancelWorkflow={handleCancelWorkflow}
             />
           )}
 
-          {activeView === 'jobs' && (
-            <JobsView
-              runs={allRuns}
-              pages={pages}
-              selectedJobId={selectedJobId}
-              onSelectJob={(id) => setSelectedJobId(id)}
-              onNewJob={() => setActiveView('studio')}
-              onRetryStep={handleRetryStep}
-              onCancelJob={handleCancelJob}
-            />
-          )}
+          {activeView === 'bulk_import' && <BulkImportView />}
+
+          {activeView === 'jobs' && <JobsView />}
 
           {activeView === 'pages' && (
             <PagesView
@@ -614,18 +643,6 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
             />
           )}
 
-          {activeView === 'studio' && (
-            <StudioView
-              pages={pages}
-              activePageId={activePageId || undefined}
-              onSelectPage={(id) => setActivePageId(id)}
-              activeRun={activeWorkflowRun}
-              isRunning={running}
-              onRunWorkflow={handleExecuteWorkflow}
-              onCancelWorkflow={handleCancelWorkflow}
-            />
-          )}
-
           {activeView === 'publish' && (
             <PublishView
               runs={allRuns}
@@ -635,12 +652,9 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
             />
           )}
 
-          {activeView === 'settings' && (
-            <SettingsDevView
-              readiness={readiness}
-              onRefreshReadiness={() => fetchDetailedReadiness().then(setReadiness)}
-            />
-          )}
+          {activeView === 'history' && <HistoryView />}
+
+          {activeView === 'settings' && <SettingsView />}
         </main>
       </div>
 

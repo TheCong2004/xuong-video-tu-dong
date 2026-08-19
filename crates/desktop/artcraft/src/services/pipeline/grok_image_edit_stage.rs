@@ -19,6 +19,7 @@ use uuid::Uuid;
 pub struct GrokImageEditInput {
   pub job_id: String,
   pub page_id: String,
+  pub browser_profile_id: Option<String>,
   pub source_image_artifact: ArtifactRef,
   pub prompt: String,
   pub timeout_ms: Option<u64>,
@@ -211,6 +212,7 @@ pub async fn execute_grok_image_edit_stage(
   // 1. Acquire exclusive worker lease
   let lease = acquire_worker(AcquireWorkerRequest {
     pool_id: None,
+    profile_id: input.browser_profile_id.clone(),
     capability: "grok.image.edit".to_string(),
     job_id: job_id.clone(),
     step_id: step_id.to_string(),

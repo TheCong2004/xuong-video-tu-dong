@@ -1,369 +1,353 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Activity,
-  AlertCircle,
-  ArrowUpRight,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Layers,
-  Play,
-  Plus,
-  RefreshCw,
-  Sparkles,
-  TrendingUp,
-  Video,
-  Zap,
+  getDashboardSummary,
+  DashboardSummary,
+  listContentPages,
+  ContentPage,
+  checkStorageHealth,
+  StorageHealthReport,
+} from '../../api/flowordClient';
+import {
+  BarChart3, RefreshCw, Layers, CheckCircle2, AlertTriangle, Clock,
+  Play, Share2, Database, HardDrive, ShieldCheck, Sparkles, Film,
+  ArrowUpRight, Filter, Calendar, Globe, Server, Check, X
 } from 'lucide-react';
-import { DetailedReadinessStatus, ContentPage } from '../../api/flowordClient';
-import { WorkflowRun } from '../../services/workflowEngine';
 
-interface DashboardViewProps {
-  readiness: DetailedReadinessStatus;
-  activeRuns: WorkflowRun[];
-  pages: ContentPage[];
-  onNewJob: () => void;
-  onNavigateTab: (tab: 'jobs' | 'pages' | 'studio' | 'publish' | 'settings') => void;
-  onSelectJob: (jobId: string) => void;
-  onRefresh: () => void;
-}
+export const DashboardView: React.FC = () => {
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [pages, setPages] = useState<ContentPage[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [loading, setLoading] = useState<boolean>(true);
+  const [pageStorageHealth, setPageStorageHealth] = useState<StorageHealthReport | null>(null);
 
-export const DashboardView: React.FC<DashboardViewProps> = ({
-  readiness,
-  activeRuns,
-  pages,
-  onNewJob,
-  onNavigateTab,
-  onSelectJob,
-  onRefresh,
-}) => {
-  const totalJobs = activeRuns.length;
-  const runningJobs = activeRuns.filter((r) => r.status === 'running').length;
-  const queuedJobs = activeRuns.filter((r) => (r.status as string) === 'pending' || r.status === 'queued').length;
-  const errorJobs = activeRuns.filter((r) => r.status === 'failed' || (r.status as string) === 'error').length;
-  const completedJobs = activeRuns.filter((r) => r.status === 'completed' || (r.status as string) === 'complete_success').length;
+  const fetchSummary = useCallback(async () => {
+    setLoading(true);
+    try {
+      let dateFrom: number | undefined;
+      const now = Math.floor(Date.now() / 1000);
+      if (dateRange === 'today') {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        dateFrom = Math.floor(startOfDay.getTime() / 1000);
+      } else if (dateRange === '7d') {
+        dateFrom = now - 7 * 86400;
+      } else if (dateRange === '30d') {
+        dateFrom = now - 30 * 86400;
+      }
 
-  // Pipeline stage breakdown counts
-  const stageCounts = {
-    image: activeRuns.filter((r) => r.currentStage === 'image' || r.currentStage?.includes('image')).length,
-    aspect: activeRuns.filter((r) => r.currentStage === 'aspect' || r.currentStage?.includes('9:16')).length,
-    video: activeRuns.filter((r) => r.currentStage === 'video' || r.currentStage?.includes('video')).length,
-    download: activeRuns.filter((r) => r.currentStage === 'download').length,
-    readyToPost: activeRuns.filter((r) => r.status === 'completed' && !r.isPublished).length,
-    posting: activeRuns.filter((r) => r.currentStage === 'publish' || r.currentStage === 'posting').length,
-  };
+      const res = await getDashboardSummary({
+        page_id: selectedPageId !== 'all' ? selectedPageId : undefined,
+        date_from: dateFrom,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+        platform: platformFilter !== 'all' ? platformFilter : undefined,
+      });
+      setSummary(res);
 
-  const getPageName = (pageId?: string) => {
-    if (!pageId) return 'General';
-    const found = pages.find((p) => p.id === pageId);
-    return found ? found.name : pageId;
-  };
+      if (selectedPageId !== 'all') {
+        try {
+          const health = await checkStorageHealth(selectedPageId);
+          setPageStorageHealth(health);
+        } catch {
+          setPageStorageHealth(null);
+        }
+      } else {
+        setPageStorageHealth(null);
+      }
+    } catch (err) {
+      console.error('Failed to load dashboard summary:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedPageId, dateRange, statusFilter, platformFilter]);
+
+  useEffect(() => {
+    listContentPages(false).then((p) => setPages(p.pages ?? [])).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    fetchSummary();
+    const interval = setInterval(fetchSummary, 6000);
+    return () => clearInterval(interval);
+  }, [fetchSummary]);
+
+  const selectedPage = pages.find((p) => p.id === selectedPageId);
 
   return (
-    <div className="space-y-6 p-6 max-w-7xl mx-auto">
-      {/* Top Banner / Hero */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-2xl bg-gradient-to-r from-[#171b26] via-[#141822] to-[#10141d] border border-white/[0.08] p-6 shadow-2xl">
-        <div>
-          <div className="flex items-center gap-3 mb-1.5">
-            <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-            <h1 className="text-xl font-bold text-white tracking-tight">Floword Production Studio</h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              System Healthy
-            </span>
-          </div>
-          <p className="text-sm text-zinc-400">
-            Automated multi-channel video generation & publishing console.
-          </p>
-        </div>
-
+    <div className="flex-1 flex flex-col h-full bg-[#0b0f17] text-slate-100 overflow-y-auto p-6 space-y-6">
+      {/* Top Header & Real-time Filter Bar */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow-lg">
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onRefresh}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs font-medium border border-white/[0.08] transition"
-            title="Refresh statistics"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Refresh
-          </button>
-          <button
-            type="button"
-            onClick={onNewJob}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#e54d5e] to-[#c23b4c] hover:from-[#f05c6d] hover:to-[#d04657] text-white text-xs font-semibold shadow-lg shadow-rose-500/20 transition transform active:scale-95"
-          >
-            <Plus className="h-4 w-4" />
-            New Job
-          </button>
-        </div>
-      </div>
-
-      {/* KPI Counters */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-white/[0.08] bg-[#121622]/80 backdrop-blur p-5">
-          <div className="flex items-center justify-between text-zinc-400 text-xs font-medium mb-2">
-            <span>Total Production Jobs</span>
-            <Layers className="h-4 w-4 text-zinc-500" />
+          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <BarChart3 className="w-5 h-5" />
           </div>
-          <div className="text-3xl font-extrabold text-white">{totalJobs}</div>
-          <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500">
-            <span>{pages.length} Pages active</span>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/[0.03] backdrop-blur p-5">
-          <div className="flex items-center justify-between text-blue-400 text-xs font-medium mb-2">
-            <span>Running Now</span>
-            <Activity className="h-4 w-4 text-blue-400 animate-spin" />
-          </div>
-          <div className="text-3xl font-extrabold text-blue-400">{runningJobs}</div>
-          <div className="mt-2 text-[11px] text-blue-400/70">
-            {queuedJobs} queued in pipeline
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] backdrop-blur p-5">
-          <div className="flex items-center justify-between text-emerald-400 text-xs font-medium mb-2">
-            <span>Completed</span>
-            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-emerald-400">{completedJobs}</div>
-          <div className="mt-2 text-[11px] text-emerald-400/70">
-            Ready or published
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-rose-500/20 bg-rose-500/[0.03] backdrop-blur p-5">
-          <div className="flex items-center justify-between text-rose-400 text-xs font-medium mb-2">
-            <span>Requires Attention</span>
-            <AlertCircle className="h-4 w-4 text-rose-400" />
-          </div>
-          <div className="text-3xl font-extrabold text-rose-400">{errorJobs}</div>
-          <div className="mt-2 text-[11px] text-rose-400/70">
-            {errorJobs > 0 ? 'Retry available' : 'Zero blockers'}
-          </div>
-        </div>
-      </div>
-
-      {/* Production Pipeline Breakdown & Readiness */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Stage counters */}
-        <div className="lg:col-span-2 rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-rose-400" />
-              Production Pipeline Stages
-            </h3>
-            <button
-              onClick={() => onNavigateTab('jobs')}
-              className="text-xs text-rose-400 hover:text-rose-300 font-medium flex items-center gap-1 transition"
-            >
-              View all jobs <ArrowUpRight className="h-3 w-3" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition">
-              <div className="text-[11px] text-zinc-400 font-medium">1. Generate Image</div>
-              <div className="text-2xl font-bold text-white mt-1">{stageCounts.image}</div>
-              <div className="text-[10px] text-zinc-500 mt-1">Grok / FLUX Worker</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition">
-              <div className="text-[11px] text-zinc-400 font-medium">2. Convert 9:16</div>
-              <div className="text-2xl font-bold text-white mt-1">{stageCounts.aspect}</div>
-              <div className="text-[10px] text-zinc-500 mt-1">Smart Outpainting</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition">
-              <div className="text-[11px] text-zinc-400 font-medium">3. Generate Video</div>
-              <div className="text-2xl font-bold text-white mt-1">{stageCounts.video}</div>
-              <div className="text-[10px] text-zinc-500 mt-1">Video Diffusion</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] transition">
-              <div className="text-[11px] text-zinc-400 font-medium">4. Download / Merge</div>
-              <div className="text-2xl font-bold text-white mt-1">{stageCounts.download}</div>
-              <div className="text-[10px] text-zinc-500 mt-1">Local Storage</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-amber-500/[0.04] border border-amber-500/20 hover:bg-amber-500/[0.08] transition">
-              <div className="text-[11px] text-amber-300 font-medium">5. Ready To Post</div>
-              <div className="text-2xl font-bold text-amber-400 mt-1">{stageCounts.readyToPost}</div>
-              <div className="text-[10px] text-amber-400/70 mt-1">Waiting Review</div>
-            </div>
-
-            <div className="p-3.5 rounded-xl bg-blue-500/[0.04] border border-blue-500/20 hover:bg-blue-500/[0.08] transition">
-              <div className="text-[11px] text-blue-300 font-medium">6. Auto / Posting</div>
-              <div className="text-2xl font-bold text-blue-400 mt-1">{stageCounts.posting}</div>
-              <div className="text-[10px] text-blue-400/70 mt-1">FB / TikTok / YT</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Worker & System Summary */}
-        <div className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Zap className="h-4 w-4 text-amber-400" />
-                Execution Engines
-              </h3>
-              <button
-                onClick={() => onNavigateTab('settings')}
-                className="text-xs text-zinc-400 hover:text-white"
-              >
-                Settings
-              </button>
-            </div>
-
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2 w-2 rounded-full ${readiness.isReadyForExecution ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-                  <span className="text-xs text-zinc-300">Unified Orchestrator</span>
-                </div>
-                <span className="text-[11px] font-mono text-zinc-500">:20128</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs text-zinc-300">Browser Extension Pool</span>
-                </div>
-                <span className="text-[11px] text-emerald-400">Online</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                  <span className="text-xs text-zinc-300">CapCut Draft Injector</span>
-                </div>
-                <span className="text-[11px] text-emerald-400">Ready</span>
-              </div>
-            </div>
+            <h1 className="text-xl font-bold text-white tracking-wide">Production Operations Console</h1>
+            <p className="text-xs text-slate-400">Authoritative real-time aggregation from SQLite tasks & publications</p>
           </div>
+        </div>
 
-          <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-500">
-            <span>Review Inbox: {stageCounts.readyToPost} videos</span>
-            <button
-              onClick={() => onNavigateTab('publish')}
-              className="text-rose-400 hover:text-rose-300 font-medium"
+        {/* Global Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Page Selector */}
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+            <Layers className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={selectedPageId}
+              onChange={(e) => setSelectedPageId(e.target.value)}
+              className="bg-transparent text-slate-200 focus:outline-none cursor-pointer"
             >
-              Open Inbox &rarr;
-            </button>
+              <option value="all">Tất cả Content Pages</option>
+              {pages.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} ({p.target_platform || 'Universal'})</option>
+              ))}
+            </select>
           </div>
+
+          {/* Date Filter */}
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={dateRange}
+              onChange={(e) => setDateRange(e.target.value as any)}
+              className="bg-transparent text-slate-200 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Toàn bộ thời gian</option>
+              <option value="today">Hôm nay (Today)</option>
+              <option value="7d">7 ngày qua</option>
+              <option value="30d">30 ngày qua</option>
+            </select>
+          </div>
+
+          {/* Platform Filter */}
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+            <Globe className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={platformFilter}
+              onChange={(e) => setPlatformFilter(e.target.value)}
+              className="bg-transparent text-slate-200 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Tất cả Platforms</option>
+              <option value="facebook">Facebook Reels</option>
+              <option value="tiktok">TikTok Video</option>
+              <option value="youtube">YouTube Shorts</option>
+            </select>
+          </div>
+
+          <button
+            onClick={fetchSummary}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <span>Làm mới</span>
+          </button>
         </div>
       </div>
 
-      {/* Recent Production Jobs */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Clock className="h-4 w-4 text-zinc-400" />
-            Recent Production Jobs
-          </h3>
-          <button
-            onClick={() => onNavigateTab('jobs')}
-            className="text-xs text-zinc-400 hover:text-white font-medium transition"
-          >
-            View all ({activeRuns.length})
-          </button>
+      {/* Per-Page Specific Banner (if a single page is selected) */}
+      {selectedPage && (
+        <div className="bg-gradient-to-r from-indigo-950/40 via-[#131926] to-[#131926] p-4 rounded-xl border border-indigo-500/30 flex flex-wrap items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                ACTIVE PAGE
+              </span>
+              <h2 className="text-lg font-bold text-white">{selectedPage.name}</h2>
+              <span className="text-xs text-slate-400 font-mono">[{selectedPage.id}]</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Browser Profile: <span className="text-slate-200 font-mono">{selectedPage.browser_profile_id || 'default'}</span> • Platform: <span className="text-slate-200 font-semibold">{selectedPage.target_platform || 'Universal'}</span>
+            </p>
+          </div>
+
+          {/* Storage health check */}
+          <div className="flex items-center gap-3 bg-[#0b0f17] px-4 py-2 rounded-lg border border-slate-800">
+            <HardDrive className="w-5 h-5 text-indigo-400" />
+            <div className="text-xs">
+              <div className="text-slate-400">Output Storage:</div>
+              <div className="font-mono text-slate-200 text-[11px] truncate max-w-[260px]">
+                {pageStorageHealth?.target_path || selectedPage.output_root || 'Default Video Storage'}
+              </div>
+            </div>
+            {pageStorageHealth ? (
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${pageStorageHealth.writable ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'}`}>
+                {pageStorageHealth.writable ? 'WRITABLE' : 'READ-ONLY/LOCKED'}
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">PROBING</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main Metric Cards Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+          <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
+            <span>TOTAL JOBS</span>
+            <Database className="w-4 h-4 text-indigo-400" />
+          </div>
+          <div className="text-3xl font-extrabold text-white tracking-tight">{summary?.total_jobs ?? 0}</div>
+          <div className="text-[11px] text-slate-500 mt-1">Đơn hàng trong bộ lọc</div>
         </div>
 
-        {activeRuns.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Video className="h-10 w-10 text-zinc-600 mb-3" />
-            <p className="text-sm font-medium text-zinc-400">Chưa có Job nào trong phiên làm việc.</p>
-            <p className="text-xs text-zinc-500 mt-1">Bấm "New Job" để khởi chạy luồng tạo video đầu tiên.</p>
-            <button
-              type="button"
-              onClick={onNewJob}
-              className="mt-4 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition"
-            >
-              Tạo Job Mới
-            </button>
+        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+          <div className="flex items-center justify-between text-amber-400 text-xs font-semibold mb-2">
+            <span>QUEUED</span>
+            <Clock className="w-4 h-4 text-amber-400" />
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/[0.06] text-zinc-500 font-medium">
-                  <th className="pb-3">Job ID</th>
-                  <th className="pb-3">Page</th>
-                  <th className="pb-3">Current Stage</th>
-                  <th className="pb-3">Progress</th>
-                  <th className="pb-3">Status</th>
-                  <th className="pb-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                {activeRuns.slice(0, 8).map((run) => (
-                  <tr
-                    key={run.id}
-                    onClick={() => onSelectJob(run.id)}
-                    className="hover:bg-white/[0.02] cursor-pointer transition group"
-                  >
-                    <td className="py-3 font-mono font-bold text-zinc-200">
-                      {run.id.slice(0, 8)}...
-                    </td>
-                    <td className="py-3 text-zinc-300">
-                      {getPageName(run.pageId)}
-                    </td>
-                    <td className="py-3 text-zinc-400 capitalize">
-                      {run.currentStage || 'Initializing'}
-                    </td>
-                    <td className="py-3">
-                      <div className="flex items-center gap-2">
-                        <div className="w-24 h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-300 ${
-                              run.status === 'failed'
-                                ? 'bg-rose-500'
-                                : run.status === 'completed'
-                                ? 'bg-emerald-500'
-                                : 'bg-blue-500'
-                            }`}
-                            style={{ width: `${run.progressPercent || 0}%` }}
-                          />
-                        </div>
-                        <span className="text-[11px] font-mono text-zinc-500">
-                          {run.progressPercent || 0}%
-                        </span>
-                      </div>
-                    </td>
-                    <td className="py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider ${
-                          run.status === 'running'
-                            ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                            : run.status === 'completed'
-                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                            : run.status === 'failed'
-                            ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                            : 'bg-zinc-500/10 text-zinc-400 border border-zinc-500/20'
-                        }`}
-                      >
-                        {run.status}
-                      </span>
-                    </td>
-                    <td className="py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onSelectJob(run.id);
-                        }}
-                        className="text-xs text-zinc-400 group-hover:text-white font-medium hover:underline"
-                      >
-                        Inspect &rarr;
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="text-3xl font-extrabold text-amber-300 tracking-tight">{summary?.queued ?? 0}</div>
+          <div className="text-[11px] text-slate-500 mt-1">Chờ Worker nhận việc</div>
+        </div>
+
+        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+          <div className="flex items-center justify-between text-sky-400 text-xs font-semibold mb-2">
+            <span>IN PROGRESS</span>
+            <Play className="w-4 h-4 text-sky-400" />
           </div>
-        )}
+          <div className="text-3xl font-extrabold text-sky-300 tracking-tight">
+            {(summary?.generating_image ?? 0) + (summary?.converting_9_16 ?? 0) + (summary?.generating_video ?? 0) + (summary?.downloading ?? 0) + (summary?.saving_local ?? 0)}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">Đang tạo ảnh/video/tải</div>
+        </div>
+
+        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+          <div className="flex items-center justify-between text-emerald-400 text-xs font-semibold mb-2">
+            <span>VIDEO DONE</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          </div>
+          <div className="text-3xl font-extrabold text-emerald-300 tracking-tight">{summary?.done ?? 0}</div>
+          <div className="text-[11px] text-slate-500 mt-1">Đã lưu ổ đĩa thành công</div>
+        </div>
+
+        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+          <div className="flex items-center justify-between text-purple-400 text-xs font-semibold mb-2">
+            <span>READY TO POST</span>
+            <Share2 className="w-4 h-4 text-purple-400" />
+          </div>
+          <div className="text-3xl font-extrabold text-purple-300 tracking-tight">{summary?.ready_to_post ?? 0}</div>
+          <div className="text-[11px] text-slate-500 mt-1">Sẵn sàng xuất bản</div>
+        </div>
+
+        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+          <div className="flex items-center justify-between text-rose-400 text-xs font-semibold mb-2">
+            <span>ERROR / AUTH</span>
+            <AlertTriangle className="w-4 h-4 text-rose-400" />
+          </div>
+          <div className="text-3xl font-extrabold text-rose-400 tracking-tight">
+            {(summary?.error ?? 0) + (summary?.auth_required ?? 0)}
+          </div>
+          <div className="text-[11px] text-slate-500 mt-1">{summary?.auth_required ?? 0} cần đăng nhập</div>
+        </div>
+      </div>
+
+      {/* Production Pipeline Funnel Details */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Core Video Generation Stage Funnel */}
+        <div className="lg:col-span-2 bg-[#131926] p-5 rounded-xl border border-slate-800/80 shadow space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Film className="w-4 h-4 text-indigo-400" />
+              <span>Tiến trình Sản xuất Video Thực tế (Pipeline Stages)</span>
+            </h3>
+            <span className="text-xs text-slate-500 font-mono">Real-time Stage Counts</span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+              <div className="text-[11px] text-slate-400 font-medium">1. Grok Edit</div>
+              <div className="text-xl font-bold text-sky-400 mt-1">{summary?.generating_image ?? 0}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Tạo / chỉnh ảnh</div>
+            </div>
+
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+              <div className="text-[11px] text-slate-400 font-medium">2. Expand 9:16</div>
+              <div className="text-xl font-bold text-indigo-400 mt-1">{summary?.converting_9_16 ?? 0}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Mở rộng khung dọc</div>
+            </div>
+
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+              <div className="text-[11px] text-slate-400 font-medium">3. Grok Video</div>
+              <div className="text-xl font-bold text-purple-400 mt-1">{summary?.generating_video ?? 0}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Sinh clip chuyển động</div>
+            </div>
+
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+              <div className="text-[11px] text-slate-400 font-medium">4. Auto Download</div>
+              <div className="text-xl font-bold text-cyan-400 mt-1">{summary?.downloading ?? 0}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Tải video MP4</div>
+            </div>
+
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+              <div className="text-[11px] text-slate-400 font-medium">5. Save Local</div>
+              <div className="text-xl font-bold text-emerald-400 mt-1">{summary?.saving_local ?? 0}</div>
+              <div className="text-[10px] text-slate-500 mt-0.5">Lưu chuẩn Page/date</div>
+            </div>
+          </div>
+
+          {/* Quick status banner */}
+          <div className="bg-[#0b0f17] p-3.5 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 text-slate-300">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Dữ liệu Authoritative truy vấn trực tiếp từ SQLite Database - Zero client-side stale mockup.</span>
+            </div>
+            <span className="text-slate-500 font-mono text-[11px]">Polling 6s</span>
+          </div>
+        </div>
+
+        {/* Social Publishing Engine Status Breakdown */}
+        <div className="bg-[#131926] p-5 rounded-xl border border-slate-800/80 shadow space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Share2 className="w-4 h-4 text-purple-400" />
+              <span>Phân phối Đa nền tảng (Publishing)</span>
+            </h3>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 text-xs">
+              <div className="flex items-center gap-2 text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                <span>Facebook Reels</span>
+              </div>
+              <span className="font-mono font-bold text-blue-400">{summary?.publications_facebook ?? 0}</span>
+            </div>
+
+            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 text-xs">
+              <div className="flex items-center gap-2 text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                <span>TikTok Video</span>
+              </div>
+              <span className="font-mono font-bold text-rose-400">{summary?.publications_tiktok ?? 0}</span>
+            </div>
+
+            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 text-xs">
+              <div className="flex items-center gap-2 text-slate-300">
+                <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                <span>YouTube Shorts</span>
+              </div>
+              <span className="font-mono font-bold text-red-400">{summary?.publications_youtube ?? 0}</span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="bg-[#0b0f17] p-2 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">Đã đăng</div>
+                <div className="text-emerald-400 font-bold font-mono mt-0.5">{summary?.publications_posted ?? 0}</div>
+              </div>
+              <div className="bg-[#0b0f17] p-2 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">Lên lịch</div>
+                <div className="text-amber-400 font-bold font-mono mt-0.5">{summary?.publications_scheduled ?? 0}</div>
+              </div>
+              <div className="bg-[#0b0f17] p-2 rounded border border-slate-800">
+                <div className="text-slate-400 text-[10px]">Chờ duyệt</div>
+                <div className="text-indigo-400 font-bold font-mono mt-0.5">{summary?.publications_waiting_approval ?? 0}</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

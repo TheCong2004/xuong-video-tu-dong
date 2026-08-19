@@ -16,12 +16,14 @@ import {
   UserCheck,
   X,
   Zap,
+  Monitor,
 } from 'lucide-react';
 import {
   ContentPage,
   CreateContentPageRequest,
   UpdateContentPageRequest,
 } from '../../api/flowordClient';
+import { PageManagementModal } from '../PageManagementModal';
 
 interface PagesViewProps {
   pages: ContentPage[];
@@ -40,96 +42,24 @@ export const PagesView: React.FC<PagesViewProps> = ({
   onUpdatePage,
   onArchivePage,
 }) => {
-  const [isEditing, setIsEditing] = useState<boolean>(false);
-  const [editingPageId, setEditingPageId] = useState<string | null>(null);
-
-  // Form state
-  const [formData, setFormData] = useState<{
-    name: string;
-    description: string;
-    targetAudience: string;
-    storagePath: string;
-    browserProfile: string;
-    defaultImagePrompt: string;
-    defaultExpand916Prompt: string;
-    defaultVideoPrompt: string;
-    postMode: 'auto' | 'review';
-    slots: string;
-  }>({
-    name: '',
-    description: '',
-    targetAudience: 'Movie & Entertainment',
-    storagePath: 'D:\\Floword_Media\\',
-    browserProfile: 'PROFILE_01',
-    defaultImagePrompt: 'Cinematic wide angle frame, 8k resolution, photorealistic lighting',
-    defaultExpand916Prompt: 'Expand image to 9:16 vertical ratio preserving subject and composition',
-    defaultVideoPrompt: 'Smooth camera panning, vivid 4k cinematic movement',
-    postMode: 'review',
-    slots: '08:30, 12:00, 17:30, 21:00',
-  });
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [selectedPageToEdit, setSelectedPageToEdit] = useState<ContentPage | null>(null);
 
   const openCreateModal = () => {
-    setEditingPageId(null);
-    setFormData({
-      name: '',
-      description: '',
-      targetAudience: 'General Audience',
-      storagePath: 'D:\\Floword_Media\\',
-      browserProfile: 'PROFILE_DEFAULT',
-      defaultImagePrompt: 'Cinematic shot, hyper-realistic, vivid atmosphere',
-      defaultExpand916Prompt: 'Expand image to 9:16 vertical ratio preserving subject and composition',
-      defaultVideoPrompt: 'Dynamic motion, smooth camera pan',
-      postMode: 'review',
-      slots: '08:30, 12:00, 17:30, 21:00',
-    });
-    setIsEditing(true);
+    setSelectedPageToEdit(null);
+    setModalOpen(true);
   };
 
   const openEditModal = (page: ContentPage) => {
-    setEditingPageId(page.id);
-    setFormData({
-      name: page.name,
-      description: (page as unknown as { description?: string }).description || '',
-      targetAudience: (page as unknown as { targetAudience?: string }).targetAudience || 'General Audience',
-      storagePath: page.output_root || 'D:\\Floword_Media\\' + page.name,
-      browserProfile: 'PROFILE_' + page.name.toUpperCase().replace(/\s+/g, '_'),
-      defaultImagePrompt: page.default_image_prompt || 'Cinematic shot, hyper-realistic, vivid atmosphere',
-      defaultExpand916Prompt: page.default_expand_9_16_prompt || 'Expand image to 9:16 vertical ratio preserving subject and composition',
-      defaultVideoPrompt: page.default_video_prompt || 'Dynamic motion, smooth camera pan',
-      postMode: 'review',
-      slots: '08:30, 12:00, 17:30, 21:00',
-    });
-    setIsEditing(true);
+    setSelectedPageToEdit(page);
+    setModalOpen(true);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name.trim()) return;
-
-    try {
-      if (editingPageId) {
-        await onUpdatePage(editingPageId, {
-          id: editingPageId,
-          name: formData.name.trim(),
-          output_root: formData.storagePath.trim() || 'D:\\',
-          target_platform: 'tiktok',
-          default_image_prompt: formData.defaultImagePrompt.trim() || undefined,
-          default_expand_9_16_prompt: formData.defaultExpand916Prompt.trim() || undefined,
-          default_video_prompt: formData.defaultVideoPrompt.trim() || undefined,
-        });
-      } else {
-        await onCreatePage({
-          name: formData.name.trim(),
-          output_root: formData.storagePath.trim() || 'D:\\',
-          target_platform: 'tiktok',
-          default_image_prompt: formData.defaultImagePrompt.trim() || undefined,
-          default_expand_9_16_prompt: formData.defaultExpand916Prompt.trim() || undefined,
-          default_video_prompt: formData.defaultVideoPrompt.trim() || undefined,
-        });
-      }
-      setIsEditing(false);
-    } catch {
-      // Retain modal open on error so user can retry
+  const handleSavePage = async (req: CreateContentPageRequest | UpdateContentPageRequest) => {
+    if ('id' in req && req.id) {
+      await onUpdatePage(req.id, req as UpdateContentPageRequest);
+    } else {
+      await onCreatePage(req as CreateContentPageRequest);
     }
   };
 
@@ -140,7 +70,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Channel & Page Management</h1>
           <p className="text-xs text-zinc-400">
-            Configure target media channels, automated prompt presets, storage, and publishing rules.
+            Cấu hình Page, thư mục lưu trữ cục bộ, Donut Browser Profile affinity và Prompt mặc định.
           </p>
         </div>
 
@@ -177,8 +107,8 @@ export const PagesView: React.FC<PagesViewProps> = ({
                       <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
                       <h3 className="font-bold text-base text-white">{page.name}</h3>
                     </div>
-                    <p className="text-xs text-zinc-400 mt-1 line-clamp-2">
-                      {(page as unknown as { description?: string }).description || `Output: ${page.output_root}`}
+                    <p className="text-xs text-zinc-400 mt-1 line-clamp-1 font-mono">
+                      {page.output_root}
                     </p>
                   </div>
 
@@ -195,35 +125,25 @@ export const PagesView: React.FC<PagesViewProps> = ({
                   </button>
                 </div>
 
-                {/* Target Audience & Preset Badges */}
+                {/* Profile Affinity & Platform */}
                 <div className="mt-4 pt-3 border-t border-white/[0.06] space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-zinc-500">Platform:</span>
                     <span className="text-zinc-300 font-medium uppercase">{page.target_platform || 'TikTok'}</span>
                   </div>
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-zinc-500">Post Mode:</span>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                      Review Before Post
+                    <span className="text-zinc-500">Browser Profile:</span>
+                    <span className="font-mono text-blue-400 font-medium">
+                      {page.browser_profile_id || 'Default Pool'}
                     </span>
                   </div>
                 </div>
 
-                {/* Connected Channels */}
-                <div className="mt-4 pt-3 border-t border-white/[0.06]">
-                  <div className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider mb-2">
-                    Publishing Channels
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                      Facebook Page
-                    </span>
-                    <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-pink-500/10 text-pink-400 border border-pink-500/20">
-                      TikTok
-                    </span>
-                    <span className="px-2 py-1 rounded-md text-[10px] font-bold bg-red-500/10 text-red-400 border border-red-500/20">
-                      YouTube
-                    </span>
+                {/* Output Directory Template */}
+                <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-white/[0.04] text-[10px] font-mono text-zinc-400">
+                  <div className="text-zinc-500 font-sans font-semibold mb-0.5">Layout lưu file:</div>
+                  <div className="truncate text-indigo-300">
+                    {page.output_root}\{page.name}\&lt;DD-MM-YYYY&gt;\
                   </div>
                 </div>
               </div>
@@ -231,7 +151,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
               {/* Card Footer */}
               <div className="mt-5 pt-3 border-t border-white/[0.06] flex items-center justify-between">
                 <span className="text-[11px] text-zinc-500">
-                  {isActive ? '● Currently Active' : 'Click to activate'}
+                  {isActive ? '● Currently Active' : 'Click to select'}
                 </span>
                 <button
                   type="button"
@@ -249,135 +169,14 @@ export const PagesView: React.FC<PagesViewProps> = ({
         })}
       </div>
 
-      {/* Page Edit / Create Modal */}
-      {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-[#151926] border border-white/[0.12] p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-              <h3 className="text-base font-bold text-white">
-                {editingPageId ? 'Page Preset Settings' : 'Create New Channel / Page'}
-              </h3>
-              <button
-                type="button"
-                onClick={() => setIsEditing(false)}
-                className="p-1 text-zinc-400 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSave} className="space-y-4 text-xs">
-              <div>
-                <label className="block text-zinc-400 mb-1 font-medium">Page / Channel Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Movie Feed, Celebrity World..."
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-zinc-400 mb-1 font-medium">Topic / Description</label>
-                <input
-                  type="text"
-                  placeholder="Short description of the content theme..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-zinc-400 mb-1 font-medium">Dedicated Storage Directory</label>
-                  <input
-                    type="text"
-                    value={formData.storagePath}
-                    onChange={(e) => setFormData({ ...formData, storagePath: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-zinc-300 font-mono text-[11px] focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-zinc-400 mb-1 font-medium">Browser Posting Profile</label>
-                  <input
-                    type="text"
-                    value={formData.browserProfile}
-                    onChange={(e) => setFormData({ ...formData, browserProfile: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-zinc-300 font-mono text-[11px] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-zinc-400 mb-1 font-medium">Default Prompt Template</label>
-                <textarea
-                  rows={2}
-                  value={formData.defaultImagePrompt}
-                  onChange={(e) => setFormData({ ...formData, defaultImagePrompt: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-zinc-400 mb-1 font-medium">Publishing Workflow</label>
-                  <select
-                    value={formData.postMode}
-                    onChange={(e) => setFormData({ ...formData, postMode: e.target.value as any })}
-                    className="w-full px-3 py-2 rounded-xl bg-[#1b2030] border border-white/[0.1] text-white focus:outline-none"
-                  >
-                    <option value="review">Review Before Post (Recommended)</option>
-                    <option value="auto">Auto-Post Immediately</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-zinc-400 mb-1 font-medium">Default Schedule Slots</label>
-                  <input
-                    type="text"
-                    value={formData.slots}
-                    onChange={(e) => setFormData({ ...formData, slots: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white font-mono text-[11px] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4 border-t border-white/[0.08] flex items-center justify-between">
-                {editingPageId ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onArchivePage(editingPageId);
-                      setIsEditing(false);
-                    }}
-                    className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-medium transition"
-                  >
-                    Archive Page
-                  </button>
-                ) : <div />}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs font-medium transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow transition"
-                  >
-                    Save Page Preset
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* Authoritative Page Modal */}
+      <PageManagementModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        pageToEdit={selectedPageToEdit}
+        onSavePage={handleSavePage}
+        onArchivePage={onArchivePage}
+      />
     </div>
   );
 };

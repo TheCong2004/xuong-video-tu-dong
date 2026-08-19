@@ -1,4 +1,5 @@
 pub mod artifact_store;
+pub mod bulk_import_service;
 pub mod caption_segmenter;
 pub mod capcut;
 pub mod clients;
@@ -10,6 +11,7 @@ pub mod media_timeline;
 pub mod research;
 pub mod visual_assets;
 pub mod story_script;
+pub mod system_health_probes;
 pub mod voice;
 pub mod state;
 pub mod threads;

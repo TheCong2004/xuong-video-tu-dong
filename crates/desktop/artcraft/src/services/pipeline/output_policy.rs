@@ -70,18 +70,26 @@ pub struct OutputPathResolver;
 
 impl OutputPathResolver {
   /// Resolves the canonical target directory for a page on the current local date:
-  /// `<output_root>\<sanitized_page_name>\<DD-MM-YYYY>\`
+  /// `<output_root>\<DD-MM-YYYY>\` if output_root is exact page root, or `<output_root>\<sanitized_page_name>\<DD-MM-YYYY>\`
   pub fn resolve_page_date_directory(output_root: &str, page_name: &str) -> Result<PathBuf, String> {
-    let root_path = PathBuf::from(output_root.trim());
-    if output_root.trim().is_empty() {
+    let trimmed_root = output_root.trim().trim_end_matches(['/', '\\']);
+    if trimmed_root.is_empty() {
       return Err("OUTPUT_ROOT_EMPTY: Output root path cannot be empty".to_string());
     }
+    let root_path = PathBuf::from(trimmed_root);
 
     let safe_page = sanitize_page_name(page_name);
     let date_str = current_local_date_string();
 
-    // Guard against relative injection in page_name or date
-    let target = root_path.join(&safe_page).join(&date_str);
+    let root_file_name = root_path.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let is_already_page_dir = root_file_name.eq_ignore_ascii_case(page_name.trim())
+      || root_file_name.eq_ignore_ascii_case(&safe_page);
+
+    let target = if is_already_page_dir {
+      root_path.join(&date_str)
+    } else {
+      root_path.join(&safe_page).join(&date_str)
+    };
 
     Ok(target)
   }

@@ -19,6 +19,7 @@ use uuid::Uuid;
 pub struct GrokVideoGenerateInput {
   pub job_id: String,
   pub page_id: String,
+  pub browser_profile_id: Option<String>,
   /// MUST be the exact 9:16 vertical artifact output from IMAGE_9_16_DONE
   pub vertical_image_artifact: ArtifactRef,
   pub prompt: String,
@@ -186,6 +187,7 @@ pub async fn execute_grok_video_generate(
     attempt_id: attempt_id.to_string(),
     capability: "grok.video.generate".to_string(),
     pool_id: None,
+    profile_id: input.browser_profile_id.clone(),
     ttl_seconds: Some(300),
   };
 

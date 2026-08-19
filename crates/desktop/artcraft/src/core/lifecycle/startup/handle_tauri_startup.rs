@@ -96,6 +96,12 @@ pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_con
   // (script generation -> video assembly) gated by the CommandDispatcher.
   tauri::async_runtime::spawn(pipeline_worker_thread(app.clone(), root.clone(), task_database.clone(), command_dispatcher));
 
+  // Publishing worker: handles automated/approved social posting (FB, TikTok, YT Shorts)
+  crate::services::publishing::threads::publishing_worker_thread::PublishingWorkerThread::start(
+    app.clone(),
+    task_database.get_connection().clone(),
+  );
+
   spawn_discord_presence_thread()?;
 
   initially_size_and_position_windows(&app, &root);

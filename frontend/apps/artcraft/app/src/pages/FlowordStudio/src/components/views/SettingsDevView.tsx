@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Activity,
   Boxes,
@@ -20,8 +20,11 @@ import {
   Sliders,
   Terminal,
   Zap,
+  Monitor,
+  Check,
 } from 'lucide-react';
-import { DetailedReadinessStatus } from '../../api/flowordClient';
+import toast from 'react-hot-toast';
+import { DetailedReadinessStatus, BrowserWorkerInfo, listBrowserWorkers, getFlowordSettings, updateFlowordSettings } from '../../api/flowordClient';
 
 interface SettingsDevViewProps {
   readiness: DetailedReadinessStatus;
@@ -33,7 +36,35 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
   onRefreshReadiness,
 }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'workers' | 'engines' | 'storage' | 'diagnostics'>('general');
-  const [devSectionExpanded, setDevSectionExpanded] = useState<boolean>(false);
+  const [maxConcurrency, setMaxConcurrency] = useState<number>(3);
+  const [savingSettings, setSavingSettings] = useState<boolean>(false);
+  const [workers, setWorkers] = useState<BrowserWorkerInfo[]>([]);
+  const [loadingWorkers, setLoadingWorkers] = useState<boolean>(false);
+
+  useEffect(() => {
+    getFlowordSettings()
+      .then((res) => setMaxConcurrency(res.max_concurrent_jobs))
+      .catch(() => setMaxConcurrency(3));
+
+    setLoadingWorkers(true);
+    listBrowserWorkers()
+      .then(setWorkers)
+      .catch(() => setWorkers([]))
+      .finally(() => setLoadingWorkers(false));
+  }, []);
+
+  const handleSaveConcurrency = async (val: number) => {
+    setMaxConcurrency(val);
+    setSavingSettings(true);
+    try {
+      await updateFlowordSettings(val);
+      toast.success(`Đã lưu cấu hình Max Concurrency: ${val} Jobs đồng thời.`);
+    } catch (err) {
+      toast.error('Lỗi khi lưu cấu hình');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
@@ -42,13 +73,16 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Settings & System Architecture</h1>
           <p className="text-xs text-zinc-400">
-            Configure system defaults, AI worker pools, engine adapters, and developer diagnostics.
+            Authoritative Bounded Concurrency, Browser Worker Pools & System Diagnostics.
           </p>
         </div>
 
         <button
           type="button"
-          onClick={onRefreshReadiness}
+          onClick={() => {
+            onRefreshReadiness();
+            listBrowserWorkers().then(setWorkers).catch(() => {});
+          }}
           className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs font-medium border border-white/[0.08] transition"
         >
           <RefreshCw className="h-3.5 w-3.5" />
@@ -68,7 +102,7 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
           }`}
         >
           <Settings className="h-4 w-4" />
-          General System
+          General & Concurrency
         </button>
 
         <button
@@ -80,34 +114,8 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
               : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
-          <Zap className="h-4 w-4 text-amber-400" />
-          Worker Pools & Concurrency
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('engines')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition ${
-            activeTab === 'engines'
-              ? 'bg-white/[0.08] text-white font-semibold'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Boxes className="h-4 w-4 text-blue-400" />
-          AI Engines & Adapters
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('storage')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl transition ${
-            activeTab === 'storage'
-              ? 'bg-white/[0.08] text-white font-semibold'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <HardDrive className="h-4 w-4 text-emerald-400" />
-          Storage & Directories
+          <Monitor className="h-4 w-4 text-blue-400" />
+          Donut Browser Workers
         </button>
 
         <button
@@ -120,37 +128,56 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
           }`}
         >
           <Code2 className="h-4 w-4 text-rose-400" />
-          Developer & Diagnostics
+          Readiness Probes
         </button>
       </div>
 
       {/* Tab Contents */}
       {activeTab === 'general' && (
         <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-5 text-xs">
-          <h3 className="text-sm font-bold text-white">General Preferences</h3>
+          <h3 className="text-sm font-bold text-white">Production Scheduler Configuration</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-2">
-              <span className="font-semibold text-white">Default Workflow Strategy</span>
-              <p className="text-zinc-400 text-[11px]">
-                Define default processing order when new jobs are created from Quick Actions.
-              </p>
-              <select className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.08] text-zinc-300 focus:outline-none">
-                <option>Automated: Image &rarr; 9:16 &rarr; Video &rarr; Review</option>
-                <option>Fast Track: Image &rarr; Video &rarr; Direct Publish</option>
-              </select>
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-3">
+              <div>
+                <span className="font-semibold text-white">Bounded Concurrent Job Scheduler (P0)</span>
+                <p className="text-zinc-400 text-[11px] mt-0.5">
+                  Số lượng Job tối đa Rust Worker Thread được phép thực thi đồng thời trong Tokio async pool. Giá trị được lưu trực tiếp vào SQLite <code>app_settings</code>.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <select
+                  value={maxConcurrency}
+                  onChange={(e) => handleSaveConcurrency(Number(e.target.value))}
+                  disabled={savingSettings}
+                  className="px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.1] text-white font-semibold text-xs focus:outline-none focus:border-rose-500"
+                >
+                  <option value={1}>1 Job (Serial execution)</option>
+                  <option value={2}>2 Concurrent Jobs</option>
+                  <option value={3}>3 Concurrent Jobs (Mặc định)</option>
+                  <option value={5}>5 Concurrent Jobs (Khuyên dùng 16GB+ RAM)</option>
+                  <option value={8}>8 Concurrent Jobs (High performance)</option>
+                  <option value={10}>10 Concurrent Jobs</option>
+                  <option value={15}>15 Concurrent Jobs</option>
+                  <option value={20}>20 Concurrent Jobs (Max)</option>
+                </select>
+
+                {savingSettings && <span className="text-zinc-400 text-[11px]">Đang lưu...</span>}
+              </div>
             </div>
 
             <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-2">
-              <span className="font-semibold text-white">Concurrency Limit</span>
+              <span className="font-semibold text-white">Output Root Path Policy</span>
               <p className="text-zinc-400 text-[11px]">
-                Maximum parallel video generation jobs allowed simultaneously across workers.
+                Quy tắc lưu trữ tự động của hệ thống:
               </p>
-              <select className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.08] text-zinc-300 focus:outline-none">
-                <option>4 Concurrent Jobs (Recommended for 16GB+ RAM)</option>
-                <option>8 Concurrent Jobs (High performance workstation)</option>
-                <option>2 Concurrent Jobs (Lightweight mode)</option>
-              </select>
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.05] font-mono text-[10px] text-zinc-300">
+                &lt;page.output_root&gt;\&lt;DD-MM-YYYY&gt;\&lt;filename&gt;
+              </div>
+              <p className="text-[10px] text-zinc-500">
+                Không tạo lồng trùng lặp tên Page nếu output_root đã chứa thư mục tương ứng.
+              </p>
             </div>
           </div>
         </div>
@@ -160,194 +187,78 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
         <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-5 text-xs">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-sm font-bold text-white">Active Worker Pools</h3>
-              <p className="text-zinc-400 text-[11px]">Manage automated browser profiles & generation executors.</p>
+              <h3 className="text-sm font-bold text-white">Active Donut Browser Worker Profiles</h3>
+              <p className="text-zinc-400 text-[11px]">Danh sách các browser worker đang chạy và kết nối với Donut Browser runtime.</p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              8/10 Workers Online
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              {workers.length} Workers Trực tuyến
             </span>
           </div>
 
           <div className="space-y-3">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((w) => (
-              <div key={w} className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
-                <div className="flex items-center gap-3">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-                  <div>
-                    <div className="font-semibold text-white">Grok Worker #{w < 10 ? `0${w}` : w}</div>
-                    <div className="text-[10px] text-zinc-500 font-mono">PROFILE_WORKER_{w} • Ready</div>
+            {workers.length === 0 ? (
+              <div className="p-8 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-xs text-zinc-500">
+                {loadingWorkers ? 'Đang truy vấn Donut Browser runtime...' : 'Không có browser worker nào trực tuyến. Hãy khởi động Donut Browser.'}
+              </div>
+            ) : (
+              workers.map((w) => (
+                <div key={w.worker_id} className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                  <div className="flex items-center gap-3">
+                    <span className={`h-2.5 w-2.5 rounded-full ${w.grok_logged_in ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                    <div>
+                      <div className="font-semibold text-white flex items-center gap-2">
+                        {w.profile_name || w.profile_id || w.worker_id}
+                        {w.grok_logged_in ? (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Grok Logged In</span>
+                        ) : (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20">Auth Required</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-mono">
+                        Profile ID: {w.profile_id || 'N/A'} &bull; Worker ID: {w.worker_id} &bull; State: {w.state}
+                      </div>
+                    </div>
                   </div>
+                  <span className="text-[10px] font-mono px-2 py-1 rounded bg-white/[0.06] text-zinc-300">
+                    {w.has_extension ? 'Extension Ready' : 'No Extension'}
+                  </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[11px] text-zinc-400">Idle / Ready</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] bg-white/[0.06] text-zinc-300 font-mono">0 tasks</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'engines' && (
-        <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-5 text-xs">
-          <h3 className="text-sm font-bold text-white">Underlying Engine Adapters</h3>
-          <p className="text-zinc-400 text-[11px]">
-            All specialized engines are encapsulated into the Floword Unified Facade.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-white">OmniRoute AI Gateway</span>
-                <span className="text-emerald-400 text-[10px] font-bold">CONNECTED</span>
-              </div>
-              <p className="text-zinc-400 text-[11px]">
-                Powers model routing, rate limit balancing, and LLM script prompting.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-white">MediaCrawler & Youwee</span>
-                <span className="text-emerald-400 text-[10px] font-bold">READY</span>
-              </div>
-              <p className="text-zinc-400 text-[11px]">
-                Automated multi-platform trend analysis, hashtag scraping & asset indexing.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-white">OpenMontage & Vynaro</span>
-                <span className="text-emerald-400 text-[10px] font-bold">READY</span>
-              </div>
-              <p className="text-zinc-400 text-[11px]">
-                Timeline rendering, 9:16 layout composition, subtitle styling & video fusion.
-              </p>
-            </div>
-
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-white">CapCut Mate Bridge</span>
-                <span className="text-emerald-400 text-[10px] font-bold">READY</span>
-              </div>
-              <p className="text-zinc-400 text-[11px]">
-                Automated draft injection, sticker track overlay, and seamless export.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'storage' && (
-        <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-5 text-xs">
-          <h3 className="text-sm font-bold text-white">Storage Locations & Output Directories</h3>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">Global Media Workspace Root</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value="D:\capcutpolot\artcraft\artifacts\"
-                  className="flex-1 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] font-mono text-zinc-300"
-                />
-                <button className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white font-medium">
-                  Browse...
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-zinc-400 mb-1 font-medium">CapCut Drafts Destination Directory</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value="C:\Users\AppData\Local\CapCut\User Data\Projects\com.lveditor.draft\"
-                  className="flex-1 px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] font-mono text-zinc-300"
-                />
-                <button className="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-white font-medium">
-                  Browse...
-                </button>
-              </div>
-            </div>
+              ))
+            )}
           </div>
         </div>
       )}
 
       {activeTab === 'diagnostics' && (
-        <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-5 text-xs">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Terminal className="h-4 w-4 text-rose-400" />
-                Developer & Diagnostic Console
-              </h3>
-              <p className="text-zinc-400 text-[11px]">
-                Low-level ports, process status, and real-time backend communication logs.
-              </p>
-            </div>
-            <span className="px-3 py-1 rounded-full text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              Unified Server Port :20128
-            </span>
-          </div>
+        <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-4 text-xs">
+          <h3 className="text-sm font-bold text-white">Backend Readiness Probes</h3>
 
-          {/* Service Health Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/[0.06] text-zinc-500 font-medium">
-                  <th className="pb-2">Subsystem Service</th>
-                  <th className="pb-2">Port / Transport</th>
-                  <th className="pb-2">Health</th>
-                  <th className="pb-2 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.04]">
-                <tr>
-                  <td className="py-2.5 font-medium text-white">Unified Server Core</td>
-                  <td className="py-2.5 font-mono text-zinc-400">127.0.0.1:20128</td>
-                  <td className="py-2.5 text-emerald-400 font-semibold">● Responsive</td>
-                  <td className="py-2.5 text-right">
-                    <button className="text-zinc-400 hover:text-white">Restart</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 font-medium text-white">OmniRoute AI Gateway</td>
-                  <td className="py-2.5 font-mono text-zinc-400">Internal Proxy</td>
-                  <td className="py-2.5 text-emerald-400 font-semibold">● Responsive</td>
-                  <td className="py-2.5 text-right">
-                    <button className="text-zinc-400 hover:text-white">Ping</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 font-medium text-white">CapCut Mate IPC</td>
-                  <td className="py-2.5 font-mono text-zinc-400">Named Pipe / RPC</td>
-                  <td className="py-2.5 text-emerald-400 font-semibold">● Ready</td>
-                  <td className="py-2.5 text-right">
-                    <button className="text-zinc-400 hover:text-white">Verify</button>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="py-2.5 font-medium text-white">Browser Extension Bridge</td>
-                  <td className="py-2.5 font-mono text-zinc-400">WebSocket / CDP</td>
-                  <td className="py-2.5 text-emerald-400 font-semibold">● 10 Profiles Active</td>
-                  <td className="py-2.5 text-right">
-                    <button className="text-zinc-400 hover:text-white">Re-attach</button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Raw Diagnostic Log Terminal */}
-          <div className="rounded-xl bg-[#0a0d13] border border-white/[0.06] p-4 font-mono text-[11px] space-y-1 text-zinc-400 h-44 overflow-y-auto">
-            <div className="text-zinc-600">[SYS] Floword Studio unified engine initialized.</div>
-            <div className="text-zinc-600">[SYS] Local adapter discovery: 8 modules loaded successfully.</div>
-            <div className="text-emerald-400">[IPC] Backend connection verified at http://127.0.0.1:20128</div>
-            <div className="text-blue-400">[BRIDGE] Browser extension pool listening for generation tasks.</div>
+          <div className="space-y-2">
+            {readiness.services.map((svc) => (
+              <div key={svc.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                <div className="flex items-center gap-2.5">
+                  <span className={`h-2 w-2 rounded-full ${
+                    svc.status === 'ready' ? 'bg-emerald-400' : svc.status === 'auth_required' ? 'bg-amber-400' : 'bg-zinc-600'
+                  }`} />
+                  <div>
+                    <span className="font-semibold text-white uppercase">{svc.id}</span>
+                    {svc.message && <p className="text-[10px] text-zinc-500">{svc.message}</p>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-mono text-zinc-500">{svc.latency_ms}ms</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                    svc.status === 'ready'
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      : svc.status === 'auth_required'
+                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                      : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                  }`}>
+                    {svc.status}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

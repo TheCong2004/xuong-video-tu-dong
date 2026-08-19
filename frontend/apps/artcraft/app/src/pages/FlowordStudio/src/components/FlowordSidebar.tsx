@@ -19,15 +19,19 @@ import {
   Workflow,
   X,
   Clapperboard,
+  FileSpreadsheet,
+  History,
 } from 'lucide-react';
 import { goToApp } from '~/config/appMenu';
 
 export type FlowordView =
   | 'dashboard'
+  | 'studio'
+  | 'bulk_import'
   | 'jobs'
   | 'pages'
-  | 'studio'
   | 'publish'
+  | 'history'
   | 'settings';
 
 interface FlowordSidebarProps {
@@ -50,8 +54,20 @@ const navItems = [
     badge: null,
   },
   {
+    id: 'studio' as const,
+    label: 'Studio',
+    icon: PlaySquare,
+    badge: null,
+  },
+  {
+    id: 'bulk_import' as const,
+    label: 'Bulk Import',
+    icon: FileSpreadsheet,
+    badge: null,
+  },
+  {
     id: 'jobs' as const,
-    label: 'Jobs',
+    label: 'Jobs Table',
     icon: ListChecks,
     badge: 'activeJobsCount',
   },
@@ -62,20 +78,20 @@ const navItems = [
     badge: null,
   },
   {
-    id: 'studio' as const,
-    label: 'Studio',
-    icon: PlaySquare,
-    badge: null,
-  },
-  {
     id: 'publish' as const,
-    label: 'Publish',
+    label: 'Publish Queue',
     icon: Send,
     badge: 'pendingPublishCount',
   },
   {
+    id: 'history' as const,
+    label: 'History Logs',
+    icon: History,
+    badge: null,
+  },
+  {
     id: 'settings' as const,
-    label: 'Settings',
+    label: 'Settings & Ops',
     icon: Settings,
     badge: null,
   },

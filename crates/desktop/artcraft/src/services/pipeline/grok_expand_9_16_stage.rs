@@ -19,6 +19,7 @@ use uuid::Uuid;
 pub struct GrokExpand916Input {
   pub job_id: String,
   pub page_id: String,
+  pub browser_profile_id: Option<String>,
   /// MUST be the exact generated artifact output from IMAGE_DONE
   pub image_done_artifact: ArtifactRef,
   pub prompt: String,
@@ -266,6 +267,7 @@ pub async fn execute_grok_expand_9_16(
     attempt_id: attempt_id.to_string(),
     capability: "grok.image.expand_9_16".to_string(),
     pool_id: None,
+    profile_id: input.browser_profile_id.clone(),
     ttl_seconds: Some(180),
   };
 

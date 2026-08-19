@@ -6,11 +6,7 @@ use std::fmt::{Display, Formatter};
 pub enum SqliteTasksError {
   SqlxError(sqlx::Error),
   EnumError(EnumError),
-  //TaskNotFound,
-  //TaskAlreadyExists,
-  //InvalidTaskStatus,
-  //InvalidTaskType,
-  //InvalidGenerationProvider,
+  Custom(String),
 }
 
 impl Error for SqliteTasksError {}
@@ -20,6 +16,7 @@ impl Display for SqliteTasksError {
     match self {
       SqliteTasksError::SqlxError(err) => write!(f, "SQLx error: {:?}", err),
       SqliteTasksError::EnumError(err) => write!(f, "Error parsing enum: {:?}", err),
+      SqliteTasksError::Custom(msg) => write!(f, "SQLite Tasks error: {}", msg),
     }
   }
 }
