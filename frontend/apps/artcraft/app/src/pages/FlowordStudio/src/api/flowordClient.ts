@@ -1280,6 +1280,8 @@ export interface ProbeDetail {
 
 export interface SystemReadinessReport {
   overall_ready: boolean;
+  core_generation_ready: boolean;
+  publishing_orchestrator_ready: boolean;
   sqlite_ready: boolean;
   artifact_storage_ready: boolean;
   floword_scheduler_ready: boolean;
@@ -1287,8 +1289,11 @@ export interface SystemReadinessReport {
   donut_ready: boolean;
   workers_online_count: number;
   grok_profile_ready: boolean;
+  facebook_capability_available: boolean;
   facebook_profile_ready: boolean;
+  tiktok_capability_available: boolean;
   tiktok_profile_ready: boolean;
+  youtube_capability_available: boolean;
   youtube_profile_ready: boolean;
   details: ProbeDetail[];
 }

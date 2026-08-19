@@ -403,7 +403,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                     onChange={(e) => setFbProfile(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
                   >
-                    <option value="">-- Mặc định (Default Profile) --</option>
+                    <option value="">-- Chưa gán Profile --</option>
                     {workers.map((w) => (
                       <option key={w.worker_id} value={w.profile_id || w.worker_id}>
                         {w.profile_name || w.profile_id || w.worker_id}
@@ -454,7 +454,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                     onChange={(e) => setTtProfile(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
                   >
-                    <option value="">-- Mặc định (Default Profile) --</option>
+                    <option value="">-- Chưa gán Profile --</option>
                     {workers.map((w) => (
                       <option key={w.worker_id} value={w.profile_id || w.worker_id}>
                         {w.profile_name || w.profile_id || w.worker_id}
@@ -505,7 +505,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                     onChange={(e) => setYtProfile(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
                   >
-                    <option value="">-- Mặc định (Default Profile) --</option>
+                    <option value="">-- Chưa gán Profile --</option>
                     {workers.map((w) => (
                       <option key={w.worker_id} value={w.profile_id || w.worker_id}>
                         {w.profile_name || w.profile_id || w.worker_id}

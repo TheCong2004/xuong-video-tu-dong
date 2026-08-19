@@ -355,7 +355,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
                     <div>
                       <span className="text-zinc-500 block text-[10px]">Browser Profile:</span>
                       <span className="font-mono text-zinc-300 truncate block">
-                        {pub.browser_profile_id || 'default'}
+                        {pub.browser_profile_id || 'Chưa gán profile'}
                       </span>
                     </div>
                     <div>

@@ -1,4 +1,4 @@
-use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response};
+use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response, ExpectedDispatchIdentity};
 use super::publisher_adapter::{PublicationExecutionContext, PublicationResult, PublisherAdapter, PublisherError, PublisherErrorCode};
 use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, release_lease, AcquireWorkerRequest};
 use async_trait::async_trait;
@@ -34,7 +34,7 @@ impl PublisherAdapter for YouTubePublisherAdapter {
     let req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
       step_id: format!("publish_youtube_{}_session_check", ctx.publication_id),
-      attempt_id: "val_session".to_string(),
+      attempt_id: format!("val_session_{}", ctx.attempt_number),
       capability: "social.youtube.publish".to_string(),
       pool_id: None,
       profile_id: Some(ctx.browser_profile_id.clone()),
@@ -60,16 +60,19 @@ impl PublisherAdapter for YouTubePublisherAdapter {
     self.prepare(ctx).await?;
 
     info!(
-      "[YouTubePublisher] Initiating YouTube Shorts publishing: pub_id={} profile={} channel={}",
-      ctx.publication_id, ctx.browser_profile_id, ctx.target_destination_id
+      "[YouTubePublisher] Initiating YouTube Shorts publishing: pub_id={} profile={} channel={} attempt={}",
+      ctx.publication_id, ctx.browser_profile_id, ctx.target_destination_id, ctx.attempt_number
     );
 
     // 1. Acquire exclusive lock on target browser profile
     let step_id = format!("publish_youtube_{}", ctx.publication_id);
+    let attempt_id = format!("pub_{}_attempt_{}", ctx.publication_id, ctx.attempt_number);
+    let request_id = format!("req_yt_{}_{}_{}", ctx.publication_id, ctx.attempt_number, uuid::Uuid::new_v4());
+
     let acquire_req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
       step_id: step_id.clone(),
-      attempt_id: format!("attempt_{}", ctx.publication_id),
+      attempt_id: attempt_id.clone(),
       capability: "social.youtube.publish".to_string(),
       pool_id: None,
       profile_id: Some(ctx.browser_profile_id.clone()),
@@ -96,14 +99,15 @@ impl PublisherAdapter for YouTubePublisherAdapter {
     let payload = serde_json::json!({
       "protocol": "floword-production",
       "protocolVersion": 1,
-      "requestId": format!("req_yt_{}", ctx.publication_id),
+      "requestId": request_id,
       "jobId": ctx.job_id,
       "stepId": step_id,
-      "attemptId": format!("attempt_{}", ctx.publication_id),
+      "attemptId": attempt_id,
       "leaseId": lease_id,
       "profileId": ctx.browser_profile_id,
-      "pageId": ctx.target_destination_id,
+      "pageId": ctx.page_id,
       "method": "social.youtube.shorts.publish",
+      "createdAt": chrono::Utc::now().to_rfc3339(),
       "params": {
         "publicationId": ctx.publication_id,
         "targetChannelId": ctx.target_destination_id,
@@ -116,7 +120,16 @@ impl PublisherAdapter for YouTubePublisherAdapter {
       }
     });
 
-    info!("[YouTubePublisher] Dispatching to worker {} step={}", lease.worker_id, step_id);
+    let expected_identity = ExpectedDispatchIdentity {
+      request_id: request_id.clone(),
+      job_id: ctx.job_id.clone(),
+      step_id: step_id.clone(),
+      attempt_id: attempt_id.clone(),
+      lease_id: lease_id.clone(),
+      profile_id: ctx.browser_profile_id.clone(),
+    };
+
+    info!("[YouTubePublisher] Dispatching to worker {} step={} attempt={}", lease.worker_id, step_id, attempt_id);
     let resp = client.post(&dispatch_url).json(&payload).send().await;
 
     // Ensure lease is released
@@ -133,23 +146,20 @@ impl PublisherAdapter for YouTubePublisherAdapter {
           )
         })?;
 
-        // Decode into typed struct and classify errors using canonical error taxonomy
+        // Decode into typed struct and validate full execution identity correlation
         let parsed = parse_dispatch_body(raw.clone(), "YouTube")?;
-        let result = validate_dispatch_response(parsed, "YouTube")?;
+        let result = validate_dispatch_response(parsed, &expected_identity, "YouTube")?;
 
-        // Extract authoritative evidence from body.result (preferred) then root fallback
+        // Extract authoritative evidence strictly from body.result
         let result_obj = result.as_ref();
         let video_id = result_obj
           .and_then(|r| r.get("videoId").or_else(|| r.get("postId")).or_else(|| r.get("platform_post_id")))
           .and_then(|v| v.as_str())
-          .map(|s| s.to_string())
-          .or_else(|| raw.get("videoId").and_then(|v| v.as_str()).map(|s| s.to_string()));
+          .map(|s| s.to_string());
         let post_url = result_obj
           .and_then(|r| r.get("videoUrl").or_else(|| r.get("postUrl")).or_else(|| r.get("post_url")))
           .and_then(|v| v.as_str())
-          .map(|s| s.to_string())
-          .or_else(|| raw.get("videoUrl").and_then(|v| v.as_str()).map(|s| s.to_string()))
-          .or_else(|| raw.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string()));
+          .map(|s| s.to_string());
 
         // Evidence validation: require video_id or post_url — NEVER fabricate a YouTube Shorts URL
         if video_id.is_none() && post_url.is_none() {
@@ -160,7 +170,7 @@ impl PublisherAdapter for YouTubePublisherAdapter {
           ));
         }
 
-        info!("[YouTubePublisher] Published successfully. video_id={:?} post_url={:?}", video_id, post_url);
+        info!("[YouTubePublisher] Published successfully with verified evidence. video_id={:?} post_url={:?}", video_id, post_url);
         Ok(PublicationResult {
           platform_post_id: video_id,
           post_url, // stored as-is; never fabricated from video_id

@@ -338,7 +338,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           <div className="mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-[11px] text-zinc-400 space-y-1">
             <div className="flex items-center justify-between">
               <span>Profile Affinity:</span>
-              <span className="text-blue-400 font-mono font-medium">{selectedPage?.browser_profile_id || 'Default Pool'}</span>
+              <span className="text-blue-400 font-mono font-medium">{selectedPage?.browser_profile_id || 'Chưa gán profile'}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>Output Path:</span>

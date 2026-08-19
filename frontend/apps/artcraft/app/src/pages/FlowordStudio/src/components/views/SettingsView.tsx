@@ -208,12 +208,35 @@ export const SettingsView: React.FC = () => {
 
       {/* Real System Readiness Probes */}
       <div className="bg-[#131926] p-5 rounded-xl border border-slate-800 shadow space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Authoritative System Readiness (Real Health Probes)</span>
-          </h2>
-          <span className="text-[11px] font-mono text-slate-500">Live Hardware & Subsystem Status</span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm font-bold text-white flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Authoritative System Readiness</span>
+            </h2>
+          </div>
+          {readiness && (
+            <div className="flex items-center gap-2 text-xs">
+              <div className="px-2.5 py-1 rounded bg-black/40 border border-slate-800 flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px]">Core Production:</span>
+                <span className={`font-bold text-[11px] ${readiness.core_generation_ready ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {readiness.core_generation_ready ? 'READY' : 'NOT READY'}
+                </span>
+              </div>
+              <div className="px-2.5 py-1 rounded bg-black/40 border border-slate-800 flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px]">Publishing Orchestrator:</span>
+                <span className={`font-bold text-[11px] ${readiness.publishing_orchestrator_ready ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {readiness.publishing_orchestrator_ready ? 'READY' : 'NOT READY'}
+                </span>
+              </div>
+              <div className="px-2.5 py-1 rounded bg-black/40 border border-slate-800 flex items-center gap-1.5">
+                <span className="text-slate-400 text-[11px]">System:</span>
+                <span className={`font-bold text-[11px] ${readiness.overall_ready ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  {readiness.overall_ready ? 'READY' : 'DEGRADED'}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

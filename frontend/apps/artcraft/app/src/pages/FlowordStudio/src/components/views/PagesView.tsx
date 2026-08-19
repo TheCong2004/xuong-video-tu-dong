@@ -134,7 +134,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-zinc-500">Browser Profile:</span>
                     <span className="font-mono text-blue-400 font-medium">
-                      {page.browser_profile_id || 'Default Pool'}
+                      {page.browser_profile_id || 'Chưa gán profile'}
                     </span>
                   </div>
                 </div>

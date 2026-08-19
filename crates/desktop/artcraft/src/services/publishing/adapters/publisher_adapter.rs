@@ -16,6 +16,7 @@ pub struct PublicationExecutionContext {
   pub target_destination_id: String,
   pub target_destination_handle: Option<String>,
   pub idempotency_key: String,
+  pub attempt_number: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +42,8 @@ pub enum PublisherErrorCode {
   VerifyFailed,
   VerificationRequired,
   CapabilityUnavailable,
+  ProtocolMismatch,
+  CorrelationMismatch,
   Unknown,
 }
 
@@ -60,6 +63,8 @@ impl PublisherErrorCode {
       Self::VerifyFailed => "VERIFY_FAILED",
       Self::VerificationRequired => "VERIFY_REQUIRED",
       Self::CapabilityUnavailable => "CAPABILITY_UNAVAILABLE",
+      Self::ProtocolMismatch => "PROTOCOL_MISMATCH",
+      Self::CorrelationMismatch => "CORRELATION_MISMATCH",
       Self::Unknown => "UNKNOWN",
     }
   }
@@ -99,6 +104,14 @@ impl PublisherError {
 
   pub fn verify_failed(message: impl Into<String>) -> Self {
     Self::new(PublisherErrorCode::VerifyFailed, message, false)
+  }
+
+  pub fn protocol_mismatch(message: impl Into<String>) -> Self {
+    Self::new(PublisherErrorCode::ProtocolMismatch, message, false)
+  }
+
+  pub fn correlation_mismatch(message: impl Into<String>) -> Self {
+    Self::new(PublisherErrorCode::CorrelationMismatch, message, false)
   }
 }
 

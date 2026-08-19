@@ -115,6 +115,7 @@ impl PublishingWorkerThread {
               target_destination_id: claimed.target_config_id.clone().unwrap_or_default(),
               target_destination_handle: None,
               idempotency_key: claimed.idempotency_key.clone(),
+              attempt_number: claimed.attempt_count as i32,
             };
 
             let adapter: Arc<dyn PublisherAdapter> = match claimed.platform.to_lowercase().as_str() {

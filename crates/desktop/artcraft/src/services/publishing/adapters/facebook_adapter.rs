@@ -1,4 +1,4 @@
-use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response};
+use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response, ExpectedDispatchIdentity};
 use super::publisher_adapter::{PublicationExecutionContext, PublicationResult, PublisherAdapter, PublisherError, PublisherErrorCode};
 use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, release_lease, AcquireWorkerRequest};
 use async_trait::async_trait;
@@ -18,7 +18,7 @@ impl FacebookPublisherAdapter {
 #[async_trait]
 impl PublisherAdapter for FacebookPublisherAdapter {
   async fn prepare(&self, ctx: &PublicationExecutionContext) -> Result<(), PublisherError> {
-    info!("[FacebookPublisher] Preparing execution for pub_id={} target={}", ctx.publication_id, ctx.target_destination_id);
+    info!("[FacebookPublisher] Preparing execution for pub_id={} page_id={}", ctx.publication_id, ctx.target_destination_id);
     if !Path::new(&ctx.video_path).exists() {
       return Err(PublisherError::new(
         PublisherErrorCode::VideoNotFound,
@@ -34,7 +34,7 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     let req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
       step_id: format!("publish_facebook_{}_session_check", ctx.publication_id),
-      attempt_id: "val_session".to_string(),
+      attempt_id: format!("val_session_{}", ctx.attempt_number),
       capability: "social.facebook.publish".to_string(),
       pool_id: None,
       profile_id: Some(ctx.browser_profile_id.clone()),
@@ -60,16 +60,19 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     self.prepare(ctx).await?;
 
     info!(
-      "[FacebookPublisher] Initiating Facebook publishing: pub_id={} profile={} page_id={}",
-      ctx.publication_id, ctx.browser_profile_id, ctx.target_destination_id
+      "[FacebookPublisher] Initiating Facebook publishing: pub_id={} profile={} page_id={} attempt={}",
+      ctx.publication_id, ctx.browser_profile_id, ctx.target_destination_id, ctx.attempt_number
     );
 
     // 1. Acquire exclusive lock on target browser profile
     let step_id = format!("publish_facebook_{}", ctx.publication_id);
+    let attempt_id = format!("pub_{}_attempt_{}", ctx.publication_id, ctx.attempt_number);
+    let request_id = format!("req_fb_{}_{}_{}", ctx.publication_id, ctx.attempt_number, uuid::Uuid::new_v4());
+
     let acquire_req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
       step_id: step_id.clone(),
-      attempt_id: format!("attempt_{}", ctx.publication_id),
+      attempt_id: attempt_id.clone(),
       capability: "social.facebook.publish".to_string(),
       pool_id: None,
       profile_id: Some(ctx.browser_profile_id.clone()),
@@ -96,14 +99,15 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     let payload = serde_json::json!({
       "protocol": "floword-production",
       "protocolVersion": 1,
-      "requestId": format!("req_fb_{}", ctx.publication_id),
+      "requestId": request_id,
       "jobId": ctx.job_id,
       "stepId": step_id,
-      "attemptId": format!("attempt_{}", ctx.publication_id),
+      "attemptId": attempt_id,
       "leaseId": lease_id,
       "profileId": ctx.browser_profile_id,
-      "pageId": ctx.target_destination_id,
+      "pageId": ctx.page_id,
       "method": "social.facebook.reels.publish",
+      "createdAt": chrono::Utc::now().to_rfc3339(),
       "params": {
         "publicationId": ctx.publication_id,
         "targetPageId": ctx.target_destination_id,
@@ -112,11 +116,21 @@ impl PublisherAdapter for FacebookPublisherAdapter {
         "title": ctx.title,
         "caption": ctx.caption,
         "hashtags": ctx.hashtags,
+        "description": ctx.description,
         "idempotencyKey": ctx.idempotency_key
       }
     });
 
-    info!("[FacebookPublisher] Dispatching to worker {} step={}", lease.worker_id, step_id);
+    let expected_identity = ExpectedDispatchIdentity {
+      request_id: request_id.clone(),
+      job_id: ctx.job_id.clone(),
+      step_id: step_id.clone(),
+      attempt_id: attempt_id.clone(),
+      lease_id: lease_id.clone(),
+      profile_id: ctx.browser_profile_id.clone(),
+    };
+
+    info!("[FacebookPublisher] Dispatching to worker {} step={} attempt={}", lease.worker_id, step_id, attempt_id);
     let resp = client.post(&dispatch_url).json(&payload).send().await;
 
     // Ensure lease is always released
@@ -133,22 +147,20 @@ impl PublisherAdapter for FacebookPublisherAdapter {
           )
         })?;
 
-        // Decode into typed struct and classify errors using canonical error taxonomy
+        // Decode into typed struct and validate full execution identity correlation
         let parsed = parse_dispatch_body(raw.clone(), "Facebook")?;
-        let result = validate_dispatch_response(parsed, "Facebook")?;
+        let result = validate_dispatch_response(parsed, &expected_identity, "Facebook")?;
 
-        // Extract authoritative evidence from body.result (preferred) then root fallback
+        // Extract authoritative evidence strictly from body.result
         let result_obj = result.as_ref();
         let post_id = result_obj
           .and_then(|r| r.get("postId").or_else(|| r.get("platform_post_id")))
           .and_then(|v| v.as_str())
-          .map(|s| s.to_string())
-          .or_else(|| raw.get("postId").and_then(|v| v.as_str()).map(|s| s.to_string()));
+          .map(|s| s.to_string());
         let post_url = result_obj
           .and_then(|r| r.get("postUrl").or_else(|| r.get("post_url")))
           .and_then(|v| v.as_str())
-          .map(|s| s.to_string())
-          .or_else(|| raw.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string()));
+          .map(|s| s.to_string());
 
         // Evidence validation: require post_id or post_url
         // NEVER construct a URL from post_id — Facebook post IDs cannot be reliably converted to URLs
@@ -160,7 +172,7 @@ impl PublisherAdapter for FacebookPublisherAdapter {
           ));
         }
 
-        info!("[FacebookPublisher] Published successfully. post_id={:?} post_url={:?}", post_id, post_url);
+        info!("[FacebookPublisher] Published successfully with verified evidence. post_id={:?} post_url={:?}", post_id, post_url);
         Ok(PublicationResult {
           platform_post_id: post_id,
           post_url, // stored as-is; never fabricated from post_id

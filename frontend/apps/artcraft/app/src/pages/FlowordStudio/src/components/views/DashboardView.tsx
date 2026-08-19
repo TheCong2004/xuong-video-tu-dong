@@ -159,7 +159,7 @@ export const DashboardView: React.FC = () => {
               <span className="text-xs text-slate-400 font-mono">[{selectedPage.id}]</span>
             </div>
             <p className="text-xs text-slate-400">
-              Browser Profile: <span className="text-slate-200 font-mono">{selectedPage.browser_profile_id || 'default'}</span> • Platform: <span className="text-slate-200 font-semibold">{selectedPage.target_platform || 'Universal'}</span>
+              Browser Profile: <span className="text-slate-200 font-mono">{selectedPage.browser_profile_id || 'Chưa gán profile'}</span> • Platform: <span className="text-slate-200 font-semibold">{selectedPage.target_platform || 'Universal'}</span>
             </p>
           </div>
 

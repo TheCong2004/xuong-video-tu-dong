@@ -1,4 +1,4 @@
-use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response};
+use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response, ExpectedDispatchIdentity};
 use super::publisher_adapter::{PublicationExecutionContext, PublicationResult, PublisherAdapter, PublisherError, PublisherErrorCode};
 use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, release_lease, AcquireWorkerRequest};
 use async_trait::async_trait;
@@ -18,7 +18,7 @@ impl TikTokPublisherAdapter {
 #[async_trait]
 impl PublisherAdapter for TikTokPublisherAdapter {
   async fn prepare(&self, ctx: &PublicationExecutionContext) -> Result<(), PublisherError> {
-    info!("[TikTokPublisher] Preparing execution for pub_id={} destination={}", ctx.publication_id, ctx.target_destination_id);
+    info!("[TikTokPublisher] Preparing execution for pub_id={} handle={:?}", ctx.publication_id, ctx.target_destination_handle);
     if !Path::new(&ctx.video_path).exists() {
       return Err(PublisherError::new(
         PublisherErrorCode::VideoNotFound,
@@ -34,7 +34,7 @@ impl PublisherAdapter for TikTokPublisherAdapter {
     let req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
       step_id: format!("publish_tiktok_{}_session_check", ctx.publication_id),
-      attempt_id: "val_session".to_string(),
+      attempt_id: format!("val_session_{}", ctx.attempt_number),
       capability: "social.tiktok.publish".to_string(),
       pool_id: None,
       profile_id: Some(ctx.browser_profile_id.clone()),
@@ -60,16 +60,19 @@ impl PublisherAdapter for TikTokPublisherAdapter {
     self.prepare(ctx).await?;
 
     info!(
-      "[TikTokPublisher] Initiating TikTok publishing: pub_id={} profile={} handle={:?}",
-      ctx.publication_id, ctx.browser_profile_id, ctx.target_destination_handle
+      "[TikTokPublisher] Initiating TikTok publishing: pub_id={} profile={} handle={:?} attempt={}",
+      ctx.publication_id, ctx.browser_profile_id, ctx.target_destination_handle, ctx.attempt_number
     );
 
     // 1. Acquire exclusive lock on target browser profile
     let step_id = format!("publish_tiktok_{}", ctx.publication_id);
+    let attempt_id = format!("pub_{}_attempt_{}", ctx.publication_id, ctx.attempt_number);
+    let request_id = format!("req_tt_{}_{}_{}", ctx.publication_id, ctx.attempt_number, uuid::Uuid::new_v4());
+
     let acquire_req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
       step_id: step_id.clone(),
-      attempt_id: format!("attempt_{}", ctx.publication_id),
+      attempt_id: attempt_id.clone(),
       capability: "social.tiktok.publish".to_string(),
       pool_id: None,
       profile_id: Some(ctx.browser_profile_id.clone()),
@@ -96,26 +99,38 @@ impl PublisherAdapter for TikTokPublisherAdapter {
     let payload = serde_json::json!({
       "protocol": "floword-production",
       "protocolVersion": 1,
-      "requestId": format!("req_tt_{}", ctx.publication_id),
+      "requestId": request_id,
       "jobId": ctx.job_id,
       "stepId": step_id,
-      "attemptId": format!("attempt_{}", ctx.publication_id),
+      "attemptId": attempt_id,
       "leaseId": lease_id,
       "profileId": ctx.browser_profile_id,
-      "pageId": ctx.target_destination_id,
+      "pageId": ctx.page_id,
       "method": "social.tiktok.video.publish",
+      "createdAt": chrono::Utc::now().to_rfc3339(),
       "params": {
         "publicationId": ctx.publication_id,
         "targetHandle": ctx.target_destination_handle,
+        "targetDestinationId": ctx.target_destination_id,
         "videoPath": ctx.video_path,
         "title": ctx.title,
         "caption": ctx.caption,
         "hashtags": ctx.hashtags,
+        "description": ctx.description,
         "idempotencyKey": ctx.idempotency_key
       }
     });
 
-    info!("[TikTokPublisher] Dispatching to worker {} step={}", lease.worker_id, step_id);
+    let expected_identity = ExpectedDispatchIdentity {
+      request_id: request_id.clone(),
+      job_id: ctx.job_id.clone(),
+      step_id: step_id.clone(),
+      attempt_id: attempt_id.clone(),
+      lease_id: lease_id.clone(),
+      profile_id: ctx.browser_profile_id.clone(),
+    };
+
+    info!("[TikTokPublisher] Dispatching to worker {} step={} attempt={}", lease.worker_id, step_id, attempt_id);
     let resp = client.post(&dispatch_url).json(&payload).send().await;
 
     // Ensure lease is released
@@ -132,26 +147,23 @@ impl PublisherAdapter for TikTokPublisherAdapter {
           )
         })?;
 
-        // Decode into typed struct and classify errors using canonical error taxonomy
+        // Decode into typed struct and validate full execution identity correlation
         let parsed = parse_dispatch_body(raw.clone(), "TikTok")?;
-        let result = validate_dispatch_response(parsed, "TikTok")?;
+        let result = validate_dispatch_response(parsed, &expected_identity, "TikTok")?;
 
-        // Extract authoritative evidence from body.result (preferred) then root fallback
+        // Extract authoritative evidence strictly from body.result
         let result_obj = result.as_ref();
         let post_id = result_obj
-          .and_then(|r| r.get("postId").or_else(|| r.get("itemId")).or_else(|| r.get("platform_post_id")))
+          .and_then(|r| r.get("postId").or_else(|| r.get("item_id")).or_else(|| r.get("platform_post_id")))
           .and_then(|v| v.as_str())
-          .map(|s| s.to_string())
-          .or_else(|| raw.get("postId").and_then(|v| v.as_str()).map(|s| s.to_string()))
-          .or_else(|| raw.get("itemId").and_then(|v| v.as_str()).map(|s| s.to_string()));
+          .map(|s| s.to_string());
         let post_url = result_obj
-          .and_then(|r| r.get("postUrl").or_else(|| r.get("shareUrl")).or_else(|| r.get("post_url")))
+          .and_then(|r| r.get("postUrl").or_else(|| r.get("share_url")).or_else(|| r.get("post_url")))
           .and_then(|v| v.as_str())
-          .map(|s| s.to_string())
-          .or_else(|| raw.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string()))
-          .or_else(|| raw.get("shareUrl").and_then(|v| v.as_str()).map(|s| s.to_string()));
+          .map(|s| s.to_string());
 
-        // Evidence validation: require post_id or post_url — NEVER fabricate a URL
+        // Evidence validation: require post_id or post_url
+        // NEVER construct a URL from post_id — TikTok video URLs cannot be safely guessed from post_id alone
         if post_id.is_none() && post_url.is_none() {
           return Err(PublisherError::new(
             PublisherErrorCode::VerificationRequired,
@@ -160,7 +172,7 @@ impl PublisherAdapter for TikTokPublisherAdapter {
           ));
         }
 
-        info!("[TikTokPublisher] Published successfully. post_id={:?} post_url={:?}", post_id, post_url);
+        info!("[TikTokPublisher] Published successfully with verified evidence. post_id={:?} post_url={:?}", post_id, post_url);
         Ok(PublicationResult {
           platform_post_id: post_id,
           post_url, // stored as-is; never fabricated from post_id
@@ -182,7 +194,7 @@ impl PublisherAdapter for TikTokPublisherAdapter {
         error!("[TikTokPublisher] Network error during dispatch: {err}");
         Err(PublisherError::new(
           PublisherErrorCode::VerifyFailed,
-          format!("Network disconnected during TikTok publish, verification required: {err}"),
+          format!("Network disconnected during publish, verification required: {err}"),
           false,
         ))
       }
