@@ -28,6 +28,7 @@ impl PublishingWorkerThread {
 
       loop {
         poll_interval.tick().await;
+        crate::services::pipeline::system_health_probes::record_publishing_worker_tick();
 
         let pending_items = match list_pending_publications(&db, 10).await {
           Ok(items) => items,
@@ -197,7 +198,8 @@ impl PublishingWorkerThread {
 
                 let (new_status, is_retryable) = match err.code {
                   PublisherErrorCode::AuthRequired => ("AUTH_REQUIRED", false),
-                  PublisherErrorCode::VerifyFailed => ("VERIFY_REQUIRED", false),
+                  PublisherErrorCode::VerifyFailed | PublisherErrorCode::VerificationRequired => ("VERIFY_REQUIRED", false),
+                  PublisherErrorCode::CapabilityUnavailable => ("CAPABILITY_UNAVAILABLE", false),
                   _ => {
                     if err.retryable && claimed.attempt_count < 3 {
                       ("READY_TO_POST", true)
@@ -241,8 +243,10 @@ impl PublishingWorkerThread {
                     business_status: Some(new_status),
                     event_type: if err.code == PublisherErrorCode::AuthRequired {
                       "AUTH_REQUIRED"
-                    } else if err.code == PublisherErrorCode::VerifyFailed {
+                    } else if err.code == PublisherErrorCode::VerifyFailed || err.code == PublisherErrorCode::VerificationRequired {
                       "VERIFY_REQUIRED"
+                    } else if err.code == PublisherErrorCode::CapabilityUnavailable {
+                      "CAPABILITY_UNAVAILABLE"
                     } else {
                       "POST_ERROR"
                     },

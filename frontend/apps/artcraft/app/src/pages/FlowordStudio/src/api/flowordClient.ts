@@ -115,6 +115,14 @@ export interface EnqueueFlowordWorkflowRequest {
   cookie_browser_profile?: string;
   cookie_file_path?: string;
   cookie_skip_patterns?: string[];
+  title?: string;
+  caption?: string;
+  hashtags?: string[];
+  description?: string;
+  publish_platforms?: string[];
+  post_mode?: string;
+  schedule_time?: string;
+  custom_filename?: string;
 }
 
 export interface EnqueueFlowordWorkflowResponse {

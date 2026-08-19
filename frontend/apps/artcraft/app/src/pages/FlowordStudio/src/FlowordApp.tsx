@@ -431,6 +431,14 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         aspect_ratio: inputToUse.aspectRatio,
         target_duration_seconds: inputToUse.targetDurationSeconds,
         output_mode: inputToUse.outputMode,
+        title: inputToUse.title || inputToUse.topic,
+        caption: inputToUse.caption || inputToUse.customPrompt,
+        hashtags: inputToUse.hashtags,
+        description: inputToUse.description,
+        publish_platforms: inputToUse.publishPlatforms,
+        post_mode: inputToUse.postMode,
+        schedule_time: inputToUse.scheduleTime,
+        custom_filename: inputToUse.customFilename,
       });
 
       const jobId = res.job_id;
@@ -509,11 +517,12 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
     toast('Đã từ chối đăng video. Bạn có thể tinh chỉnh lại trong Studio.', { icon: '↩️' });
   };
 
-  const handleCreatePage = async (req: CreateContentPageRequest) => {
+  const handleCreatePage = async (req: CreateContentPageRequest): Promise<ContentPage> => {
     try {
-      await createContentPage(req);
+      const created = await createContentPage(req);
       await refreshPages();
       toast.success(`Đã tạo Page: ${req.name}`);
+      return created;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Không thể lưu Page vào database: ${msg}`);
@@ -521,10 +530,10 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
     }
   };
 
-  const handleUpdatePage = async (pageId: string, req: Partial<UpdateContentPageRequest> & { name?: string }) => {
+  const handleUpdatePage = async (pageId: string, req: Partial<UpdateContentPageRequest> & { name?: string }): Promise<ContentPage> => {
     try {
       const current = pages.find((p) => p.id === pageId);
-      await updateContentPage({
+      const updated = await updateContentPage({
         id: pageId,
         name: req.name || current?.name || '',
         output_root: req.output_root || current?.output_root || 'D:\\',
@@ -532,6 +541,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
       });
       await refreshPages();
       toast.success('Cập nhật Page thành công!');
+      return updated;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Không thể cập nhật Page: ${msg}`);
@@ -668,12 +678,16 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         pageToEdit={pageToEdit}
         onSavePage={async (req) => {
           if (pageToEdit) {
-            await handleUpdatePage(pageToEdit.id, req);
+            const res = await handleUpdatePage(pageToEdit.id, req);
+            setIsPageModalOpen(false);
+            setPageToEdit(null);
+            return res;
           } else {
-            await handleCreatePage(req);
+            const res = await handleCreatePage(req);
+            setIsPageModalOpen(false);
+            setPageToEdit(null);
+            return res;
           }
-          setIsPageModalOpen(false);
-          setPageToEdit(null);
         }}
         onArchivePage={async (id) => {
           await handleArchivePage(id);

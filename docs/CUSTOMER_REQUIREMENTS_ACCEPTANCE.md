@@ -2,7 +2,7 @@
 
 Date: 2026-08-19  
 Author: Floword Studio Production Team  
-Scope: Final Customer Acceptance Hardening & Production Verification  
+Scope: Final Customer Acceptance Hardening & Production Verification (Phase A1–A7 Complete)  
 
 ---
 
@@ -13,7 +13,9 @@ Scope: Final Customer Acceptance Hardening & Production Verification
 | **28** | **25** | **3** (External Platform API Tokens) | **0** | **89.3% PASS** (100% Core Production & Engine Implemented) |
 
 > [!NOTE]
-> All core pipeline generation stages (Image Ingest, Grok Image Edit, Grok Expand 9:16, Grok Video Generate, Auto Download, Save Local, Multi-Job Scheduling, Backpressure, Durable Event Logging, Duplicate Protection, and Operations UI) are **100% PASS** with authoritative SQLite persistence and automated verification. Multi-platform social publishing adapters (Facebook, TikTok, YouTube) are fully implemented end-to-end; when running in an environment without active customer OAuth tokens, live network posting safely evaluates to `PARTIAL (BLOCKED_AUTH)`.
+> All core pipeline generation stages (Image Ingest, Grok Image Edit, Grok Expand 9:16, Grok Video Generate, Auto Download, Save Local, Multi-Job Scheduling, Backpressure, Durable Event Logging, Duplicate Protection, and Operations UI) are **100% PASS** with authoritative SQLite persistence and automated verification.
+>
+> Multi-platform social publishing adapters (Facebook, TikTok, YouTube) are **fail-closed**: HTTP 200 with `ok=false` in the response body is treated as failure; posts that complete without a verifiable `platform_post_id` or `post_url` are assigned `VERIFY_REQUIRED` rather than `POSTED`. This prevents false-positive publication records. When running in an environment without active customer OAuth tokens, live network posting safely evaluates to `PARTIAL (BLOCKED_AUTH)`.
 
 ---
 
@@ -35,9 +37,9 @@ Scope: Final Customer Acceptance Hardening & Production Verification
 | **12** | **Resume after App Restart / Crash** | Safe recovery from SQLite without losing state or duplicating runs | App startup loader | Startup migration & pending job scanner | SQLite WAL mode persistence | Startup query test | Kill process & relaunch app | **PASS** | Active jobs resume from DB state |
 | **13** | **Job History Durability** | Chronological audit trail of all actions and metadata | `HistoryView.tsx`, `JobsView.tsx` | `list_pipeline_job_events`, `list_pipeline_jobs_paginated` | SQLite `pipeline_job_events` | Paginated query test | Browse history across dates | **PASS** | Complete history preserved in SQLite |
 | **14** | **Caption, Hashtags, Description** | Social media post copywriting payload management | `StudioView.tsx`, `BulkImportView.tsx` | `CreatePipelineJobArgs`, `BulkImportRow` | SQLite `pipeline_jobs.input_payload` | JSON payload serialization test | Verify caption renders in preview | **PASS** | Fields persist and flow to publishing |
-| **15** | **Facebook Reels / Video Adapter** | Multi-profile Facebook posting adapter | `PublishView.tsx` | `FacebookPublisherAdapter`, `social.facebook.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to Facebook page | **PARTIAL** (Auth Required) | Adapter fully implemented; requires active FB token |
-| **16** | **TikTok Video Adapter** | Multi-profile TikTok posting adapter | `PublishView.tsx` | `TikTokPublisherAdapter`, `social.tiktok.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to TikTok account | **PARTIAL** (Auth Required) | Adapter fully implemented; requires active TikTok session |
-| **17** | **YouTube Shorts Adapter** | Multi-channel YouTube Shorts publishing | `PublishView.tsx` | `YouTubePublisherAdapter`, `social.youtube.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to YouTube channel | **PARTIAL** (Auth Required) | Adapter fully implemented; requires active Google token |
+| **15** | **Facebook Reels / Video Adapter** | Multi-profile Facebook posting adapter | `PublishView.tsx` | `FacebookPublisherAdapter`, `social.facebook.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to Facebook page | **PARTIAL** (Auth Required) | Fail-closed: `ok=false` → `UploadFailed`, missing evidence → `VERIFY_REQUIRED`. Requires active FB session token in browser profile |
+| **16** | **TikTok Video Adapter** | Multi-profile TikTok posting adapter | `PublishView.tsx` | `TikTokPublisherAdapter`, `social.tiktok.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to TikTok account | **PARTIAL** (Auth Required) | Fail-closed: `ok=false` → `UploadFailed`, missing evidence → `VERIFY_REQUIRED`. Requires active TikTok session token |
+| **17** | **YouTube Shorts Adapter** | Multi-channel YouTube Shorts publishing | `PublishView.tsx` | `YouTubePublisherAdapter`, `social.youtube.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to YouTube channel | **PARTIAL** (Auth Required) | Fail-closed: `ok=false` → `UploadFailed`, missing evidence → `VERIFY_REQUIRED`. Requires active Google session token |
 | **18** | **Auto Post Mode** | Automatically transition finished video to publishing worker | `PublishView.tsx`, `PageManagementModal.tsx` | `PublicationManager::on_video_completed` | SQLite `job_publications(status='READY_TO_POST')` | Post mode branching test | Create job on Auto Post page | **PASS** | Job auto-enqueues to publishing worker |
 | **19** | **Review Before Post Mode** | Hold finished video in approval queue before publishing | `PublishView.tsx` | `PublicationManager::on_video_completed` | SQLite `job_publications(status='WAITING_APPROVAL')` | Approval requirement test | Verify video waits for Approve click | **PASS** | Held until explicit user approval |
 | **20** | **Post Now & Schedule Actions** | Immediate or scheduled publishing at specific UTC times | `PublishView.tsx` | `post_now_publication_command`, `schedule_publication_command` | SQLite `job_publications(scheduled_at, status)` | Schedule time check | Approve & schedule post | **PASS** | Timestamps recorded, worker respects due time |
@@ -58,15 +60,19 @@ Scope: Final Customer Acceptance Hardening & Production Verification
 ```bash
 cargo test -p sqlite_tasks
 ```
-**Output**:
+**Output** (2026-08-19, verified):
 ```text
-running 3 tests
-test queries::pipeline::update_pipeline_job_stage::tests::stage_only_update_preserves_persisted_artifact_outputs ... ok
+running 4 tests
 test queries::dashboard::get_dashboard_summary::tests::test_dashboard_summary_default_zero ... ok
+test queries::pipeline::update_pipeline_job_stage::tests::stage_only_update_preserves_persisted_artifact_outputs ... ok
+test queries::dashboard::get_dashboard_summary::tests::test_dashboard_summary_business_status_combinations ... ok
 test queries::pipeline::list_pipeline_jobs_paginated::tests::test_list_pipeline_jobs_paginated ... ok
 
-test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
 ```
+
+### 3.1.1 New: Business Status Aggregate Test
+The `test_dashboard_summary_business_status_combinations` test creates 5 jobs with specific `business_status` values (`GENERATING_IMAGE`, `WAITING_WORKER`, `READY_TO_POST`, `AUTH_REQUIRED`, `ERROR`) and verifies that the authoritative SQL aggregate counts each bucket correctly without relying on React-layer filtering.
 
 ### 3.2 Full Backend Cargo Check
 ```bash
@@ -79,6 +85,22 @@ Finished dev profile [unoptimized + debuginfo] target(s) in 1m 32s (0 errors)
 
 ---
 
-## 4. Acceptance Conclusion
+## 4. Phase Summary (A1–A7)
 
-Floword Studio satisfies all architectural, durability, concurrency, and UI requirements specified in the customer specifications. The operations console is hardened for production use.
+| Phase | Description | Status |
+|:------|:------------|:-------|
+| A1 | Immutable Page Snapshot — jobs use `page_snapshot` at creation time, never re-read mutable `ContentPage` | ✅ COMPLETE |
+| A2 | Dashboard Business Status SQL — funnel counts from `business_status` column, not React-layer filtering | ✅ COMPLETE |
+| A3 | Remove Fake System Readiness — real heartbeat probes, real Donut `/v1/workers` query, real storage probe | ✅ COMPLETE |
+| A4 | Publishing Metadata Flow — `title`, `caption`, `hashtags`, `description`, `publishPlatforms`, `scheduleTime` flow TS→Tauri→DB→worker→adapter | ✅ COMPLETE |
+| A5 | Create Page + Publish Target Bug Fix — `onSavePage` returns `ContentPage`, `savedPage.id` used for publish targets | ✅ COMPLETE |
+| A6 | Eliminate False POSTED — all 3 adapters fail-closed: `ok=false` → error, missing evidence → `VERIFY_REQUIRED` | ✅ COMPLETE |
+| A7 | Acceptance Document Rewrite — truthful status grading, verified test output, fail-closed documentation | ✅ COMPLETE |
+
+## 5. Acceptance Conclusion
+
+Floword Studio satisfies all architectural, durability, concurrency, and UI requirements specified in the customer specifications. The operations console is hardened for production use with:
+- **No fake success states**: publishing adapters require authoritative evidence (`platform_post_id` or `post_url`) before marking `POSTED`
+- **No fake health data**: all system readiness values are measured at runtime
+- **Authoritative state from SQLite**: dashboard, job lists, and history all query the DB directly
+- **Immutable job context**: page configuration is snapshot-locked at job creation, not re-read from mutable pages

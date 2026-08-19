@@ -39,6 +39,8 @@ pub enum PublisherErrorCode {
   TargetNotFound,
   TargetAmbiguous,
   VerifyFailed,
+  VerificationRequired,
+  CapabilityUnavailable,
   Unknown,
 }
 
@@ -56,6 +58,8 @@ impl PublisherErrorCode {
       Self::TargetNotFound => "TARGET_NOT_FOUND",
       Self::TargetAmbiguous => "TARGET_AMBIGUOUS",
       Self::VerifyFailed => "VERIFY_FAILED",
+      Self::VerificationRequired => "VERIFY_REQUIRED",
+      Self::CapabilityUnavailable => "CAPABILITY_UNAVAILABLE",
       Self::Unknown => "UNKNOWN",
     }
   }

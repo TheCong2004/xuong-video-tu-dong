@@ -29,8 +29,8 @@ interface PagesViewProps {
   pages: ContentPage[];
   activePageId?: string;
   onSelectPage: (pageId: string) => void;
-  onCreatePage: (req: CreateContentPageRequest) => Promise<void>;
-  onUpdatePage: (pageId: string, req: UpdateContentPageRequest) => Promise<void>;
+  onCreatePage: (req: CreateContentPageRequest) => Promise<ContentPage>;
+  onUpdatePage: (pageId: string, req: UpdateContentPageRequest) => Promise<ContentPage>;
   onArchivePage: (pageId: string) => Promise<void>;
 }
 
@@ -55,11 +55,11 @@ export const PagesView: React.FC<PagesViewProps> = ({
     setModalOpen(true);
   };
 
-  const handleSavePage = async (req: CreateContentPageRequest | UpdateContentPageRequest) => {
+  const handleSavePage = async (req: CreateContentPageRequest | UpdateContentPageRequest): Promise<ContentPage> => {
     if ('id' in req && req.id) {
-      await onUpdatePage(req.id, req as UpdateContentPageRequest);
+      return await onUpdatePage(req.id, req as UpdateContentPageRequest);
     } else {
-      await onCreatePage(req as CreateContentPageRequest);
+      return await onCreatePage(req as CreateContentPageRequest);
     }
   };
 

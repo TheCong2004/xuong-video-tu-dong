@@ -28,6 +28,7 @@ use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use sqlite_tasks::queries::app_settings::get_app_setting::{get_app_setting, GetAppSettingArgs};
 use sqlite_tasks::queries::content_pages::get_content_page_by_id::{get_content_page_by_id, GetContentPageByIdArgs};
+use crate::services::pipeline::floword_job_page_config::resolve_job_page_config;
 use sqlite_tasks::queries::pipeline::claim_pipeline_job::{claim_pipeline_job, ClaimPipelineJobArgs};
 use sqlite_tasks::queries::pipeline::fail_pipeline_job::{fail_pipeline_job, FailPipelineJobArgs};
 use sqlite_tasks::queries::pipeline::list_pending_pipeline_jobs::{list_pending_pipeline_jobs, ListPendingPipelineJobsArgs};
@@ -135,6 +136,8 @@ async fn worker_loop(app_handle: &AppHandle, task_database: &TaskDatabase, dispa
   let mut active_tasks: HashMap<String, tokio::task::JoinHandle<()>> = HashMap::new();
 
   loop {
+    crate::services::pipeline::system_health_probes::record_scheduler_tick();
+
     // 1. Clean up finished async tasks
     active_tasks.retain(|job_id, handle| {
       if handle.is_finished() {
@@ -390,24 +393,17 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
   if is_grok_image_edit {
     check_cancelled(&job_id_str, PipelineStage::ScriptGenerating)?;
 
-    // 1. Mandatory Page validation (fail-closed authoritative lookup)
-    let page_id = input.get("page_id")
-      .or_else(|| input.get("page"))
-      .and_then(Value::as_str)
-      .ok_or_else(|| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_REQUIRED", "Grok image edit workflow requires page_id".to_string()))?;
-
-    let content_page = get_content_page_by_id(GetContentPageByIdArgs {
-      db: task_database.get_connection(),
-      id: page_id,
-    }).await.map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_LOOKUP_FAILED", e.to_string()))?
-      .ok_or_else(|| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_NOT_FOUND", format!("ContentPage with id '{page_id}' not found in database")))?;
+    // 1. Mandatory Page validation (fail-closed authoritative immutable snapshot resolution)
+    let page_config = resolve_job_page_config(job, task_database.get_connection())
+      .await
+      .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_RESOLVE_FAILED", e.to_string()))?;
 
     // 2. Mandatory Prompt validation (fail-closed authoritative resolution)
     let final_prompt: &str = if let Some(p) = input.get("image_prompt").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
       p
     } else if !prompt.trim().is_empty() {
       prompt.as_str()
-    } else if let Some(dp) = content_page.default_image_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
+    } else if let Some(dp) = page_config.default_image_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
       dp
     } else {
       return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_PROMPT_REQUIRED", "Grok image edit workflow requires a non-empty image prompt".to_string()).into());
@@ -459,8 +455,8 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
 
     let edit_output = run_grok_image_edit_stage(
       &job_id_str,
-      page_id,
-      content_page.browser_profile_id.clone(),
+      &page_config.page_id,
+      page_config.browser_profile_id.clone(),
       source_image_artifact,
       final_prompt,
       &work_dir,
@@ -489,31 +485,22 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
   if is_grok_content_pipeline {
     check_cancelled(&job_id_str, PipelineStage::ScriptGenerating)?;
 
-    // 1. Mandatory Page validation (fail-closed authoritative lookup)
-    let page_id = input.get("page_id")
-      .or_else(|| input.get("page"))
-      .and_then(Value::as_str)
-      .ok_or_else(|| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_REQUIRED", "Grok content pipeline requires page_id".to_string()))?;
+    // 1. Mandatory Page validation (fail-closed authoritative immutable snapshot resolution)
+    let page_config = resolve_job_page_config(job, task_database.get_connection())
+      .await
+      .map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_RESOLVE_FAILED", e.to_string()))?;
 
-    let content_page = get_content_page_by_id(GetContentPageByIdArgs {
-      db: task_database.get_connection(),
-      id: page_id,
-    }).await.map_err(|e| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_LOOKUP_FAILED", e.to_string()))?
-      .ok_or_else(|| PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_NOT_FOUND", format!("ContentPage with id '{page_id}' not found in database")))?;
+    let page_name = &page_config.page_name;
+    let page_id = page_config.page_id.as_str();
+    let output_root = &page_config.output_root;
+    let browser_profile_id = page_config.browser_profile_id.clone();
 
-    let page_name = &content_page.name;
-    if content_page.output_root.trim().is_empty() {
-      return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "PAGE_OUTPUT_ROOT_MISSING", format!("ContentPage '{page_name}' has empty output_root in database")).into());
-    }
-    let output_root = &content_page.output_root;
-    let browser_profile_id = content_page.browser_profile_id.clone();
-
-    // 2. Authoritative Prompts resolution (Job override -> ContentPage default -> safe system fallback/fail-closed)
+    // 2. Authoritative Prompts resolution (Job override -> Immutable snapshot default -> safe system fallback/fail-closed)
     let image_prompt: &str = if let Some(p) = input.get("image_prompt").and_then(Value::as_str).filter(|s| !s.trim().is_empty()) {
       p
     } else if !prompt.trim().is_empty() {
       prompt.as_str()
-    } else if let Some(dp) = content_page.default_image_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
+    } else if let Some(dp) = page_config.default_image_prompt.as_deref().filter(|s| !s.trim().is_empty()) {
       dp
     } else {
       return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "IMAGE_PROMPT_REQUIRED", "Grok content pipeline requires a non-empty image prompt".to_string()).into());
@@ -525,7 +512,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       .and_then(Value::as_str)
       .filter(|s| !s.trim().is_empty())
       .unwrap_or(
-        content_page.default_expand_9_16_prompt.as_deref()
+        page_config.default_expand_9_16_prompt.as_deref()
           .filter(|s| !s.trim().is_empty())
           .unwrap_or(default_expand_fallback)
       );
@@ -535,7 +522,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       .and_then(Value::as_str)
       .filter(|s| !s.trim().is_empty())
       .unwrap_or(
-        content_page.default_video_prompt.as_deref()
+        page_config.default_video_prompt.as_deref()
           .filter(|s| !s.trim().is_empty())
           .unwrap_or(default_video_fallback)
       );
@@ -884,19 +871,20 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     let serialized_outputs = serialize_outputs(&outputs)?;
     finalize_video_done(app_handle, task_database, &job.id, &final_path_str, &serialized_outputs).await?;
 
-    let (pub_title, pub_caption, pub_hashtags) = if let Some(payload_str) = &job.maybe_input_payload {
+    let (pub_title, pub_caption, pub_hashtags, pub_description) = if let Some(payload_str) = &job.maybe_input_payload {
       if let Ok(v) = serde_json::from_str::<serde_json::Value>(payload_str) {
-        let t = v.get("topic").or_else(|| v.get("title")).and_then(|s| s.as_str()).map(|s| s.to_string());
+        let t = v.get("title").or_else(|| v.get("topic")).and_then(|s| s.as_str()).map(|s| s.to_string());
         let c = v.get("caption").or_else(|| v.get("custom_prompt")).and_then(|s| s.as_str()).map(|s| s.to_string());
+        let d = v.get("description").and_then(|s| s.as_str()).map(|s| s.to_string());
         let h: Vec<String> = v.get("hashtags").and_then(|arr| arr.as_array())
           .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
           .unwrap_or_default();
-        (t, c, h)
+        (t, c, h, d)
       } else {
-        (None, None, Vec::new())
+        (None, None, Vec::new(), None)
       }
     } else {
-      (None, None, Vec::new())
+      (None, None, Vec::new(), None)
     };
 
     let page_id_val = job.maybe_page_id.clone().unwrap_or_else(|| "general".to_string());
@@ -909,7 +897,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       pub_title.as_deref(),
       pub_caption.as_deref(),
       &pub_hashtags,
-      None,
+      pub_description.as_deref(),
     ).await;
 
     return Ok(());
@@ -1351,23 +1339,20 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
           outputs["video_url"] = json!(video_url);
           outputs["rendering_supported"] = json!(true);
 
-          let maybe_page_id_str = job.maybe_page_id.as_deref().or_else(|| input.get("page_id").and_then(Value::as_str));
-          if let Some(page_id) = maybe_page_id_str {
-            if let Ok(Some(page)) = get_content_page_by_id(GetContentPageByIdArgs { db: task_database.get_connection(), id: page_id }).await {
-              match OutputPathResolver::prepare_output_directory(&page.output_root, &page.name) {
-                Ok(output_dir) => {
-                  let filename = OutputPathResolver::generate_final_filename(job.id.as_str(), "video", "mp4");
-                  match OutputPathResolver::publish_final_file(&rendered_path, &output_dir, &filename) {
-                    Ok(published) => {
-                      info!("[OutputPolicy] Final video published to {}", published.display());
-                      outputs["final_published_path"] = json!(published.to_string_lossy().to_string());
-                      outputs["final_output_directory"] = json!(output_dir.to_string_lossy().to_string());
-                    },
-                    Err(err) => warn!("[OutputPolicy] Failed to publish final video: {err}"),
-                  }
-                },
-                Err(err) => warn!("[OutputPolicy] Failed to prepare output directory: {err}"),
-              }
+          if let Ok(page_config) = resolve_job_page_config(job, task_database.get_connection()).await {
+            match OutputPathResolver::prepare_output_directory(&page_config.output_root, &page_config.page_name) {
+              Ok(output_dir) => {
+                let filename = OutputPathResolver::generate_final_filename(job.id.as_str(), "video", "mp4");
+                match OutputPathResolver::publish_final_file(&rendered_path, &output_dir, &filename) {
+                  Ok(published) => {
+                    info!("[OutputPolicy] Final video published to {}", published.display());
+                    outputs["final_published_path"] = json!(published.to_string_lossy().to_string());
+                    outputs["final_output_directory"] = json!(output_dir.to_string_lossy().to_string());
+                  },
+                  Err(err) => warn!("[OutputPolicy] Failed to publish final video: {err}"),
+                }
+              },
+              Err(err) => warn!("[OutputPolicy] Failed to prepare output directory: {err}"),
             }
           }
 

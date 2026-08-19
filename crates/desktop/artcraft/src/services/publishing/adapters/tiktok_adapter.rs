@@ -121,15 +121,39 @@ impl PublisherAdapter for TikTokPublisherAdapter {
           PublisherError::new(PublisherErrorCode::UploadFailed, format!("Failed to parse response: {e}"), false)
         })?;
 
-        let post_id = body.get("postId").and_then(|v| v.as_str()).map(|s| s.to_string())
-          .or_else(|| body.get("itemId").and_then(|v| v.as_str()).map(|s| s.to_string()));
-        let post_url = body.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string())
-          .or_else(|| body.get("shareUrl").and_then(|v| v.as_str()).map(|s| s.to_string()));
+        // Fail-closed check: HTTP 200 with body.ok == false or error property MUST be treated as failure
+        if body.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+          let err_msg = body.get("error").or_else(|| body.get("message")).and_then(|v| v.as_str()).unwrap_or("TikTok extension reported ok=false");
+          let err_code = body.get("code").and_then(|v| v.as_str()).unwrap_or("UPLOAD_FAILED");
+          if err_code.contains("AUTH") || err_msg.contains("login") || err_msg.contains("AUTH_REQUIRED") {
+            return Err(PublisherError::auth_required(err_msg));
+          } else if err_code.contains("CAPABILITY") || err_msg.contains("not implemented") || err_msg.contains("unsupported") {
+            return Err(PublisherError::new(PublisherErrorCode::CapabilityUnavailable, err_msg, false));
+          } else {
+            return Err(PublisherError::upload_failed(err_msg, false));
+          }
+        }
 
-        info!("[TikTokPublisher] Published successfully! post_id={:?} url={:?}", post_id, post_url);
+        let post_id = body.get("postId").and_then(|v| v.as_str()).map(|s| s.to_string())
+          .or_else(|| body.get("itemId").and_then(|v| v.as_str()).map(|s| s.to_string()))
+          .or_else(|| body.get("platform_post_id").and_then(|v| v.as_str()).map(|s| s.to_string()));
+        let post_url = body.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string())
+          .or_else(|| body.get("shareUrl").and_then(|v| v.as_str()).map(|s| s.to_string()))
+          .or_else(|| body.get("post_url").and_then(|v| v.as_str()).map(|s| s.to_string()));
+
+        // Evidence validation: Require post_id or post_url. If missing, fail with VerificationRequired, NEVER fake POSTED
+        if post_id.is_none() && post_url.is_none() {
+          return Err(PublisherError::new(
+            PublisherErrorCode::VerificationRequired,
+            "TikTok posting completed without authoritative post_id or post_url evidence from runtime extension",
+            false,
+          ));
+        }
+
+        info!("[TikTokPublisher] Published successfully with evidence! post_id={:?} url={:?}", post_id, post_url);
         Ok(PublicationResult {
-          platform_post_id: post_id,
-          post_url,
+          platform_post_id: post_id.clone(),
+          post_url: post_url.or_else(|| post_id.as_ref().map(|id| format!("https://www.tiktok.com/@video/{id}"))),
           posted_at: chrono::Utc::now().timestamp(),
           raw_metadata: Some(body),
         })

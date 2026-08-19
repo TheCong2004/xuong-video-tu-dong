@@ -31,6 +31,15 @@ export interface WorkflowInput {
   xhsVariant?: 'mainland' | 'international';
   musicPath?: string;
   characterReferencePath?: string;
+  // Publishing fields
+  title?: string;
+  caption?: string;
+  hashtags?: string[];
+  description?: string;
+  publishPlatforms?: string[];
+  postMode?: 'auto' | 'manual' | 'scheduled';
+  scheduleTime?: string;
+  customFilename?: string;
   // UI helper / backward compatible fields
   customPrompt?: string;
   platform?: string;

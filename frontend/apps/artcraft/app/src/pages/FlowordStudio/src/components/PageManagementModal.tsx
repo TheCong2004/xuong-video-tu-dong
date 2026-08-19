@@ -16,7 +16,7 @@ interface PageManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
   pageToEdit?: ContentPage | null;
-  onSavePage: (data: CreateContentPageRequest | UpdateContentPageRequest) => Promise<void>;
+  onSavePage: (data: CreateContentPageRequest | UpdateContentPageRequest) => Promise<ContentPage>;
   onArchivePage?: (pageId: string) => Promise<void>;
 }
 
@@ -165,78 +165,110 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
       return;
     }
 
+    // Validate target browser profiles: no fake "default"
+    if (fbEnabled) {
+      const fbEffectiveProfile = fbProfile.trim() || browserProfileId.trim();
+      if (!fbEffectiveProfile) {
+        setError('Facebook publish target requires a browser profile to be selected');
+        return;
+      }
+    }
+    if (ttEnabled) {
+      const ttEffectiveProfile = ttProfile.trim() || browserProfileId.trim();
+      if (!ttEffectiveProfile) {
+        setError('TikTok publish target requires a browser profile to be selected');
+        return;
+      }
+    }
+    if (ytEnabled) {
+      const ytEffectiveProfile = ytProfile.trim() || browserProfileId.trim();
+      if (!ytEffectiveProfile) {
+        setError('YouTube publish target requires a browser profile to be selected');
+        return;
+      }
+    }
+
     setSaving(true);
     setError(null);
     try {
-      let savedPageId = pageToEdit?.id;
+      const savedPage: ContentPage = pageToEdit
+        ? await onSavePage({
+            id: pageToEdit.id,
+            name: name.trim(),
+            output_root: outputRoot.trim(),
+            target_platform: targetPlatform,
+            default_language: defaultLanguage,
+            default_tone: defaultTone,
+            default_aspect_ratio: defaultAspectRatio,
+            browser_profile_id: browserProfileId.trim() || undefined,
+            default_image_prompt: defaultImagePrompt.trim() || undefined,
+            default_expand_9_16_prompt: defaultExpand916Prompt.trim() || undefined,
+            default_video_prompt: defaultVideoPrompt.trim() || undefined,
+          })
+        : await onSavePage({
+            name: name.trim(),
+            output_root: outputRoot.trim(),
+            target_platform: targetPlatform,
+            default_language: defaultLanguage,
+            default_tone: defaultTone,
+            default_aspect_ratio: defaultAspectRatio,
+            browser_profile_id: browserProfileId.trim() || undefined,
+            default_image_prompt: defaultImagePrompt.trim() || undefined,
+            default_expand_9_16_prompt: defaultExpand916Prompt.trim() || undefined,
+            default_video_prompt: defaultVideoPrompt.trim() || undefined,
+          });
 
-      if (pageToEdit) {
-        await onSavePage({
-          id: pageToEdit.id,
-          name: name.trim(),
-          output_root: outputRoot.trim(),
-          target_platform: targetPlatform,
-          default_language: defaultLanguage,
-          default_tone: defaultTone,
-          default_aspect_ratio: defaultAspectRatio,
-          browser_profile_id: browserProfileId.trim() || undefined,
-          default_image_prompt: defaultImagePrompt.trim() || undefined,
-          default_expand_9_16_prompt: defaultExpand916Prompt.trim() || undefined,
-          default_video_prompt: defaultVideoPrompt.trim() || undefined,
-        });
-      } else {
-        await onSavePage({
-          name: name.trim(),
-          output_root: outputRoot.trim(),
-          target_platform: targetPlatform,
-          default_language: defaultLanguage,
-          default_tone: defaultTone,
-          default_aspect_ratio: defaultAspectRatio,
-          browser_profile_id: browserProfileId.trim() || undefined,
-          default_image_prompt: defaultImagePrompt.trim() || undefined,
-          default_expand_9_16_prompt: defaultExpand916Prompt.trim() || undefined,
-          default_video_prompt: defaultVideoPrompt.trim() || undefined,
-        });
-      }
+      const savedPageId = savedPage.id;
 
-      // Upsert publish targets if page exists
-      if (savedPageId) {
-        // Facebook target
+      // Upsert publish targets using the authoritative saved page id
+      try {
         if (fbEnabled || fbDestination.trim()) {
-          await upsertContentPagePublishTarget({
-            page_id: savedPageId,
-            platform: 'facebook',
-            enabled: fbEnabled,
-            destination_id: fbDestination.trim() || savedPageId,
-            browser_profile_id: fbProfile.trim() || browserProfileId.trim() || 'default',
-            post_mode: fbMode,
-            default_slots_json: parseSlots(fbSlots),
-          });
+          const profile = fbProfile.trim() || browserProfileId.trim();
+          if (profile) {
+            await upsertContentPagePublishTarget({
+              page_id: savedPageId,
+              platform: 'facebook',
+              enabled: fbEnabled,
+              destination_id: fbDestination.trim() || savedPageId,
+              browser_profile_id: profile,
+              post_mode: fbMode,
+              default_slots_json: parseSlots(fbSlots),
+            });
+          }
         }
-        // TikTok target
         if (ttEnabled || ttDestination.trim()) {
-          await upsertContentPagePublishTarget({
-            page_id: savedPageId,
-            platform: 'tiktok',
-            enabled: ttEnabled,
-            destination_id: ttDestination.trim() || savedPageId,
-            browser_profile_id: ttProfile.trim() || browserProfileId.trim() || 'default',
-            post_mode: ttMode,
-            default_slots_json: parseSlots(ttSlots),
-          });
+          const profile = ttProfile.trim() || browserProfileId.trim();
+          if (profile) {
+            await upsertContentPagePublishTarget({
+              page_id: savedPageId,
+              platform: 'tiktok',
+              enabled: ttEnabled,
+              destination_id: ttDestination.trim() || savedPageId,
+              browser_profile_id: profile,
+              post_mode: ttMode,
+              default_slots_json: parseSlots(ttSlots),
+            });
+          }
         }
-        // YouTube target
         if (ytEnabled || ytDestination.trim()) {
-          await upsertContentPagePublishTarget({
-            page_id: savedPageId,
-            platform: 'youtube',
-            enabled: ytEnabled,
-            destination_id: ytDestination.trim() || savedPageId,
-            browser_profile_id: ytProfile.trim() || browserProfileId.trim() || 'default',
-            post_mode: ytMode,
-            default_slots_json: parseSlots(ytSlots),
-          });
+          const profile = ytProfile.trim() || browserProfileId.trim();
+          if (profile) {
+            await upsertContentPagePublishTarget({
+              page_id: savedPageId,
+              platform: 'youtube',
+              enabled: ytEnabled,
+              destination_id: ytDestination.trim() || savedPageId,
+              browser_profile_id: profile,
+              post_mode: ytMode,
+              default_slots_json: parseSlots(ytSlots),
+            });
+          }
         }
+      } catch (targetErr) {
+        const tMsg = targetErr instanceof Error ? targetErr.message : String(targetErr);
+        toast.error(`Page đã lưu (id: ${savedPageId}), nhưng lỗi lưu publish target: ${tMsg}`);
+        setError(`Page saved, but publish target failed: ${tMsg}`);
+        return;
       }
 
       toast.success('Đã lưu cấu hình Page và Publish Targets thành công!');

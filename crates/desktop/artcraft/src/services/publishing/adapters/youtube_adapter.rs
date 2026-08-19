@@ -122,16 +122,40 @@ impl PublisherAdapter for YouTubePublisherAdapter {
           PublisherError::new(PublisherErrorCode::UploadFailed, format!("Failed to parse response: {e}"), false)
         })?;
 
+        // Fail-closed check: HTTP 200 with body.ok == false or error property MUST be treated as failure
+        if body.get("ok").and_then(|v| v.as_bool()) == Some(false) {
+          let err_msg = body.get("error").or_else(|| body.get("message")).and_then(|v| v.as_str()).unwrap_or("YouTube extension reported ok=false");
+          let err_code = body.get("code").and_then(|v| v.as_str()).unwrap_or("UPLOAD_FAILED");
+          if err_code.contains("AUTH") || err_msg.contains("login") || err_msg.contains("AUTH_REQUIRED") {
+            return Err(PublisherError::auth_required(err_msg));
+          } else if err_code.contains("CAPABILITY") || err_msg.contains("not implemented") || err_msg.contains("unsupported") {
+            return Err(PublisherError::new(PublisherErrorCode::CapabilityUnavailable, err_msg, false));
+          } else {
+            return Err(PublisherError::upload_failed(err_msg, false));
+          }
+        }
+
         let video_id = body.get("videoId").and_then(|v| v.as_str()).map(|s| s.to_string())
-          .or_else(|| body.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()));
+          .or_else(|| body.get("id").and_then(|v| v.as_str()).map(|s| s.to_string()))
+          .or_else(|| body.get("platform_post_id").and_then(|v| v.as_str()).map(|s| s.to_string()));
         let post_url = body.get("videoUrl").and_then(|v| v.as_str()).map(|s| s.to_string())
           .or_else(|| body.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string()))
-          .or_else(|| video_id.as_ref().map(|id| format!("https://www.youtube.com/shorts/{id}")));
+          .or_else(|| body.get("url").and_then(|v| v.as_str()).map(|s| s.to_string()))
+          .or_else(|| body.get("post_url").and_then(|v| v.as_str()).map(|s| s.to_string()));
 
-        info!("[YouTubePublisher] Published successfully! video_id={:?} url={:?}", video_id, post_url);
+        // Evidence validation: Require video_id or post_url. If missing, fail with VerificationRequired, NEVER fake POSTED
+        if video_id.is_none() && post_url.is_none() {
+          return Err(PublisherError::new(
+            PublisherErrorCode::VerificationRequired,
+            "YouTube posting completed without authoritative video_id or post_url evidence from runtime extension",
+            false,
+          ));
+        }
+
+        info!("[YouTubePublisher] Published successfully with evidence! video_id={:?} url={:?}", video_id, post_url);
         Ok(PublicationResult {
-          platform_post_id: video_id,
-          post_url,
+          platform_post_id: video_id.clone(),
+          post_url: post_url.or_else(|| video_id.as_ref().map(|id| format!("https://www.youtube.com/shorts/{id}"))),
           posted_at: chrono::Utc::now().timestamp(),
           raw_metadata: Some(body),
         })

@@ -110,6 +110,15 @@ pub struct EnqueueFlowordWorkflowRequest {
   pub cookie_browser_profile: Option<String>,
   pub cookie_file_path: Option<String>,
   pub cookie_skip_patterns: Option<Vec<String>>,
+  // Publishing fields
+  pub title: Option<String>,
+  pub caption: Option<String>,
+  pub hashtags: Option<Vec<String>>,
+  pub description: Option<String>,
+  pub publish_platforms: Option<Vec<String>>,
+  pub post_mode: Option<String>,
+  pub schedule_time: Option<String>,
+  pub custom_filename: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -1906,6 +1915,8 @@ pub async fn floword_dashboard_summary_command(
       date_from: request.date_from,
       date_to: request.date_to,
       status: request.status,
+      business_status: None,
+      task_status: None,
       platform: request.platform,
     },
   )

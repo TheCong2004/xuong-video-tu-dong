@@ -296,9 +296,28 @@ impl BulkImportService {
 
     let mut created_job_ids = Vec::with_capacity(rows.len());
 
+    // Cache page snapshots by page_id to avoid redundant queries
+    let mut page_snapshots: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
     // Chunk in batches of 25 to prevent lock storm
     for chunk in rows.chunks(25) {
       for row in chunk {
+        if !page_snapshots.contains_key(&row.page_id) {
+          if let Ok(Some(page)) = sqlite_tasks::queries::content_pages::get_content_page_by_id::get_content_page_by_id(
+            sqlite_tasks::queries::content_pages::get_content_page_by_id::GetContentPageByIdArgs {
+              db,
+              id: &row.page_id,
+            }
+          ).await {
+            let snap = crate::services::pipeline::floword_job_page_config::FlowordJobPageSnapshot::from_content_page(&page);
+            if let Ok(snap_str) = serde_json::to_string(&snap) {
+              page_snapshots.insert(row.page_id.clone(), snap_str);
+            }
+          }
+        }
+
+        let maybe_snap_str = page_snapshots.get(&row.page_id).map(|s| s.as_str());
+
         let payload = serde_json::json!({
           "workflow_mode": "grok_content_pipeline",
           "batch_id": batch_id,
@@ -324,7 +343,7 @@ impl BulkImportService {
           current_stage: PipelineStage::Queued,
           maybe_page_id: Some(&row.page_id),
           maybe_input_payload: Some(&payload_str),
-          maybe_page_snapshot: None,
+          maybe_page_snapshot: maybe_snap_str,
           maybe_business_status: Some("QUEUED"),
         };
 
