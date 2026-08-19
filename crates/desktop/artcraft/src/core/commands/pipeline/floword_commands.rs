@@ -2193,8 +2193,10 @@ impl SerializeMarker for CheckSystemReadinessResponse {}
 #[tauri::command]
 pub async fn check_system_readiness_command(
   task_database: State<'_, TaskDatabase>,
+  app_data_root: State<'_, AppDataRoot>,
 ) -> ResponseOrError<CheckSystemReadinessResponse, FlowordErrorDetails> {
-  let report = SystemHealthProbes::probe_system_readiness(task_database.get_connection()).await;
+  let artifact_dir = app_data_root.pipeline_artifacts_dir();
+  let report = SystemHealthProbes::probe_system_readiness(task_database.get_connection(), artifact_dir).await;
   Ok(CheckSystemReadinessResponse { report }.into())
 }
 
@@ -2369,6 +2371,14 @@ mod tests {
         cookie_browser_profile: None,
         cookie_file_path: None,
         cookie_skip_patterns: None,
+        title: None,
+        caption: None,
+        hashtags: None,
+        description: None,
+        publish_platforms: None,
+        post_mode: None,
+        schedule_time: None,
+        custom_filename: None,
       };
 
       if req.workflow_mode.as_deref().unwrap_or("").trim().is_empty() {

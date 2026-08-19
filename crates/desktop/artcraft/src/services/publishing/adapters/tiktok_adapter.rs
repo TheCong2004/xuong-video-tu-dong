@@ -1,7 +1,8 @@
+use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response};
 use super::publisher_adapter::{PublicationExecutionContext, PublicationResult, PublisherAdapter, PublisherError, PublisherErrorCode};
 use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, release_lease, AcquireWorkerRequest};
 use async_trait::async_trait;
-use log::{error, info, warn};
+use log::{error, info};
 use reqwest::Client;
 use std::path::Path;
 use std::time::Duration;
@@ -32,7 +33,7 @@ impl PublisherAdapter for TikTokPublisherAdapter {
     info!("[TikTokPublisher] Validating session for profile={}", ctx.browser_profile_id);
     let req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
-      step_id: format!("publish_tt_{}", ctx.publication_id),
+      step_id: format!("publish_tiktok_{}_session_check", ctx.publication_id),
       attempt_id: "val_session".to_string(),
       capability: "social.tiktok.publish".to_string(),
       pool_id: None,
@@ -64,9 +65,10 @@ impl PublisherAdapter for TikTokPublisherAdapter {
     );
 
     // 1. Acquire exclusive lock on target browser profile
+    let step_id = format!("publish_tiktok_{}", ctx.publication_id);
     let acquire_req = AcquireWorkerRequest {
       job_id: ctx.job_id.clone(),
-      step_id: format!("publish_tt_{}", ctx.publication_id),
+      step_id: step_id.clone(),
       attempt_id: format!("attempt_{}", ctx.publication_id),
       capability: "social.tiktok.publish".to_string(),
       pool_id: None,
@@ -84,7 +86,7 @@ impl PublisherAdapter for TikTokPublisherAdapter {
 
     let lease_id = lease.lease_id.clone();
 
-    // 2. Dispatch publishing command to Donut Browser runtime
+    // 2. Dispatch using canonical floword-production v1 request envelope
     let base_url = crate::services::pipeline::clients::browser_runtime_client::get_donut_browser_api_base_url();
     let client = Client::builder().timeout(Duration::from_secs(180)).build().map_err(|e| {
       PublisherError::new(PublisherErrorCode::NetworkError, e.to_string(), true)
@@ -92,14 +94,18 @@ impl PublisherAdapter for TikTokPublisherAdapter {
 
     let dispatch_url = format!("{base_url}/v1/workers/{}/dispatch", lease.worker_id);
     let payload = serde_json::json!({
+      "protocol": "floword-production",
+      "protocolVersion": 1,
       "requestId": format!("req_tt_{}", ctx.publication_id),
       "jobId": ctx.job_id,
-      "publicationId": ctx.publication_id,
+      "stepId": step_id,
+      "attemptId": format!("attempt_{}", ctx.publication_id),
       "leaseId": lease_id,
       "profileId": ctx.browser_profile_id,
-      "platform": "tiktok",
+      "pageId": ctx.target_destination_id,
       "method": "social.tiktok.video.publish",
       "params": {
+        "publicationId": ctx.publication_id,
         "targetHandle": ctx.target_destination_handle,
         "videoPath": ctx.video_path,
         "title": ctx.title,
@@ -109,7 +115,7 @@ impl PublisherAdapter for TikTokPublisherAdapter {
       }
     });
 
-    info!("[TikTokPublisher] Dispatching payload to worker: {}", lease.worker_id);
+    info!("[TikTokPublisher] Dispatching to worker {} step={}", lease.worker_id, step_id);
     let resp = client.post(&dispatch_url).json(&payload).send().await;
 
     // Ensure lease is released
@@ -117,31 +123,35 @@ impl PublisherAdapter for TikTokPublisherAdapter {
 
     match resp {
       Ok(res) if res.status().is_success() => {
-        let body: serde_json::Value = res.json().await.map_err(|e| {
-          PublisherError::new(PublisherErrorCode::UploadFailed, format!("Failed to parse response: {e}"), false)
+        // Parse raw JSON — protocol violation if unparseable
+        let raw: serde_json::Value = res.json().await.map_err(|e| {
+          PublisherError::new(
+            PublisherErrorCode::PlatformRejected,
+            format!("[TikTok] Failed to parse dispatch response (protocol violation): {e}"),
+            false,
+          )
         })?;
 
-        // Fail-closed check: HTTP 200 with body.ok == false or error property MUST be treated as failure
-        if body.get("ok").and_then(|v| v.as_bool()) == Some(false) {
-          let err_msg = body.get("error").or_else(|| body.get("message")).and_then(|v| v.as_str()).unwrap_or("TikTok extension reported ok=false");
-          let err_code = body.get("code").and_then(|v| v.as_str()).unwrap_or("UPLOAD_FAILED");
-          if err_code.contains("AUTH") || err_msg.contains("login") || err_msg.contains("AUTH_REQUIRED") {
-            return Err(PublisherError::auth_required(err_msg));
-          } else if err_code.contains("CAPABILITY") || err_msg.contains("not implemented") || err_msg.contains("unsupported") {
-            return Err(PublisherError::new(PublisherErrorCode::CapabilityUnavailable, err_msg, false));
-          } else {
-            return Err(PublisherError::upload_failed(err_msg, false));
-          }
-        }
+        // Decode into typed struct and classify errors using canonical error taxonomy
+        let parsed = parse_dispatch_body(raw.clone(), "TikTok")?;
+        let result = validate_dispatch_response(parsed, "TikTok")?;
 
-        let post_id = body.get("postId").and_then(|v| v.as_str()).map(|s| s.to_string())
-          .or_else(|| body.get("itemId").and_then(|v| v.as_str()).map(|s| s.to_string()))
-          .or_else(|| body.get("platform_post_id").and_then(|v| v.as_str()).map(|s| s.to_string()));
-        let post_url = body.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string())
-          .or_else(|| body.get("shareUrl").and_then(|v| v.as_str()).map(|s| s.to_string()))
-          .or_else(|| body.get("post_url").and_then(|v| v.as_str()).map(|s| s.to_string()));
+        // Extract authoritative evidence from body.result (preferred) then root fallback
+        let result_obj = result.as_ref();
+        let post_id = result_obj
+          .and_then(|r| r.get("postId").or_else(|| r.get("itemId")).or_else(|| r.get("platform_post_id")))
+          .and_then(|v| v.as_str())
+          .map(|s| s.to_string())
+          .or_else(|| raw.get("postId").and_then(|v| v.as_str()).map(|s| s.to_string()))
+          .or_else(|| raw.get("itemId").and_then(|v| v.as_str()).map(|s| s.to_string()));
+        let post_url = result_obj
+          .and_then(|r| r.get("postUrl").or_else(|| r.get("shareUrl")).or_else(|| r.get("post_url")))
+          .and_then(|v| v.as_str())
+          .map(|s| s.to_string())
+          .or_else(|| raw.get("postUrl").and_then(|v| v.as_str()).map(|s| s.to_string()))
+          .or_else(|| raw.get("shareUrl").and_then(|v| v.as_str()).map(|s| s.to_string()));
 
-        // Evidence validation: Require post_id or post_url. If missing, fail with VerificationRequired, NEVER fake POSTED
+        // Evidence validation: require post_id or post_url — NEVER fabricate a URL
         if post_id.is_none() && post_url.is_none() {
           return Err(PublisherError::new(
             PublisherErrorCode::VerificationRequired,
@@ -150,18 +160,18 @@ impl PublisherAdapter for TikTokPublisherAdapter {
           ));
         }
 
-        info!("[TikTokPublisher] Published successfully with evidence! post_id={:?} url={:?}", post_id, post_url);
+        info!("[TikTokPublisher] Published successfully. post_id={:?} post_url={:?}", post_id, post_url);
         Ok(PublicationResult {
-          platform_post_id: post_id.clone(),
-          post_url: post_url.or_else(|| post_id.as_ref().map(|id| format!("https://www.tiktok.com/@video/{id}"))),
+          platform_post_id: post_id,
+          post_url, // stored as-is; never fabricated from post_id
           posted_at: chrono::Utc::now().timestamp(),
-          raw_metadata: Some(body),
+          raw_metadata: Some(raw),
         })
       }
       Ok(res) => {
         let status = res.status();
         let body_text = res.text().await.unwrap_or_default();
-        error!("[TikTokPublisher] TikTok publish returned {status}: {body_text}");
+        error!("[TikTokPublisher] HTTP {status}: {body_text}");
         if body_text.contains("AUTH_REQUIRED") || body_text.contains("login") {
           Err(PublisherError::auth_required(body_text))
         } else {

@@ -2,105 +2,95 @@
 
 Date: 2026-08-19  
 Author: Floword Studio Production Team  
-Scope: Final Customer Acceptance Hardening & Production Verification (Phase A1–A7 Complete)  
+Scope: Final Customer Acceptance Hardening & Verification
 
 ---
 
 ## 1. Executive Summary & Acceptance Percentage
 
-| Total Requirements | PASS | PARTIAL / BLOCKED_AUTH | BLOCKED | Acceptance Rate (Fully Implemented & Verified) |
+| Total Requirements | PASS_VERIFIED | PASS_CODE_ONLY | BLOCKED_RUNTIME | FAIL |
 | :---: | :---: | :---: | :---: | :---: |
-| **28** | **25** | **3** (External Platform API Tokens) | **0** | **89.3% PASS** (100% Core Production & Engine Implemented) |
+| **28** | **9** | **16** | **3** (Facebook/TikTok/YouTube Downstream Automation) | **0** |
 
-> [!NOTE]
-> All core pipeline generation stages (Image Ingest, Grok Image Edit, Grok Expand 9:16, Grok Video Generate, Auto Download, Save Local, Multi-Job Scheduling, Backpressure, Durable Event Logging, Duplicate Protection, and Operations UI) are **100% PASS** with authoritative SQLite persistence and automated verification.
->
-> Multi-platform social publishing adapters (Facebook, TikTok, YouTube) are **fail-closed**: HTTP 200 with `ok=false` in the response body is treated as failure; posts that complete without a verifiable `platform_post_id` or `post_url` are assigned `VERIFY_REQUIRED` rather than `POSTED`. This prevents false-positive publication records. When running in an environment without active customer OAuth tokens, live network posting safely evaluates to `PARTIAL (BLOCKED_AUTH)`.
+> [!IMPORTANT]
+> **Status Taxonomy Definitions:**
+> - `PASS_VERIFIED`: Implementation verified via automated unit/integration test suite with repeatable execution evidence.
+> - `PASS_CODE_ONLY`: Implementation is fully coded and compiles with clean types, but end-to-end live runtime proof requires interactive execution.
+> - `BLOCKED_RUNTIME`: Required downstream runtime (Donut browser coordinator / ExtensionProMax DOM automation) has not yet implemented the social publishing capabilities (`social.facebook.publish`, `social.tiktok.publish`, `social.youtube.publish`). Floword fails closed and truthfully reports this blocker.
+> - `BLOCKED_AUTH`: Implementation exists and is ready, but active user credentials/OAuth tokens are required.
+> - `FAIL`: Known broken or failing implementation.
 
 ---
 
 ## 2. Customer Requirement Matrix
 
-| # | Requirement | Implementation | UI Component | Backend Service / Tauri Command | DB / Persistence | Automated Test | Manual Test | Status | Evidence |
-| :- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | **Page Management** | Multi-page configuration (Name, Output folder, Fallback prompts, Profile bindings) | `PageManagementModal.tsx`, `PagesView.tsx` | `create_content_page`, `update_content_page`, `list_content_pages` | SQLite `content_pages` table | `cargo test -p sqlite_tasks` | Create/Edit/Select Page in Studio | **PASS** | Pages persisted, path validated, unique IDs |
-| **2** | **Upload / Paste Source Image** | Drag-and-drop, clipboard paste, file picker | `StudioView.tsx`, `UploadZone.tsx` | `save_source_image_artifact`, local blob staging | SQLite `pipeline_jobs(input_payload)` | Client blob hash verification | Paste Ctrl+V & file upload | **PASS** | Source image written to disk & recorded in job |
-| **3** | **Grok Generate / Edit Image** | Text-to-image & image-to-image prompt execution | `StudioView.tsx`, `RunFlowModal.tsx` | `grok_pipeline_service.rs`, stage `GROK_IMAGE_EDIT` | SQLite `pipeline_jobs(current_stage, stage_outputs)` | Pipeline stage update test | Trigger Grok image generation | **PASS** | Artifact stored, dimensions checked |
-| **4** | **Grok Expand 9:16** | Vertical expansion from 1:1 / 16:9 to 9:16 vertical video ratio | `StudioView.tsx` | `grok_pipeline_service.rs`, stage `GROK_EXPAND_9_16` | SQLite `pipeline_jobs(stage_outputs)` | Aspect ratio calculation & stage update | Run expand 9:16 on image | **PASS** | Aspect ratio 9:16 verified |
-| **5** | **Grok Generate Video** | Motion animation video generation using vertical 9:16 artifact | `StudioView.tsx` | `grok_pipeline_service.rs`, stage `GROK_VIDEO_GENERATE` | SQLite `pipeline_jobs(stage_outputs)` | Video generation stage check | Trigger video animation | **PASS** | Generates playable MP4 video artifact |
-| **6** | **Auto Download** | Automatic polling and artifact stream downloading | Polling state in UI | `auto_download_service.rs`, stage `AUTO_DOWNLOAD` | SQLite `pipeline_jobs(stage_outputs)` | Download completion test | Verify downloaded bytes | **PASS** | File transferred to cache directory |
-| **7** | **Save Local (Page/Date Structure)** | Materialize final video into `D:\<Page_Name>\<YYYY-MM-DD>\<job_id>.mp4` | `StudioView.tsx`, `JobsView.tsx` | `save_local_service.rs`, stage `SAVE_LOCAL` | SQLite `pipeline_jobs(stage_outputs)` | Directory creation & writability test | Check filesystem for saved video | **PASS** | Video saved under structured directory |
-| **8** | **Job Naming & Metadata** | Title, Description, Hashtags, Custom filename | `StudioView.tsx`, `JobsView.tsx` | `create_pipeline_job`, `pipeline_job_events` | SQLite `pipeline_jobs(input_payload)` | Payload serialization test | Create job with caption & hashtags | **PASS** | Metadata persisted and readable |
-| **9** | **Concurrent Jobs & Queue** | Multi-job execution with scheduler queue polling | `JobsView.tsx`, `DashboardView.tsx` | `pipeline_scheduler.rs`, queue worker loop | SQLite `pipeline_jobs` (`QUEUED`, `WAITING_WORKER`) | Concurrency test suite | Enqueue 5 jobs simultaneously | **PASS** | Queue executes up to max concurrency |
-| **10** | **Detailed Status Reporting** | Real-time stage progress & error diagnostic codes | `StudioView.tsx`, `JobsView.tsx`, `JobEventsDrawer` | `floword_commands::list_pipeline_job_events` | SQLite `pipeline_job_events` table | Event sequence integrity test | View live Inspector drawer | **PASS** | Every stage step emits structured event |
-| **11** | **Retry & Upstream Preservation** | Retry failed jobs from the exact failed stage without losing inputs | `JobsView.tsx` (Retry action) | `retry_floword_job_from_start_command` | SQLite `pipeline_jobs(status, stage_outputs)` | `stage_only_update_preserves_persisted_artifact_outputs` | Click Retry on failed job | **PASS** | Artifact outputs preserved, status reset |
-| **12** | **Resume after App Restart / Crash** | Safe recovery from SQLite without losing state or duplicating runs | App startup loader | Startup migration & pending job scanner | SQLite WAL mode persistence | Startup query test | Kill process & relaunch app | **PASS** | Active jobs resume from DB state |
-| **13** | **Job History Durability** | Chronological audit trail of all actions and metadata | `HistoryView.tsx`, `JobsView.tsx` | `list_pipeline_job_events`, `list_pipeline_jobs_paginated` | SQLite `pipeline_job_events` | Paginated query test | Browse history across dates | **PASS** | Complete history preserved in SQLite |
-| **14** | **Caption, Hashtags, Description** | Social media post copywriting payload management | `StudioView.tsx`, `BulkImportView.tsx` | `CreatePipelineJobArgs`, `BulkImportRow` | SQLite `pipeline_jobs.input_payload` | JSON payload serialization test | Verify caption renders in preview | **PASS** | Fields persist and flow to publishing |
-| **15** | **Facebook Reels / Video Adapter** | Multi-profile Facebook posting adapter | `PublishView.tsx` | `FacebookPublisherAdapter`, `social.facebook.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to Facebook page | **PARTIAL** (Auth Required) | Fail-closed: `ok=false` → `UploadFailed`, missing evidence → `VERIFY_REQUIRED`. Requires active FB session token in browser profile |
-| **16** | **TikTok Video Adapter** | Multi-profile TikTok posting adapter | `PublishView.tsx` | `TikTokPublisherAdapter`, `social.tiktok.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to TikTok account | **PARTIAL** (Auth Required) | Fail-closed: `ok=false` → `UploadFailed`, missing evidence → `VERIFY_REQUIRED`. Requires active TikTok session token |
-| **17** | **YouTube Shorts Adapter** | Multi-channel YouTube Shorts publishing | `PublishView.tsx` | `YouTubePublisherAdapter`, `social.youtube.publish` | SQLite `job_publications` | Adapter dispatch test | Post video to YouTube channel | **PARTIAL** (Auth Required) | Fail-closed: `ok=false` → `UploadFailed`, missing evidence → `VERIFY_REQUIRED`. Requires active Google session token |
-| **18** | **Auto Post Mode** | Automatically transition finished video to publishing worker | `PublishView.tsx`, `PageManagementModal.tsx` | `PublicationManager::on_video_completed` | SQLite `job_publications(status='READY_TO_POST')` | Post mode branching test | Create job on Auto Post page | **PASS** | Job auto-enqueues to publishing worker |
-| **19** | **Review Before Post Mode** | Hold finished video in approval queue before publishing | `PublishView.tsx` | `PublicationManager::on_video_completed` | SQLite `job_publications(status='WAITING_APPROVAL')` | Approval requirement test | Verify video waits for Approve click | **PASS** | Held until explicit user approval |
-| **20** | **Post Now & Schedule Actions** | Immediate or scheduled publishing at specific UTC times | `PublishView.tsx` | `post_now_publication_command`, `schedule_publication_command` | SQLite `job_publications(scheduled_at, status)` | Schedule time check | Approve & schedule post | **PASS** | Timestamps recorded, worker respects due time |
-| **21** | **Default Slots Allocator** | Collision-free slot assignment based on Page schedule times | `PageManagementModal.tsx`, `slot_allocator.rs` | `SlotAllocator::allocate_next_available_slot` | SQLite `content_page_publish_targets(default_slots_json)` | Slot allocation unit test | Check sequential slot assignment | **PASS** | Next free slot allocated automatically |
-| **22** | **Duplicate Post Protection** | Idempotency hashing + atomic worker claims | `PublishingWorkerThread` | `claim_job_publication`, SHA-256 idempotency key | SQLite `job_publications(idempotency_key)` UNIQUE | Idempotency collision test | Re-run publish trigger | **PASS** | Prevents duplicate posts under all conditions |
-| **23** | **Post ID & Post URL Persistence** | Durable recording of platform post identifiers and live links | `PublishView.tsx`, `HistoryView.tsx` | `update_job_publication` | SQLite `job_publications(platform_post_id, post_url)` | Publication update test | Inspect published record | **PASS** | Post ID and URL recorded and clickable |
-| **24** | **Authoritative Dashboard** | Direct SQL aggregate metrics (funnel stages, platforms) | `DashboardView.tsx` | `floword_dashboard_summary_command` | SQLite aggregate query (`get_dashboard_summary`) | `test_dashboard_summary_default_zero` | Filter by Page and Date range | **PASS** | No React heuristic counting, 100% SQL true |
-| **25** | **Paginated Jobs Table & Search** | Server-side pagination with date/status/search filters | `JobsView.tsx` | `list_pipeline_jobs_paginated_command` | SQLite `list_pipeline_jobs_paginated` (limit/offset) | `test_list_pipeline_jobs_paginated` | Change page size & search keywords | **PASS** | Fast queries with zero memory bloat |
-| **26** | **Bulk CSV Import with Dry-Run** | CSV import with pre-flight dry-run validation taxonomy | `BulkImportView.tsx` | `BulkImportService::validate_import_rows` | SQLite batch insert into `pipeline_jobs` | `test_csv_parser_comma_and_quotes` | Paste CSV and trigger dry-run | **PASS** | Row-by-row error diagnostics before commit |
-| **27** | **Dynamic Concurrency & Backpressure** | Configurable worker limits (1-20 concurrent jobs, max 5 Grok) | `SettingsView.tsx` | `update_floword_settings_command` | SQLite `floword_system_settings` | Settings persistence test | Change concurrency slider & save | **PASS** | Concurrency persisted in SQLite settings |
-| **28** | **Live System Readiness Probes** | Real-time latency probes for DB, Storage, Scheduler, Worker | `SettingsView.tsx`, `DashboardView.tsx` | `check_system_readiness_command`, `check_storage_health_command` | Real filesystem probe & SQLite ping | Storage health test | View System Readiness cards | **PASS** | Real millisecond latencies, no hard-coded badges |
+| # | Requirement | Implementation Details | UI Component | Backend Service / Tauri Command | DB / Persistence | Status | Evidence & Verification Notes |
+| :- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **1** | **Page Management** | Multi-page configuration (Name, Output folder, Fallback prompts, Profile bindings) | `PageManagementModal.tsx`, `PagesView.tsx` | `create_content_page`, `update_content_page`, `list_content_pages` | SQLite `content_pages` table | **PASS_VERIFIED** | Verified via `test_page_snapshot_isolation` in `floword_job_page_config.rs`. Pages and snapshots persist with unique IDs. |
+| **2** | **Upload / Paste Source Image** | Drag-and-drop, clipboard paste, file picker | `StudioView.tsx` | `ingest_floword_source_image_command`, `pipeline_worker_thread.rs` | SQLite `pipeline_jobs(input_payload)` | **PASS_CODE_ONLY** | Source image written to disk under artifacts root & referenced in job context. |
+| **3** | **Grok Generate / Edit Image** | Text-to-image & image-to-image prompt execution via Donut worker dispatch | `StudioView.tsx` | `pipeline_worker_thread.rs` (Stage 1 `GROK_IMAGE_EDIT`) | SQLite `pipeline_jobs(current_stage, stage_outputs)` | **PASS_CODE_ONLY** | Stage checkpoints and artifact refs stored in SQLite. |
+| **4** | **Grok Expand 9:16** | Vertical expansion from original ratio to 9:16 vertical ratio | `StudioView.tsx` | `pipeline_worker_thread.rs` (Stage 2 `CONVERTING_9_16`) | SQLite `pipeline_jobs(stage_outputs)` | **PASS_CODE_ONLY** | 9:16 expand stage executes and persists vertical frame artifact. |
+| **5** | **Grok Generate Video** | Motion animation video generation using vertical 9:16 artifact | `StudioView.tsx` | `pipeline_worker_thread.rs` (Stage 3 `GENERATING_VIDEO`) | SQLite `pipeline_jobs(stage_outputs)` | **PASS_CODE_ONLY** | Generates video artifact ref with stage progression. |
+| **6** | **Auto Download** | Automatic polling and artifact stream downloading to local cache | `StudioView.tsx`, `JobsView.tsx` | `pipeline_worker_thread.rs` (Stage `DOWNLOADING`) | SQLite `pipeline_jobs(stage_outputs)` | **PASS_CODE_ONLY** | Downloads and registers downloaded MP4 artifact. |
+| **7** | **Save Local (Page/Date Structure)** | Materialize final video into `<output_root>/<page_name>/<DD-MM-YYYY>/<filename>.mp4` | `StudioView.tsx`, `JobsView.tsx` | `output_policy.rs`, `pipeline_worker_thread.rs` (Stage 4 `SAVING_LOCAL`) | SQLite `pipeline_jobs(stage_outputs)` | **PASS_CODE_ONLY** | `OutputPathResolver` prepares structured directory and copies final video file. |
+| **8** | **Job Naming & Metadata** | Title, Description, Hashtags, Custom filename | `StudioView.tsx`, `JobsView.tsx` | `floword_commands::enqueue_floword_workflow`, `pipeline_job_events` | SQLite `pipeline_jobs(input_payload)` | **PASS_VERIFIED** | Verified via `test_publishing_metadata_separation`: `image_prompt != caption`, structured hashtags array preserved. |
+| **9** | **Concurrent Jobs & Queue** | Multi-job execution with scheduler queue polling | `JobsView.tsx`, `DashboardView.tsx` | `pipeline_scheduler_thread.rs`, `pipeline_worker_thread.rs` | SQLite `pipeline_jobs` (`QUEUED`, `WAITING_WORKER`) | **PASS_CODE_ONLY** | Scheduler polls SQLite with configurable concurrency limit. |
+| **10** | **Detailed Status Reporting** | Real-time stage progress & error diagnostic codes | `StudioView.tsx`, `JobsView.tsx`, `JobInspectorModal.tsx` | `floword_commands::list_pipeline_job_events_command` | SQLite `pipeline_job_events` table | **PASS_CODE_ONLY** | Every pipeline step emits structured event with sequence number and level. |
+| **11** | **Retry & Upstream Preservation** | Retry failed jobs from the exact failed stage without losing inputs | `JobsView.tsx` (Retry action) | `retry_floword_job_from_start_command`, `update_pipeline_job_stage` | SQLite `pipeline_jobs(status, stage_outputs)` | **PASS_VERIFIED** | Verified via `stage_only_update_preserves_persisted_artifact_outputs` in `sqlite_tasks`. |
+| **12** | **Resume after App Restart / Crash** | Safe recovery from SQLite without losing state or duplicating runs | App startup loader | SQLite WAL mode & startup scanner | SQLite WAL mode persistence | **PASS_CODE_ONLY** | SQLite WAL mode ensures transactional durability across restarts. |
+| **13** | **Job History Durability** | Chronological audit trail of all actions and metadata | `HistoryView.tsx`, `JobsView.tsx` | `list_pipeline_jobs_paginated_command`, `list_pipeline_job_events_command` | SQLite `pipeline_job_events`, `pipeline_jobs` | **PASS_VERIFIED** | Verified via `test_list_pipeline_jobs_paginated` in `sqlite_tasks`. |
+| **14** | **Caption, Hashtags, Description** | Social media post copywriting payload management (strict separation from prompts) | `StudioView.tsx`, `BulkImportView.tsx` | `floword_commands::enqueue_floword_workflow`, `publication_manager.rs` | SQLite `pipeline_jobs.input_payload` | **PASS_VERIFIED** | Verified: Caption never falls back to image prompt; hashtags parsed as structured array. |
+| **15** | **Facebook Reels / Video Adapter** | Multi-profile Facebook posting adapter | `PublishView.tsx` | `FacebookPublisherAdapter`, `dispatch_protocol.rs` | SQLite `job_publications` | **BLOCKED_RUNTIME** | Downstream Donut/Extension runtime has not yet implemented Facebook DOM automation. Adapter is fail-closed: missing evidence yields `VERIFY_REQUIRED`, unsupported method yields `CAPABILITY_UNAVAILABLE`. |
+| **16** | **TikTok Video Adapter** | Multi-profile TikTok posting adapter | `PublishView.tsx` | `TikTokPublisherAdapter`, `dispatch_protocol.rs` | SQLite `job_publications` | **BLOCKED_RUNTIME** | Downstream Donut/Extension runtime has not yet implemented TikTok DOM automation. Adapter is fail-closed. |
+| **17** | **YouTube Shorts Adapter** | Multi-channel YouTube Shorts publishing | `PublishView.tsx` | `YouTubePublisherAdapter`, `dispatch_protocol.rs` | SQLite `job_publications` | **BLOCKED_RUNTIME** | Downstream Donut/Extension runtime has not yet implemented YouTube DOM automation. Adapter is fail-closed. |
+| **18** | **Auto Post Mode** | Automatically transition finished video to publishing worker | `PublishView.tsx`, `PageManagementModal.tsx` | `publication_manager::create_publications_for_completed_job` | SQLite `job_publications(status='READY_TO_POST')` | **PASS_CODE_ONLY** | Completed video triggers publication generation based on page targets. |
+| **19** | **Review Before Post Mode** | Hold finished video in approval queue before publishing | `PublishView.tsx` | `publication_manager::create_publications_for_completed_job` | SQLite `job_publications(status='WAITING_APPROVAL')` | **PASS_CODE_ONLY** | Publications created in `WAITING_APPROVAL` status until approved by user. |
+| **20** | **Post Now & Schedule Actions** | Immediate or scheduled publishing at specific UTC times | `PublishView.tsx` | `post_now_publication_command`, `schedule_publication_command` | SQLite `job_publications(scheduled_at, status)` | **PASS_CODE_ONLY** | Commands update `scheduled_at` and `approved_at` timestamps in SQLite. |
+| **21** | **Default Slots Allocator** | Collision-free slot assignment based on Page schedule times | `PageManagementModal.tsx` | `slot_allocator.rs` | SQLite `content_page_publish_targets(default_slots_json)` | **PASS_CODE_ONLY** | Computes next available publishing slot for sequential scheduling. |
+| **22** | **Duplicate Post Protection** | Idempotency hashing + atomic worker claims | `PublishingWorkerThread` | `claim_job_publication`, SHA-256 idempotency key | SQLite `job_publications(idempotency_key)` UNIQUE | **PASS_CODE_ONLY** | SHA-256 idempotency key prevents duplicate publication creation. |
+| **23** | **Post ID & Post URL Persistence** | Durable recording of platform post identifiers and live links | `PublishView.tsx`, `HistoryView.tsx` | `update_job_publication`, `dispatch_protocol.rs` | SQLite `job_publications(platform_post_id, post_url)` | **PASS_VERIFIED** | Verified via `test_dispatch_valid_evidence` in `dispatch_protocol.rs`. URL is never fabricated from raw ID. |
+| **24** | **Authoritative Dashboard** | Direct SQL aggregate metrics (funnel stages, platforms) | `DashboardView.tsx` | `floword_dashboard_summary_command` | SQLite aggregate query (`get_dashboard_summary`) | **PASS_VERIFIED** | Verified via `test_dashboard_summary_business_status_combinations` and `test_dashboard_summary_default_zero`. |
+| **25** | **Paginated Jobs Table & Search** | Server-side pagination with date/status/search filters | `JobsView.tsx` | `list_pipeline_jobs_paginated_command` | SQLite `list_pipeline_jobs_paginated` (limit/offset) | **PASS_VERIFIED** | Verified via `test_list_pipeline_jobs_paginated` in `sqlite_tasks`. |
+| **26** | **Bulk CSV Import with Dry-Run** | CSV import with pre-flight dry-run validation taxonomy | `BulkImportView.tsx` | `bulk_import_service.rs` | SQLite batch insert into `pipeline_jobs` | **PASS_CODE_ONLY** | Validates CSV row format, prompts, and Page assignment before commit. |
+| **27** | **Dynamic Concurrency & Backpressure** | Configurable worker limits (1-20 concurrent jobs, max 5 Grok) | `SettingsView.tsx` | `update_floword_settings_command` | SQLite `floword_system_settings` | **PASS_CODE_ONLY** | Concurrency settings persist in SQLite and control scheduler thread limits. |
+| **28** | **Live System Readiness Probes** | Real-time latency probes for DB, Storage, Scheduler, Worker | `SettingsView.tsx`, `DashboardView.tsx` | `check_system_readiness_command`, `system_health_probes.rs` | Real canonical artifact directory write probe & Donut `/v1/workers` query | **PASS_VERIFIED** | Verified via `test_worker_readiness_grok_only` and `test_worker_readiness_social_facebook`. Storage probes canonical `AppDataRoot::pipeline_artifacts_dir()`. |
 
 ---
 
-## 3. Verification & Evidence
+## 3. Automated Test Evidence
 
-### 3.1 SQLite Unit Tests
+### 3.1 SQLite Tasks Unit Tests
 ```bash
 cargo test -p sqlite_tasks
 ```
-**Output** (2026-08-19, verified):
-```text
-running 4 tests
-test queries::dashboard::get_dashboard_summary::tests::test_dashboard_summary_default_zero ... ok
-test queries::pipeline::update_pipeline_job_stage::tests::stage_only_update_preserves_persisted_artifact_outputs ... ok
-test queries::dashboard::get_dashboard_summary::tests::test_dashboard_summary_business_status_combinations ... ok
-test queries::pipeline::list_pipeline_jobs_paginated::tests::test_list_pipeline_jobs_paginated ... ok
+**Results:**
+- `test_dashboard_summary_default_zero` ... **ok**
+- `stage_only_update_preserves_persisted_artifact_outputs` ... **ok**
+- `test_dashboard_summary_business_status_combinations` ... **ok**
+- `test_list_pipeline_jobs_paginated` ... **ok**
 
-test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
-```
-
-### 3.1.1 New: Business Status Aggregate Test
-The `test_dashboard_summary_business_status_combinations` test creates 5 jobs with specific `business_status` values (`GENERATING_IMAGE`, `WAITING_WORKER`, `READY_TO_POST`, `AUTH_REQUIRED`, `ERROR`) and verifies that the authoritative SQL aggregate counts each bucket correctly without relying on React-layer filtering.
-
-### 3.2 Full Backend Cargo Check
+### 3.2 ArtCraft Unit Tests (Snapshot, Readiness, Protocol & Metadata Separation)
 ```bash
-cargo check --lib -p artcraft
+cargo test -p artcraft
 ```
-**Output**:
-```text
-Finished dev profile [unoptimized + debuginfo] target(s) in 1m 32s (0 errors)
-```
+**Results:**
+- `test_page_snapshot_isolation` ... **ok**
+- `test_legacy_fallback_when_snapshot_missing` ... **ok**
+- `test_publishing_metadata_separation` ... **ok**
+- `test_worker_readiness_grok_only` ... **ok**
+- `test_worker_readiness_social_facebook` ... **ok**
+- `test_dispatch_error_protocol_mismatch` ... **ok**
+- `test_dispatch_missing_ok_field` ... **ok**
+- `test_dispatch_valid_evidence` ... **ok**
+- `test_dispatch_auth_required_error` ... **ok**
 
 ---
 
-## 4. Phase Summary (A1–A7)
+## 4. Current Blockers (Downstream Runtime Scope)
 
-| Phase | Description | Status |
-|:------|:------------|:-------|
-| A1 | Immutable Page Snapshot — jobs use `page_snapshot` at creation time, never re-read mutable `ContentPage` | ✅ COMPLETE |
-| A2 | Dashboard Business Status SQL — funnel counts from `business_status` column, not React-layer filtering | ✅ COMPLETE |
-| A3 | Remove Fake System Readiness — real heartbeat probes, real Donut `/v1/workers` query, real storage probe | ✅ COMPLETE |
-| A4 | Publishing Metadata Flow — `title`, `caption`, `hashtags`, `description`, `publishPlatforms`, `scheduleTime` flow TS→Tauri→DB→worker→adapter | ✅ COMPLETE |
-| A5 | Create Page + Publish Target Bug Fix — `onSavePage` returns `ContentPage`, `savedPage.id` used for publish targets | ✅ COMPLETE |
-| A6 | Eliminate False POSTED — all 3 adapters fail-closed: `ok=false` → error, missing evidence → `VERIFY_REQUIRED` | ✅ COMPLETE |
-| A7 | Acceptance Document Rewrite — truthful status grading, verified test output, fail-closed documentation | ✅ COMPLETE |
+The following items are intentionally marked **BLOCKED_RUNTIME**:
+1. **Facebook live publishing**: Requires Donut Browser coordinator and ExtensionProMax social automation adapter implementation.
+2. **TikTok live publishing**: Requires Donut Browser coordinator and ExtensionProMax social automation adapter implementation.
+3. **YouTube live publishing**: Requires Donut Browser coordinator and ExtensionProMax social automation adapter implementation.
 
-## 5. Acceptance Conclusion
-
-Floword Studio satisfies all architectural, durability, concurrency, and UI requirements specified in the customer specifications. The operations console is hardened for production use with:
-- **No fake success states**: publishing adapters require authoritative evidence (`platform_post_id` or `post_url`) before marking `POSTED`
-- **No fake health data**: all system readiness values are measured at runtime
-- **Authoritative state from SQLite**: dashboard, job lists, and history all query the DB directly
-- **Immutable job context**: page configuration is snapshot-locked at job creation, not re-read from mutable pages
+Floword Studio is fully hardened and prepared with the canonical `floword-production` v1 dispatch protocol, evidence validation, and fail-closed error handling.

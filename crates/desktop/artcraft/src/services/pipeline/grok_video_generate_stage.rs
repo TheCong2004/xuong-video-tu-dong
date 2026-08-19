@@ -501,6 +501,7 @@ mod tests {
     let input = GrokVideoGenerateInput {
       job_id: "JOB_VID_001".to_string(),
       page_id: "PAGE_01".to_string(),
+      browser_profile_id: None,
       vertical_image_artifact: ArtifactRef {
         artifact_id: "ART_VERT".to_string(),
         kind: ArtifactKind::VerticalImage,

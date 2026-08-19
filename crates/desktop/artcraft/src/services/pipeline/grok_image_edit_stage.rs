@@ -808,6 +808,7 @@ mod tests {
     let input = GrokImageEditInput {
       job_id: "JOB_FAIL_001".to_string(),
       page_id: "PAGE_01".to_string(),
+      browser_profile_id: None,
       source_image_artifact: ArtifactRef {
         artifact_id: "ART_SRC".to_string(),
         kind: ArtifactKind::Story,

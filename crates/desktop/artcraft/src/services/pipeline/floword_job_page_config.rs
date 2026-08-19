@@ -167,7 +167,7 @@ pub async fn resolve_job_page_config(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::connection::TaskDbConnection;
+  use sqlite_tasks::connection::TaskDbConnection;
   use sqlite_tasks::queries::content_pages::create_content_page::{create_content_page, CreateContentPageArgs};
   use sqlite_tasks::queries::content_pages::update_content_page::{update_content_page, UpdateContentPageArgs};
   use sqlite_tasks::queries::pipeline::create_pipeline_job::{create_pipeline_job, CreatePipelineJobArgs};
@@ -182,25 +182,26 @@ mod tests {
       let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
 
       // 1. Create Page A
-      let page_id = create_content_page(CreateContentPageArgs {
+      let page_a = create_content_page(CreateContentPageArgs {
         db: &db,
+        id: None,
         name: "Page A",
-        slug: "page-a",
+        slug: Some("page-a"),
         output_root: "D:\\Stage A",
-        browser_profile_id: Some("PROFILE_A"),
-        worker_pool_id: None,
         target_platform: None,
-        default_image_prompt: Some("PROMPT_A"),
-        default_expand_9_16_prompt: None,
-        default_video_prompt: None,
+        default_model_id: None,
+        default_workflow_id: None,
         default_language: None,
         default_tone: None,
         default_aspect_ratio: None,
-        description: None,
+        browser_profile_id: Some("PROFILE_A"),
+        worker_pool_id: None,
+        default_image_prompt: Some("PROMPT_A"),
+        default_expand_9_16_prompt: None,
+        default_video_prompt: None,
       }).await.unwrap();
 
       // 2. Enqueue Job with snapshot of Page A
-      let page_a = get_content_page_by_id(GetContentPageByIdArgs { db: &db, id: &page_id }).await.unwrap().unwrap();
       let snapshot = FlowordJobPageSnapshot::from_content_page(&page_a);
       let snapshot_str = serde_json::to_string(&snapshot).unwrap();
 
@@ -208,7 +209,7 @@ mod tests {
         db: &db,
         status: TaskStatus::Pending,
         current_stage: PipelineStage::Queued,
-        maybe_page_id: Some(&page_id),
+        maybe_page_id: Some(&page_a.id),
         maybe_input_payload: Some(r#"{"workflow_mode":"grok_content_pipeline"}"#),
         maybe_page_snapshot: Some(&snapshot_str),
         maybe_business_status: Some("QUEUED"),
@@ -217,21 +218,21 @@ mod tests {
       // 3. User edits Page A to Page B (changes profile, output root, prompt)
       update_content_page(UpdateContentPageArgs {
         db: &db,
-        id: &page_id,
+        id: &page_a.id,
         name: "Page B",
-        slug: "page-b",
+        slug: Some("page-b"),
         output_root: "D:\\Stage B",
-        browser_profile_id: Some("PROFILE_B"),
-        worker_pool_id: None,
         target_platform: None,
-        default_image_prompt: Some("PROMPT_B"),
-        default_expand_9_16_prompt: None,
-        default_video_prompt: None,
+        default_model_id: None,
+        default_workflow_id: None,
         default_language: None,
         default_tone: None,
         default_aspect_ratio: None,
-        description: None,
-        is_archived: false,
+        browser_profile_id: Some("PROFILE_B"),
+        worker_pool_id: None,
+        default_image_prompt: Some("PROMPT_B"),
+        default_expand_9_16_prompt: None,
+        default_video_prompt: None,
       }).await.unwrap();
 
       // 4. Resolve Job config -> MUST still have Page A snapshot values
@@ -252,21 +253,23 @@ mod tests {
       let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
 
       // 1. Create Page
-      let page_id = create_content_page(CreateContentPageArgs {
+      let legacy_page = create_content_page(CreateContentPageArgs {
         db: &db,
+        id: None,
         name: "Legacy Page",
-        slug: "legacy-page",
+        slug: Some("legacy-page"),
         output_root: "D:\\LegacyOutput",
-        browser_profile_id: Some("PROFILE_LEGACY"),
-        worker_pool_id: None,
         target_platform: None,
-        default_image_prompt: Some("LEGACY_PROMPT"),
-        default_expand_9_16_prompt: None,
-        default_video_prompt: None,
+        default_model_id: None,
+        default_workflow_id: None,
         default_language: None,
         default_tone: None,
         default_aspect_ratio: None,
-        description: None,
+        browser_profile_id: Some("PROFILE_LEGACY"),
+        worker_pool_id: None,
+        default_image_prompt: Some("LEGACY_PROMPT"),
+        default_expand_9_16_prompt: None,
+        default_video_prompt: None,
       }).await.unwrap();
 
       // 2. Enqueue Job WITHOUT snapshot
@@ -274,7 +277,7 @@ mod tests {
         db: &db,
         status: TaskStatus::Pending,
         current_stage: PipelineStage::Queued,
-        maybe_page_id: Some(&page_id),
+        maybe_page_id: Some(&legacy_page.id),
         maybe_input_payload: Some(r#"{"workflow_mode":"grok_content_pipeline"}"#),
         maybe_page_snapshot: None,
         maybe_business_status: Some("QUEUED"),
@@ -286,6 +289,72 @@ mod tests {
       assert_eq!(resolved.page_name, "Legacy Page");
       assert_eq!(resolved.output_root, "D:\\LegacyOutput");
       assert_eq!(resolved.browser_profile_id.as_deref(), Some("PROFILE_LEGACY"));
+    });
+  }
+
+  #[test]
+  fn test_publishing_metadata_separation() {
+    tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
+      let temp = tempfile::tempdir().unwrap();
+      let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
+
+      let page = create_content_page(CreateContentPageArgs {
+        db: &db,
+        id: None,
+        name: "Test Page",
+        slug: Some("test-page"),
+        output_root: "D:\\TestOutput",
+        target_platform: Some("tiktok"),
+        default_model_id: None,
+        default_workflow_id: None,
+        default_language: None,
+        default_tone: None,
+        default_aspect_ratio: None,
+        browser_profile_id: Some("PROFILE_1"),
+        worker_pool_id: None,
+        default_image_prompt: Some("Default Image Prompt"),
+        default_expand_9_16_prompt: None,
+        default_video_prompt: None,
+      }).await.unwrap();
+
+      let payload = serde_json::json!({
+        "workflow_mode": "grok_content_pipeline",
+        "workflow_name": "grok_content_pipeline",
+        "image_prompt": "Create cinematic neon portrait of hero",
+        "prompt": "Create cinematic neon portrait of hero",
+        "title": "Top Action Movie",
+        "caption": "Phim này đáng xem cuối tuần",
+        "hashtags": ["cinema", "viral"],
+        "description": "Top action movie recommendation"
+      });
+      let payload_str = serde_json::to_string(&payload).unwrap();
+
+      let job_id = create_pipeline_job(CreatePipelineJobArgs {
+        db: &db,
+        status: TaskStatus::Pending,
+        current_stage: PipelineStage::Queued,
+        maybe_page_id: Some(&page.id),
+        maybe_input_payload: Some(&payload_str),
+        maybe_page_snapshot: None,
+        maybe_business_status: Some("QUEUED"),
+      }).await.unwrap();
+
+      let job = get_pipeline_job_by_id(GetPipelineJobByIdArgs { db: &db, pipeline_job_id: &job_id }).await.unwrap().unwrap();
+      let read_payload_str = job.maybe_input_payload.expect("Should have payload");
+      let read_val: serde_json::Value = serde_json::from_str(&read_payload_str).unwrap();
+
+      assert_eq!(read_val.get("image_prompt").and_then(|v| v.as_str()), Some("Create cinematic neon portrait of hero"));
+      assert_eq!(read_val.get("caption").and_then(|v| v.as_str()), Some("Phim này đáng xem cuối tuần"));
+      assert_ne!(
+        read_val.get("image_prompt").and_then(|v| v.as_str()),
+        read_val.get("caption").and_then(|v| v.as_str()),
+        "Caption must NOT equal image prompt"
+      );
+      assert_eq!(
+        read_val.get("hashtags").and_then(|v| v.as_array()).unwrap(),
+        &vec![serde_json::json!("cinema"), serde_json::json!("viral")]
+      );
+      assert_eq!(read_val.get("description").and_then(|v| v.as_str()), Some("Top action movie recommendation"));
     });
   }
 }

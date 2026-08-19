@@ -874,7 +874,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     let (pub_title, pub_caption, pub_hashtags, pub_description) = if let Some(payload_str) = &job.maybe_input_payload {
       if let Ok(v) = serde_json::from_str::<serde_json::Value>(payload_str) {
         let t = v.get("title").or_else(|| v.get("topic")).and_then(|s| s.as_str()).map(|s| s.to_string());
-        let c = v.get("caption").or_else(|| v.get("custom_prompt")).and_then(|s| s.as_str()).map(|s| s.to_string());
+        let c = v.get("caption").and_then(|s| s.as_str()).map(|s| s.to_string());
         let d = v.get("description").and_then(|s| s.as_str()).map(|s| s.to_string());
         let h: Vec<String> = v.get("hashtags").and_then(|arr| arr.as_array())
           .map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())

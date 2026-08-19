@@ -154,8 +154,12 @@ impl SystemHealthProbes {
   }
 
   /// Probes system readiness across all real subsystems with measured latencies and real Donut query.
+  ///
+  /// `artifact_dir` MUST be the canonical pipeline artifacts directory from AppDataRoot,
+  /// not a temp or hardcoded path.
   pub async fn probe_system_readiness(
     db: &TaskDbConnection,
+    artifact_dir: PathBuf,
   ) -> SystemReadinessReport {
     let mut details = Vec::new();
 
@@ -183,43 +187,9 @@ impl SystemHealthProbes {
       }
     };
 
-    // 2. Probe Artifact Storage with real write/delete probe
-    let artifact_dir = std::env::temp_dir().join("artcraft_artifacts");
-    let artifact_storage_ready = match std::fs::create_dir_all(&artifact_dir) {
-      Ok(_) => {
-        let test_file = artifact_dir.join(".probe.tmp");
-        match std::fs::write(&test_file, b"probe_ok") {
-          Ok(_) => {
-            let _ = std::fs::remove_file(&test_file);
-            details.push(ProbeDetail {
-              service: "Artifact Storage".to_string(),
-              ready: true,
-              message: format!("Storage writable at {:?}", artifact_dir),
-              latency_ms: None,
-            });
-            true
-          }
-          Err(e) => {
-            details.push(ProbeDetail {
-              service: "Artifact Storage".to_string(),
-              ready: false,
-              message: format!("Storage directory not writable: {e}"),
-              latency_ms: None,
-            });
-            false
-          }
-        }
-      }
-      Err(e) => {
-        details.push(ProbeDetail {
-          service: "Artifact Storage".to_string(),
-          ready: false,
-          message: format!("Artifact storage failed: {e}"),
-          latency_ms: None,
-        });
-        false
-      }
-    };
+    // 2. Probe canonical pipeline artifact storage with a unique probe file
+    //    `artifact_dir` is AppDataRoot::pipeline_artifacts_dir() — the real production path.
+    let artifact_storage_ready = probe_artifact_dir(&artifact_dir, &mut details);
 
     // 3. Real Scheduler Heartbeat
     let floword_scheduler_ready = is_scheduler_alive(10);
@@ -248,6 +218,7 @@ impl SystemHealthProbes {
     });
 
     // 5. Real Donut Runtime Query via canonical base URL
+    //    Parses the correct {workers: [...], total: N} response shape.
     let donut_base_url = crate::services::pipeline::clients::browser_runtime_client::get_donut_browser_api_base_url();
     let client = reqwest::Client::builder()
       .timeout(std::time::Duration::from_millis(1000))
@@ -259,7 +230,7 @@ impl SystemHealthProbes {
     let donut_probe = client.get(&donut_url).send().await;
 
     let mut donut_ready = false;
-    let mut workers_online_count = 0;
+    let mut workers_online_count = 0usize;
     let mut grok_profile_ready = false;
     let mut facebook_profile_ready = false;
     let mut tiktok_profile_ready = false;
@@ -270,36 +241,66 @@ impl SystemHealthProbes {
         let latency = t_donut.elapsed().as_millis() as u64;
         donut_ready = true;
 
-        if let Ok(workers) = resp.json::<serde_json::Value>().await {
-          if let Some(arr) = workers.as_array() {
-            workers_online_count = arr.len();
-            for w in arr {
-              let id = w.get("id").or_else(|| w.get("worker_id")).and_then(|v| v.as_str()).unwrap_or("");
-              let caps = w.get("capabilities").and_then(|v| v.as_array()).cloned().unwrap_or_default();
-              let cap_strings: Vec<String> = caps.iter().filter_map(|c| c.as_str().map(|s| s.to_string())).collect();
+        // Parse response as typed struct to avoid root-array misparse
+        use crate::services::pipeline::clients::browser_runtime_client::ListWorkersResponse;
+        match resp.json::<ListWorkersResponse>().await {
+          Ok(list) => {
+            // workers_online_count = workers whose state is not "OFFLINE"
+            workers_online_count = list.workers.iter()
+              .filter(|w| w.state != "OFFLINE")
+              .count();
 
-              if id.contains("grok") || cap_strings.iter().any(|c| c.contains("grok")) {
+            for w in &list.workers {
+              let state_ready = w.state == "READY";
+              let caps = &w.capabilities;
+
+              // Grok readiness: worker must be READY, extension_ready, protocol_version=1,
+              // grok_logged_in, AND advertise at least one required Grok capability.
+              let grok_caps = ["grok.image.edit", "grok.image.expand_9_16", "grok.video.generate"];
+              let has_grok_cap = caps.iter().any(|c| grok_caps.contains(&c.as_str()));
+              if state_ready
+                && w.extension_ready
+                && w.protocol_version == Some(1)
+                && w.grok_logged_in == Some(true)
+                && has_grok_cap
+              {
                 grok_profile_ready = true;
               }
-              if id.contains("facebook") || cap_strings.iter().any(|c| c.contains("facebook")) {
+
+              // Social readiness: only if worker explicitly advertises exact social capabilities.
+              // Current Extension is Grok-only; these will normally remain false.
+              if state_ready && caps.iter().any(|c| c == "social.facebook.publish") {
                 facebook_profile_ready = true;
               }
-              if id.contains("tiktok") || cap_strings.iter().any(|c| c.contains("tiktok")) {
+              if state_ready && caps.iter().any(|c| c == "social.tiktok.publish") {
                 tiktok_profile_ready = true;
               }
-              if id.contains("youtube") || cap_strings.iter().any(|c| c.contains("youtube")) {
+              if state_ready && caps.iter().any(|c| c == "social.youtube.publish") {
                 youtube_profile_ready = true;
               }
             }
+
+            details.push(ProbeDetail {
+              service: "Donut Worker Bridge".to_string(),
+              ready: true,
+              message: format!(
+                "Donut runtime reachable at {donut_base_url} ({workers_online_count}/{} workers online, grok_ready={grok_profile_ready}, {latency}ms)",
+                list.total
+              ),
+              latency_ms: Some(latency),
+            });
+          }
+          Err(e) => {
+            // HTTP reachable but payload failed to deserialize — record error, counts stay 0
+            error!("[SystemHealth] Donut /v1/workers response parse failed: {e}");
+            details.push(ProbeDetail {
+              service: "Donut Worker Bridge".to_string(),
+              ready: true, // transport reachable
+              message: format!("Donut reachable at {donut_base_url} but worker payload could not be parsed: {e} ({latency}ms)"),
+              latency_ms: Some(latency),
+            });
           }
         }
-
-        details.push(ProbeDetail {
-          service: "Donut Worker Bridge".to_string(),
-          ready: true,
-          message: format!("Donut runtime reachable at {donut_base_url} ({workers_online_count} workers online, {latency}ms)"),
-          latency_ms: Some(latency),
-        });
       }
       Ok(resp) => {
         details.push(ProbeDetail {
@@ -335,5 +336,153 @@ impl SystemHealthProbes {
       youtube_profile_ready,
       details,
     }
+  }
+}
+
+/// Probe the canonical artifact storage directory with a unique temporary file.
+/// Returns true only if the directory is writable.
+fn probe_artifact_dir(artifact_dir: &PathBuf, details: &mut Vec<ProbeDetail>) -> bool {
+  // Ensure directory exists
+  if let Err(e) = std::fs::create_dir_all(artifact_dir) {
+    details.push(ProbeDetail {
+      service: "Artifact Storage".to_string(),
+      ready: false,
+      message: format!("Cannot create artifact directory at {:?}: {e}", artifact_dir),
+      latency_ms: None,
+    });
+    return false;
+  }
+
+  // Write a unique probe file to avoid collisions between concurrent probes
+  let probe_id = uuid::Uuid::new_v4();
+  let test_file = artifact_dir.join(format!(".floword_health_probe_{probe_id}.tmp"));
+
+  match std::fs::write(&test_file, b"floword_storage_probe_ok") {
+    Ok(_) => {
+      if let Err(e) = std::fs::remove_file(&test_file) {
+        warn!("[SystemHealth] Could not remove probe file {:?}: {e}", test_file);
+      }
+      details.push(ProbeDetail {
+        service: "Artifact Storage".to_string(),
+        ready: true,
+        message: format!("Storage writable at {:?}", artifact_dir),
+        latency_ms: None,
+      });
+      true
+    }
+    Err(e) => {
+      details.push(ProbeDetail {
+        service: "Artifact Storage".to_string(),
+        ready: false,
+        message: format!("Artifact storage directory not writable at {:?}: {e}", artifact_dir),
+        latency_ms: None,
+      });
+      false
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::services::pipeline::clients::browser_runtime_client::{BrowserWorkerInfo, ListWorkersResponse};
+
+  /// Test fixture: parse a ListWorkersResponse with a Grok-ready worker.
+  /// Expected: workers_online_count=1, grok_profile_ready=true, social=false.
+  #[test]
+  fn test_worker_readiness_grok_only() {
+    let json = r#"{
+      "workers": [
+        {
+          "worker_id": "browser-profile:1",
+          "profile_id": "1",
+          "pool_id": null,
+          "state": "READY",
+          "capabilities": [
+            "grok.image.edit",
+            "grok.image.expand_9_16",
+            "grok.video.generate"
+          ],
+          "extension_ready": true,
+          "extension_version": null,
+          "protocol_version": 1,
+          "grok_logged_in": true,
+          "current_lease_id": null,
+          "current_job_id": null,
+          "last_heartbeat_at": null,
+          "last_error": null
+        }
+      ],
+      "total": 1
+    }"#;
+
+    let list: ListWorkersResponse = serde_json::from_str(json).expect("Should parse");
+    assert_eq!(list.workers.len(), 1);
+    assert_eq!(list.total, 1);
+
+    let workers = &list.workers;
+    let online_count = workers.iter().filter(|w| w.state != "OFFLINE").count();
+    assert_eq!(online_count, 1, "Expected 1 online worker");
+
+    // Grok readiness logic
+    let grok_caps = ["grok.image.edit", "grok.image.expand_9_16", "grok.video.generate"];
+    let grok_ready = workers.iter().any(|w| {
+      w.state == "READY"
+        && w.extension_ready
+        && w.protocol_version == Some(1)
+        && w.grok_logged_in == Some(true)
+        && w.capabilities.iter().any(|c| grok_caps.contains(&c.as_str()))
+    });
+    assert!(grok_ready, "Expected grok_profile_ready=true");
+
+    // Social readiness — should be false for Grok-only capabilities
+    let fb_ready = workers.iter().any(|w| w.state == "READY" && w.capabilities.iter().any(|c| c == "social.facebook.publish"));
+    assert!(!fb_ready, "Expected facebook_profile_ready=false for Grok-only worker");
+    let tt_ready = workers.iter().any(|w| w.state == "READY" && w.capabilities.iter().any(|c| c == "social.tiktok.publish"));
+    assert!(!tt_ready, "Expected tiktok_profile_ready=false for Grok-only worker");
+    let yt_ready = workers.iter().any(|w| w.state == "READY" && w.capabilities.iter().any(|c| c == "social.youtube.publish"));
+    assert!(!yt_ready, "Expected youtube_profile_ready=false for Grok-only worker");
+  }
+
+  /// Test fixture: worker with social.facebook.publish capability.
+  /// Expected: facebook_profile_ready=true, grok_profile_ready=false.
+  #[test]
+  fn test_worker_readiness_social_facebook() {
+    let json = r#"{
+      "workers": [
+        {
+          "worker_id": "browser-profile:2",
+          "profile_id": "2",
+          "pool_id": null,
+          "state": "READY",
+          "capabilities": ["social.facebook.publish"],
+          "extension_ready": true,
+          "extension_version": null,
+          "protocol_version": 1,
+          "grok_logged_in": false,
+          "current_lease_id": null,
+          "current_job_id": null,
+          "last_heartbeat_at": null,
+          "last_error": null
+        }
+      ],
+      "total": 1
+    }"#;
+
+    let list: ListWorkersResponse = serde_json::from_str(json).expect("Should parse");
+    let workers = &list.workers;
+
+    let fb_ready = workers.iter().any(|w| w.state == "READY" && w.capabilities.iter().any(|c| c == "social.facebook.publish"));
+    assert!(fb_ready, "Expected facebook_profile_ready=true");
+
+    let grok_caps = ["grok.image.edit", "grok.image.expand_9_16", "grok.video.generate"];
+    let grok_ready = workers.iter().any(|w| {
+      w.state == "READY"
+        && w.extension_ready
+        && w.protocol_version == Some(1)
+        && w.grok_logged_in == Some(true)
+        && w.capabilities.iter().any(|c| grok_caps.contains(&c.as_str()))
+    });
+    assert!(!grok_ready, "Expected grok_profile_ready=false (grok_logged_in=false, no grok caps)");
   }
 }

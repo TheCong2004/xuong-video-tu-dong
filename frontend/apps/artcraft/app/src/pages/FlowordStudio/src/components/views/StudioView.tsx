@@ -55,11 +55,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Prompts
+  // Prompts & Publishing Metadata
   const [imagePrompt, setImagePrompt] = useState<string>('');
   const [expand916Prompt, setExpand916Prompt] = useState<string>('');
   const [videoPrompt, setVideoPrompt] = useState<string>('');
+  const [title, setTitle] = useState<string>('');
   const [caption, setCaption] = useState<string>('Khám phá ngay danh sách siêu phẩm không thể bỏ lỡ! #cinema #review #movies');
+  const [hashtags, setHashtags] = useState<string>('cinema, review, movies');
+  const [description, setDescription] = useState<string>('');
 
   const selectedPage = pages.find((p) => p.id === activePageId) || pages[0];
 
@@ -159,6 +162,16 @@ export const StudioView: React.FC<StudioViewProps> = ({
     const effExpandPrompt = expand916Prompt.trim() || selectedPage.default_expand_9_16_prompt || undefined;
     const effVideoPrompt = videoPrompt.trim() || selectedPage.default_video_prompt || undefined;
 
+    // Normalize and extract structured hashtags (without leading #)
+    const fromInput = hashtags
+      .split(/[,\s]+/)
+      .map((t) => t.replace(/^#+/, '').trim())
+      .filter(Boolean);
+    const fromCaption = (caption.match(/#[a-zA-Z0-9_\u00C0-\u024F\u1EA0-\u1EF9]+/g) || [])
+      .map((t) => t.replace(/^#+/, '').trim())
+      .filter(Boolean);
+    const parsedHashtags = Array.from(new Set([...fromInput, ...fromCaption]));
+
     await onRunWorkflow({
       workflowMode: pipelineType,
       workflowName: pipelineType,
@@ -181,7 +194,11 @@ export const StudioView: React.FC<StudioViewProps> = ({
       researchPlatform: 'xhs',
       researchQuery: '',
       researchMode: 'search',
-      topic,
+      topic: topic.trim() || undefined,
+      title: title.trim() || topic.trim() || undefined,
+      caption: caption.trim() || undefined,
+      hashtags: parsedHashtags.length > 0 ? parsedHashtags : undefined,
+      description: description.trim() || undefined,
       customPrompt: effImagePrompt,
       platform: selectedPage.target_platform || 'tiktok',
       targetDurationSec: 45,
@@ -504,13 +521,47 @@ export const StudioView: React.FC<StudioViewProps> = ({
             </div>
           )}
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-zinc-400 mb-1 font-medium text-xs">Publishing Title</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={topic || 'Tiêu đề video xuất bản...'}
+                className="w-full px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500"
+              />
+            </div>
+            <div>
+              <label className="block text-zinc-400 mb-1 font-medium text-xs">Structured Hashtags</label>
+              <input
+                type="text"
+                value={hashtags}
+                onChange={(e) => setHashtags(e.target.value)}
+                placeholder="cinema, review, viral, movies..."
+                className="w-full px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Publishing Caption & Tags</label>
+            <label className="block text-zinc-400 mb-1 font-medium text-xs">Publishing Caption</label>
             <textarea
               rows={2}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none"
+              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-zinc-400 mb-1 font-medium text-xs">Social Description (YouTube / SEO)</label>
+            <textarea
+              rows={2}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Mô tả chi tiết video khi đăng lên YouTube/Facebook..."
+              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500 resize-none"
             />
           </div>
         </div>

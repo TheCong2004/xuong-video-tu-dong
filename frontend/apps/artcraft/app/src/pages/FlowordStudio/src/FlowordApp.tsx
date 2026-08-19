@@ -259,7 +259,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           pageSnapshot: pageSnap,
           businessStatus: wf.business_status,
           input: {
-            ...workflowInput,
+            ...DEFAULT_WORKFLOW_INPUT,
             ...(inputPayload ?? {}),
           },
           currentStage: wf.current_stage,
@@ -334,7 +334,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           pageSnapshot: pageSnap,
           businessStatus: res.business_status,
           input: {
-            ...workflowInput,
+            ...DEFAULT_WORKFLOW_INPUT,
             ...(inputPayload ?? {}),
           },
           currentStage: res.current_stage,
@@ -354,16 +354,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         setActiveWorkflowRun(updatedRun);
         setProgress(percent);
 
-        // Update list of all runs
-        setAllRuns((prev) => {
-          const idx = prev.findIndex((r) => r.id === jobId);
-          if (idx >= 0) {
-            const next = [...prev];
-            next[idx] = updatedRun;
-            return next;
-          }
-          return [updatedRun, ...prev];
-        });
+        setAllRuns((prev) => prev.map((r) => (r.id === jobId ? updatedRun : r)));
 
         if (TERMINAL_STATUSES.has(res.status) || TERMINAL_STAGES.has(res.current_stage)) {
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -373,19 +364,15 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
           }
         }
       } catch (err) {
-        console.error('Polling error:', err);
+        console.error(`[Floword] Polling error for job ${jobId}:`, err);
       }
-    }, POLL_INTERVAL_MS);
-  }, [activePageId, workflowInput]);
+    }, 2000);
+  }, [activePageId]);
 
-  const handleExecuteWorkflow = async (customInput?: WorkflowInput) => {
-    const inputToUse = customInput || workflowInput;
-
+  const handleRunWorkflow = async (inputToUse: WorkflowInput) => {
     const isGrokWorkflow = inputToUse.workflowMode === 'grok_content_pipeline'
-      || inputToUse.workflowMode === 'grok_image_edit'
       || inputToUse.workflowName?.toLowerCase().includes('grok');
 
-    // Validation for Grok pipeline
     if (isGrokWorkflow) {
       const selectedPage = pages.find((p) => p.id === (inputToUse.pageId || activePageId));
       if (!selectedPage && !activePageId) {
@@ -393,18 +380,9 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         return;
       }
 
-      // Check image prompt: custom or page default
       const effImagePrompt = inputToUse.imagePrompt || inputToUse.prompt || inputToUse.customPrompt || selectedPage?.default_image_prompt;
       if (!effImagePrompt || effImagePrompt.trim().length === 0) {
-        toast.error('Grok Pipeline yêu cầu Image Prompt (nhập trực tiếp hoặc cấu hình mặc định trong Page).');
-        return;
-      }
-
-      // Check source image
-      const hasSourceImage = (inputToUse.sourceFiles && inputToUse.sourceFiles.length > 0)
-        || inputToUse.sourceImageArtifact !== undefined;
-      if (!hasSourceImage) {
-        toast.error('Grok Pipeline yêu cầu Source Image (chọn file ảnh đầu vào).');
+        toast.error('Grok Pipeline yêu cầu Image Prompt.');
         return;
       }
     }
@@ -418,8 +396,8 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         page_id: inputToUse.pageId || activePageId || undefined,
         workflow_name: inputToUse.workflowName || (inputToUse.workflowMode === 'grok_content_pipeline' ? 'grok_content_pipeline' : 'floword_video_pipeline'),
         workflow_mode: inputToUse.workflowMode || (inputToUse.workflowName?.toLowerCase().includes('grok') ? 'grok_content_pipeline' : undefined),
-        prompt: inputToUse.prompt || inputToUse.customPrompt || '',
-        image_prompt: inputToUse.imagePrompt || inputToUse.customPrompt || (inputToUse.prompt !== DEFAULT_WORKFLOW_INPUT.prompt ? inputToUse.prompt : undefined),
+        prompt: inputToUse.prompt || inputToUse.imagePrompt || '',
+        image_prompt: inputToUse.imagePrompt || (inputToUse.prompt !== DEFAULT_WORKFLOW_INPUT.prompt ? inputToUse.prompt : undefined),
         expand_9_16_prompt: inputToUse.expand916Prompt || inputToUse.expandPrompt,
         video_prompt: inputToUse.videoPrompt,
         source_image_artifact: inputToUse.sourceImageArtifact,
@@ -432,9 +410,9 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
         target_duration_seconds: inputToUse.targetDurationSeconds,
         output_mode: inputToUse.outputMode,
         title: inputToUse.title || inputToUse.topic,
-        caption: inputToUse.caption || inputToUse.customPrompt,
+        caption: inputToUse.caption?.trim() ? inputToUse.caption.trim() : undefined,
         hashtags: inputToUse.hashtags,
-        description: inputToUse.description,
+        description: inputToUse.description?.trim() ? inputToUse.description.trim() : undefined,
         publish_platforms: inputToUse.publishPlatforms,
         post_mode: inputToUse.postMode,
         schedule_time: inputToUse.scheduleTime,

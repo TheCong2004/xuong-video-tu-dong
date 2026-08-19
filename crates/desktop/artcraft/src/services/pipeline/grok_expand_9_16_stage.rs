@@ -633,6 +633,7 @@ mod tests {
     let input = GrokExpand916Input {
       job_id: "JOB_EXP_001".to_string(),
       page_id: "PAGE_01".to_string(),
+      browser_profile_id: None,
       image_done_artifact: ArtifactRef {
         artifact_id: "ART_GEN".to_string(),
         kind: ArtifactKind::GeneratedImage,
