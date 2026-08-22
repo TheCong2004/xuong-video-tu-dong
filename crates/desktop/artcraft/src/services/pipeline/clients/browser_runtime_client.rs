@@ -130,6 +130,40 @@ pub async fn launch_donut_profile(profile_id: &str, target_url: Option<&str>) ->
   }
 }
 
+pub fn resolve_runtime_executable_candidates() -> Vec<std::path::PathBuf> {
+  let mut candidates = Vec::new();
+
+  // 1. Explicit Environment Variable
+  if let Ok(env_path) = std::env::var("DONUT_RUNTIME_PATH").or_else(|_| std::env::var("FLOWORD_RUNTIME_PATH")) {
+    if !env_path.trim().is_empty() {
+      candidates.push(std::path::PathBuf::from(env_path.trim()));
+    }
+  }
+
+  // 2. Relative to current executable
+  if let Ok(current_exe) = std::env::current_exe() {
+    if let Some(exe_dir) = current_exe.parent() {
+      candidates.push(exe_dir.join("floword-donut-runtime.exe"));
+      candidates.push(exe_dir.join("resources").join("donut-runtime").join("floword-donut-runtime.exe"));
+      candidates.push(exe_dir.join("donut-runtime").join("floword-donut-runtime.exe"));
+    }
+  }
+
+  // 3. Relative to current working directory
+  candidates.push(std::path::PathBuf::from("resources/donut-runtime/floword-donut-runtime.exe"));
+  candidates.push(std::path::PathBuf::from("crates/desktop/artcraft/resources/donut-runtime/floword-donut-runtime.exe"));
+
+  // 4. Dev debug assertion fallbacks only
+  #[cfg(debug_assertions)]
+  {
+    candidates.push(std::path::PathBuf::from(r"D:\capcutpolot\donutbrowser\src-tauri\target\debug\floword-donut-runtime.exe"));
+    candidates.push(std::path::PathBuf::from(r"D:\capcutpolot\artcraft\resources\donut-runtime\floword-donut-runtime.exe"));
+    candidates.push(std::path::PathBuf::from(r"D:\capcutpolot\artcraft\target\debug\resources\donut-runtime\floword-donut-runtime.exe"));
+  }
+
+  candidates
+}
+
 pub async fn ensure_runtime_alive() {
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_millis(600)).build().ok();
@@ -142,11 +176,7 @@ pub async fn ensure_runtime_alive() {
   }
 
   info!("[BrowserRuntime] Donut runtime is not responding on 10108; attempting auto-spawn...");
-  let candidates = [
-    std::path::PathBuf::from(r"D:\capcutpolot\donutbrowser\src-tauri\target\debug\floword-donut-runtime.exe"),
-    std::path::PathBuf::from(r"D:\capcutpolot\artcraft\resources\donut-runtime\floword-donut-runtime.exe"),
-    std::path::PathBuf::from(r"D:\capcutpolot\artcraft\target\debug\resources\donut-runtime\floword-donut-runtime.exe"),
-  ];
+  let candidates = resolve_runtime_executable_candidates();
 
   for exe in &candidates {
     if exe.exists() {
