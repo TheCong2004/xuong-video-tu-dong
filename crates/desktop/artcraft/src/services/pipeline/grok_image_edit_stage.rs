@@ -1,5 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse};
+use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse, LeaseStatus};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
 use reqwest::Client;
@@ -241,7 +241,7 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
 
     // Forward to extension bridge endpoint
     let bridge_base = get_extension_bridge_base_url();
-    let bridge_url = format!("{bridge_base}/v1/workers/{worker_id}/dispatch");
+    let bridge_url = build_worker_dispatch_url(&bridge_base, &worker_id);
 
     let (resp_res, was_cancelled) = tokio::select! {
       res = async {
@@ -384,9 +384,9 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
     let final_hb = heartbeat_lease(&lease_id, HeartbeatLeaseRequest { job_id: job_id.clone(), attempt_id: attempt_id.to_string(), ttl_seconds: Some(60) }).await;
 
     let hb_valid = match final_hb {
-      Ok(res) => res.status == "Active",
+      Ok(res) => res.status.is_active(),
       Err(err) => {
-        error!("[GrokImageEdit] Terminal heartbeat failed for lease {lease_id}: {err}");
+        error!("[FLOWORD][HEARTBEAT] Terminal heartbeat failed for lease {lease_id}: {err}");
         false
       },
     };
@@ -483,16 +483,16 @@ mod tests {
   // TEST GROUP E — Final ownership barrier fail-closed tests
   #[test]
   fn test_e1_final_heartbeat_ok_allows_success() {
-    let hb_status = "Active";
-    let is_valid = hb_status == "Active";
+    let hb_status = LeaseStatus::Active;
+    let is_valid = hb_status.is_active();
     assert!(is_valid);
   }
 
   #[test]
   fn test_e2_final_heartbeat_lease_not_active_fails() {
-    let hb_res: Result<HeartbeatLeaseResponse, String> = Ok(HeartbeatLeaseResponse { lease_id: "L1".to_string(), status: "Released".to_string(), expires_at: "".to_string() });
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Ok(HeartbeatLeaseResponse { lease_id: "L1".to_string(), status: LeaseStatus::Released, expires_at: "".to_string() });
     let outcome = match hb_res {
-      Ok(r) if r.status == "Active" => Ok(()),
+      Ok(r) if r.status.is_active() => Ok(()),
       _ => Err("LEASE_LOST: Terminal ownership check failed".to_string()),
     };
     assert!(outcome.is_err());
@@ -502,7 +502,7 @@ mod tests {
   fn test_e3_final_heartbeat_correlation_mismatch_fails() {
     let hb_res: Result<HeartbeatLeaseResponse, String> = Err("CORRELATION_MISMATCH: lease belongs to another job".to_string());
     let outcome = match hb_res {
-      Ok(r) if r.status == "Active" => Ok(()),
+      Ok(r) if r.status.is_active() => Ok(()),
       Err(e) => Err(format!("LEASE_LOST: {e}")),
       _ => Err("LEASE_LOST".to_string()),
     };
@@ -514,7 +514,7 @@ mod tests {
   fn test_e4_final_heartbeat_connection_refused_fails() {
     let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Connection refused (os error 111)".to_string());
     let outcome = match hb_res {
-      Ok(r) if r.status == "Active" => Ok(()),
+      Ok(r) if r.status.is_active() => Ok(()),
       Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
       _ => Err("LEASE_LOST".to_string()),
     };
@@ -526,7 +526,7 @@ mod tests {
   fn test_e5_final_heartbeat_timeout_fails() {
     let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Operation timed out".to_string());
     let outcome = match hb_res {
-      Ok(r) if r.status == "Active" => Ok(()),
+      Ok(r) if r.status.is_active() => Ok(()),
       Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
       _ => Err("LEASE_LOST".to_string()),
     };
@@ -538,7 +538,7 @@ mod tests {
   fn test_e6_final_heartbeat_http_500_fails() {
     let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Heartbeat failed (500 Internal Server Error)".to_string());
     let outcome = match hb_res {
-      Ok(r) if r.status == "Active" => Ok(()),
+      Ok(r) if r.status.is_active() => Ok(()),
       Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
       _ => Err("LEASE_LOST".to_string()),
     };
@@ -550,7 +550,7 @@ mod tests {
   fn test_e7_final_heartbeat_malformed_response_fails() {
     let hb_res: Result<HeartbeatLeaseResponse, String> = Err("Failed to parse HeartbeatLeaseResponse".to_string());
     let outcome = match hb_res {
-      Ok(r) if r.status == "Active" => Ok(()),
+      Ok(r) if r.status.is_active() => Ok(()),
       Err(e) => Err(format!("LEASE_LOST: Terminal ownership verification failed: {e}")),
       _ => Err("LEASE_LOST".to_string()),
     };

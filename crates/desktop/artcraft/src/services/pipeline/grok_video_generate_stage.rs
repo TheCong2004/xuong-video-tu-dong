@@ -1,5 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, get_donut_browser_api_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest};
+use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_donut_browser_api_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, LeaseStatus};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use crate::services::pipeline::grok_image_edit_stage::{compute_sha256, detect_image_mime};
 use log::{error, info, warn};
@@ -174,7 +174,8 @@ pub async fn execute_grok_video_generate(input: GrokVideoGenerateInput, attempt_
 
   let lease_id = acq_res.lease_id.clone();
   let profile_id = acq_res.profile_id.clone();
-  info!("[GrokVideoGenerate] Lease acquired: {lease_id} for profile {profile_id}");
+  let worker_id = acq_res.worker_id.clone();
+  info!("[GrokVideoGenerate] Lease acquired: {lease_id} for worker {worker_id} (profile {profile_id})");
 
   let mut guard = LeaseGuard::new(lease_id.clone());
 
@@ -218,7 +219,7 @@ pub async fn execute_grok_video_generate(input: GrokVideoGenerateInput, attempt_
 
     let client = Client::builder().timeout(Duration::from_millis(timeout_val + 10000)).build().map_err(|e| format!("Failed to create client: {e}"))?;
 
-    let bridge_url = format!("{}/v1/workers/{profile_id}/dispatch", get_donut_browser_api_base_url());
+    let bridge_url = build_worker_dispatch_url(&get_donut_browser_api_base_url(), &worker_id);
 
     let (resp_res, was_cancelled) = tokio::select! {
       res = client.post(&bridge_url).json(&req_payload).send() => {
@@ -238,7 +239,7 @@ pub async fn execute_grok_video_generate(input: GrokVideoGenerateInput, attempt_
     };
 
     if was_cancelled {
-      info!("[GrokVideoGenerate] Job cancelled in-flight! Dispatching cancel request to worker {profile_id}");
+      info!("[FLOWORD][CANCEL] Job cancelled in-flight! Dispatching cancel request to worker {worker_id}");
       let cancel_payload = serde_json::json!({
         "protocol": "floword-production",
         "protocolVersion": 1,
@@ -315,8 +316,8 @@ pub async fn execute_grok_video_generate(input: GrokVideoGenerateInput, attempt_
     let hb_final = heartbeat_lease(&lease_id, hb_final_req).await;
     match hb_final {
       Ok(hb_resp) => {
-        if hb_resp.status != "ACTIVE" {
-          return Err(format!("TERMINAL_OWNERSHIP_LOST: Final heartbeat status was {}, expected ACTIVE", hb_resp.status));
+        if !hb_resp.status.is_active() {
+          return Err(format!("TERMINAL_OWNERSHIP_LOST: Final heartbeat status was {:?}, expected ACTIVE", hb_resp.status));
         }
       },
       Err(e) => {

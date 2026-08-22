@@ -13,6 +13,28 @@ pub fn get_extension_bridge_base_url() -> String {
   std::env::var("EXTENSION_BRIDGE_URL").unwrap_or_else(|_| get_donut_browser_api_base_url()).trim_end_matches('/').to_string()
 }
 
+/// Safely constructs the canonical worker dispatch URL using the strict lease worker_id path segment.
+pub fn build_worker_dispatch_url(base: &str, worker_id: &str) -> String {
+  let clean_base = base.trim_end_matches('/');
+  let clean_worker = worker_id.trim();
+  format!("{clean_base}/v1/workers/{clean_worker}/dispatch")
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum LeaseStatus {
+  Active,
+  Released,
+  Expired,
+  Revoked,
+}
+
+impl LeaseStatus {
+  pub fn is_active(&self) -> bool {
+    matches!(self, LeaseStatus::Active)
+  }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AcquireWorkerRequest {
   pub job_id: String,
@@ -42,14 +64,14 @@ pub struct HeartbeatLeaseRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HeartbeatLeaseResponse {
   pub lease_id: String,
-  pub status: String,
+  pub status: LeaseStatus,
   pub expires_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReleaseLeaseResponse {
   pub lease_id: String,
-  pub status: String,
+  pub status: LeaseStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -329,3 +351,46 @@ pub async fn list_donut_profiles() -> Result<ListDonutProfilesResponse, String> 
     Err(format!("List profiles request returned status {status}"))
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn test_build_worker_dispatch_url_with_prefixed_worker_id() {
+    let base = "http://127.0.0.1:10108";
+    let worker_id = "browser-profile:1";
+    let url = build_worker_dispatch_url(base, worker_id);
+    assert_eq!(url, "http://127.0.0.1:10108/v1/workers/browser-profile:1/dispatch");
+  }
+
+  #[test]
+  fn test_build_worker_dispatch_url_trim_trailing_slash() {
+    let base = "http://127.0.0.1:10108/";
+    let worker_id = "browser-profile:abc_123";
+    let url = build_worker_dispatch_url(base, worker_id);
+    assert_eq!(url, "http://127.0.0.1:10108/v1/workers/browser-profile:abc_123/dispatch");
+  }
+
+  #[test]
+  fn test_lease_status_deserialization_screaming_snake_case() {
+    let json_active = r#"{"lease_id":"L_1","status":"ACTIVE","expires_at":"2026-08-22T12:00:00Z"}"#;
+    let resp: HeartbeatLeaseResponse = serde_json::from_str(json_active).expect("should deserialize ACTIVE");
+    assert_eq!(resp.status, LeaseStatus::Active);
+    assert!(resp.status.is_active());
+
+    let json_released = r#"{"lease_id":"L_1","status":"RELEASED","expires_at":"2026-08-22T12:00:00Z"}"#;
+    let resp: HeartbeatLeaseResponse = serde_json::from_str(json_released).expect("should deserialize RELEASED");
+    assert_eq!(resp.status, LeaseStatus::Released);
+    assert!(!resp.status.is_active());
+
+    let json_expired = r#"{"lease_id":"L_1","status":"EXPIRED","expires_at":"2026-08-22T12:00:00Z"}"#;
+    let resp: HeartbeatLeaseResponse = serde_json::from_str(json_expired).expect("should deserialize EXPIRED");
+    assert_eq!(resp.status, LeaseStatus::Expired);
+
+    let json_revoked = r#"{"lease_id":"L_1","status":"REVOKED","expires_at":"2026-08-22T12:00:00Z"}"#;
+    let resp: HeartbeatLeaseResponse = serde_json::from_str(json_revoked).expect("should deserialize REVOKED");
+    assert_eq!(resp.status, LeaseStatus::Revoked);
+  }
+}
+
