@@ -50,12 +50,11 @@ async fn run_migrations<P: AsRef<Path>>(database_file: P) -> Result<SqlitePool, 
 
   let pool = SqlitePool::connect_with(connection_options).await?;
 
-  // Run migrations regardless of whether the database is new, SQLx will track which migrations
-  // have been run.
-  // The migrations text get compiled into the binary, so no worries about build inclusion.
-  // Since the task database is being treated as ephemeral, we can always run migrations without
-  // worrying about previous state if we simply blow away old versions of the schema.
-  sqlx::migrate!("../../../../_database/sql/artcraft_migrations").run(&pool).await?;
+  let migrator = sqlx::migrate!("../../../../_database/sql/artcraft_migrations");
+  if let Err(e) = migrator.run(&pool).await {
+    pool.close().await;
+    return Err(e);
+  }
 
   Ok(pool)
 }

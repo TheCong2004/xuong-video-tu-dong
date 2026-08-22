@@ -36,36 +36,19 @@ use crate::core::commands::task_queue::tasks_nuke_all_command::tasks_nuke_all_co
 use crate::core::commands::pipeline::cancel_pipeline_job_command::cancel_pipeline_job_command;
 use crate::core::commands::pipeline::enqueue_pipeline_job_command::enqueue_pipeline_job_command;
 use crate::core::commands::pipeline::floword_commands::{
-  approve_publication_command, archive_content_page_command, cancel_floword_workflow,
-  check_storage_health_command, check_system_readiness_command, commit_bulk_import_command,
-  create_content_page_command, delete_content_page_publish_target_command, delete_prompt_template_command,
-  enqueue_floword_workflow, floword_dashboard_summary_command, get_content_page_command, get_floword_readiness,
-  get_floword_settings_command, get_floword_system_setting_command, get_floword_visual_provider, get_floword_workflow,
-  ingest_floword_source_image_command, list_browser_workers_command,
-  list_content_page_publish_targets_command, list_content_pages_command,
-  list_floword_workflows, list_job_publications_command, list_omniroute_models,
-  list_pipeline_job_events_command, list_pipeline_jobs_paginated_command, list_prompt_templates_command,
-  post_now_publication_command, reject_publication_command, resolve_floword_output_path_command,
-  retry_floword_job_from_start, retry_floword_step, retry_publication_command,
-  schedule_publication_command, skip_floword_research, test_floword_visual_provider,
-  update_content_page_command, update_floword_settings_command, update_floword_system_setting_command,
-  upsert_content_page_publish_target_command, upsert_prompt_template_command,
-  validate_bulk_import_command,
+  approve_publication_command, archive_content_page_command, cancel_floword_workflow, check_storage_health_command, check_system_readiness_command, commit_bulk_import_command, create_content_page_command, delete_content_page_publish_target_command, delete_prompt_template_command, enqueue_floword_workflow, floword_dashboard_summary_command, get_content_page_command, get_floword_readiness, get_floword_settings_command, get_floword_system_setting_command, get_floword_visual_provider, get_floword_workflow, ingest_floword_source_image_command, list_browser_workers_command, list_content_page_publish_targets_command, list_content_pages_command, list_donut_profiles_command, open_donut_browser_gui_command, list_floword_workflows, list_job_publications_command, list_omniroute_models, list_pipeline_job_events_command, list_pipeline_jobs_paginated_command, list_prompt_templates_command, post_now_publication_command, reject_publication_command, resolve_floword_output_path_command, retry_floword_job_from_start, retry_floword_step, retry_publication_command,
+  schedule_publication_command, skip_floword_research, test_floword_visual_provider, update_content_page_command, update_floword_settings_command, update_floword_system_setting_command, upsert_content_page_publish_target_command, upsert_prompt_template_command, validate_bulk_import_command,
 };
 use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
-use crate::core::commands::vynaro_command::{
-  vynaro_open_command, vynaro_start_command, vynaro_status_command, vynaro_stop_command,
-  VynaroProcessManager,
-};
-use crate::core::commands::inkos_command::{
-  inkos_start_command, inkos_status_command, inkos_stop_command, InkosProcessManager,
-};
+use crate::core::commands::vynaro_command::{vynaro_open_command, vynaro_start_command, vynaro_status_command, vynaro_stop_command, VynaroProcessManager};
+use crate::core::commands::inkos_command::{inkos_start_command, inkos_status_command, inkos_stop_command, InkosProcessManager};
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
 use crate::core::lifecycle::startup::handle_tauri_startup::handle_tauri_startup;
 use crate::core::lifecycle::startup::setup_main_window::setup_main_window;
 use crate::core::lifecycle::startup::tasks::spawn_auxiliary_backends::AuxiliaryBackendProcesses;
 use crate::core::lifecycle::startup::tasks::spawn_capcut_mate_backend::CapcutMateProcess;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::OmniRouteProcess;
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::{get_donut_runtime_status, RuntimeSupervisor};
 use crate::core::state::app_env_configs::app_env_configs::AppEnvConfigs;
 use crate::core::state::app_preferences::app_preferences_manager::load_app_preferences_or_default;
 use crate::core::state::artcraft_platform_info::ArtcraftPlatformInfo;
@@ -179,16 +162,7 @@ pub fn run() {
 
   println!("Initializing backend runtime...");
 
-  let builder = tauri::Builder::default()
-    .plugin(
-      tauri_plugin_log::Builder::default()
-        .level(log::LevelFilter::Info)
-        .targets(vec![
-          Target::new(TargetKind::Stdout),
-          Target::new(TargetKind::LogDir { file_name: Some(app_data_root.log_file_name_str().to_string()) }),
-        ])
-        .build(),
-    );
+  let builder = tauri::Builder::default().plugin(tauri_plugin_log::Builder::default().level(log::LevelFilter::Info).targets(vec![Target::new(TargetKind::Stdout), Target::new(TargetKind::LogDir { file_name: Some(app_data_root.log_file_name_str().to_string()) })]).build());
   let builder = vynaro::init_vynaro(builder)
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
@@ -222,7 +196,7 @@ pub fn run() {
       let dispatcher = command_dispatcher_2.clone();
 
       tauri::async_runtime::block_on(async move {
-        let result = setup_main_window(&app).await;
+        let _setup_result = setup_main_window(&app).await;
 
         let result = handle_tauri_startup(handle, root, env_config, artcraft_platform_info_2, artcraft_usage_tracker_2, storyteller_creds, sora_creds, sora_tasks, midjourney_creds_manager_2, grok_creds_manager_2, grok_prompt_queue_2, worldlabs_bearer_bridge_2, worldlabs_creds_manager_2, provider_credential_cache_2, dispatcher).await;
 
@@ -251,6 +225,7 @@ pub fn run() {
     .manage(worldlabs_creds_manager)
     .manage(VynaroProcessManager::default())
     .manage(InkosProcessManager::default());
+  let builder = builder.manage(RuntimeSupervisor::default());
 
   // TODO: Break this out into another module, because RustRover/IntelliJ lags with these macros.
   //  My first attempt at naively doing this didn't work because the macros can't find their codegen'd targets.
@@ -329,11 +304,14 @@ pub fn run() {
     archive_content_page_command,
     resolve_floword_output_path_command,
     list_browser_workers_command,
+    list_donut_profiles_command,
+    open_donut_browser_gui_command,
     ingest_floword_source_image_command,
     get_floword_settings_command,
     get_floword_system_setting_command,
     update_floword_settings_command,
     update_floword_system_setting_command,
+    get_donut_runtime_status,
     list_pipeline_job_events_command,
     list_job_publications_command,
     approve_publication_command,
@@ -531,6 +509,9 @@ pub fn run() {
       }
       if let Some(processes) = app.try_state::<AuxiliaryBackendProcesses>() {
         processes.stop();
+      }
+      if let Some(supervisor) = app.try_state::<RuntimeSupervisor>() {
+        supervisor.stop();
       }
     }
   });

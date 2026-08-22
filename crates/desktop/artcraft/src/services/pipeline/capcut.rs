@@ -42,11 +42,14 @@ pub fn prepare_capcut(context: &PipelineContext) -> Result<CapcutInput, Pipeline
   let video_track = track(tracks, "video", timeline_ref)?;
   let voice_track = track(tracks, "voice", timeline_ref)?;
 
-  let video_segments = segments(video_track, timeline_ref)?.iter().map(|segment| {
-    let artifact_id = segment.get("artifactId").and_then(Value::as_str).ok_or_else(|| invalid(timeline_ref, "video segment artifact ID is missing"))?;
-    let visual = visuals.iter().find(|artifact| artifact.artifact_id == artifact_id).ok_or_else(|| invalid(timeline_ref, "video segment references an unregistered visual artifact"))?;
-    placement(segment, visual, duration_us)
-  }).collect::<Result<Vec<_>, _>>()?;
+  let video_segments = segments(video_track, timeline_ref)?
+    .iter()
+    .map(|segment| {
+      let artifact_id = segment.get("artifactId").and_then(Value::as_str).ok_or_else(|| invalid(timeline_ref, "video segment artifact ID is missing"))?;
+      let visual = visuals.iter().find(|artifact| artifact.artifact_id == artifact_id).ok_or_else(|| invalid(timeline_ref, "video segment references an unregistered visual artifact"))?;
+      placement(segment, visual, duration_us)
+    })
+    .collect::<Result<Vec<_>, _>>()?;
   if video_segments.is_empty() {
     return Err(invalid(timeline_ref, "video track has no segments"));
   }

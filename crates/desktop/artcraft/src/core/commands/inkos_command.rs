@@ -16,9 +16,7 @@ pub struct InkosProcessManager {
 
 impl Default for InkosProcessManager {
   fn default() -> Self {
-    Self {
-      child: Mutex::new(None),
-    }
+    Self { child: Mutex::new(None) }
   }
 }
 
@@ -142,12 +140,12 @@ fn check_and_clean_child(manager: &InkosProcessManager) -> (bool, Option<u32>) {
       Ok(Some(_status)) => {
         *lock = None;
         (false, None)
-      }
+      },
       Ok(None) => (true, Some(child.id())),
       Err(_) => {
         *lock = None;
         (false, None)
-      }
+      },
     }
   } else {
     (false, None)
@@ -155,128 +153,49 @@ fn check_and_clean_child(manager: &InkosProcessManager) -> (bool, Option<u32>) {
 }
 
 #[tauri::command]
-pub fn inkos_status_command(
-  manager: State<'_, InkosProcessManager>,
-) -> InkosStatusResponse {
+pub fn inkos_status_command(manager: State<'_, InkosProcessManager>) -> InkosStatusResponse {
   let (is_alive, _pid) = check_and_clean_child(&manager);
   let port_ready = is_port_open(4567);
 
   if port_ready {
-    InkosStatusResponse {
-      status: "ready".to_string(),
-      ui_ready: true,
-      api_ready: true,
-      message: Some("InkOS Studio single-process server is ready on port 4567".to_string()),
-      error: None,
-    }
+    InkosStatusResponse { status: "ready".to_string(), ui_ready: true, api_ready: true, message: Some("InkOS Studio single-process server is ready on port 4567".to_string()), error: None }
   } else if is_alive {
-    InkosStatusResponse {
-      status: "starting".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: Some("InkOS Studio process is running, waiting for port 4567...".to_string()),
-      error: None,
-    }
+    InkosStatusResponse { status: "starting".to_string(), ui_ready: false, api_ready: false, message: Some("InkOS Studio process is running, waiting for port 4567...".to_string()), error: None }
   } else {
-    InkosStatusResponse {
-      status: "stopped".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: Some("InkOS Studio is stopped".to_string()),
-      error: None,
-    }
+    InkosStatusResponse { status: "stopped".to_string(), ui_ready: false, api_ready: false, message: Some("InkOS Studio is stopped".to_string()), error: None }
   }
 }
 
 #[tauri::command]
-pub fn inkos_start_command(
-  manager: State<'_, InkosProcessManager>,
-) -> InkosStatusResponse {
+pub fn inkos_start_command(manager: State<'_, InkosProcessManager>) -> InkosStatusResponse {
   if is_port_open(4567) {
-    return InkosStatusResponse {
-      status: "ready".to_string(),
-      ui_ready: true,
-      api_ready: true,
-      message: Some("InkOS Studio port 4567 is already reachable".to_string()),
-      error: None,
-    };
+    return InkosStatusResponse { status: "ready".to_string(), ui_ready: true, api_ready: true, message: Some("InkOS Studio port 4567 is already reachable".to_string()), error: None };
   }
 
   let inkos_dir = resolve_inkos_dir();
   if !inkos_dir.exists() || !inkos_dir.join("package.json").exists() {
-    return InkosStatusResponse {
-      status: "failed".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: None,
-      error: Some(format!(
-        "INKOS_ENTRY_NOT_FOUND: InkOS directory or package.json missing at {}",
-        inkos_dir.display()
-      )),
-    };
+    return InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some(format!("INKOS_ENTRY_NOT_FOUND: InkOS directory or package.json missing at {}", inkos_dir.display())) };
   }
 
   let studio_package = inkos_dir.join("packages").join("studio").join("package.json");
   if !studio_package.exists() {
-    return InkosStatusResponse {
-      status: "failed".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: None,
-      error: Some(format!(
-        "INKOS_ENTRY_NOT_FOUND: packages/studio/package.json missing at {}",
-        inkos_dir.display()
-      )),
-    };
+    return InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some(format!("INKOS_ENTRY_NOT_FOUND: packages/studio/package.json missing at {}", inkos_dir.display())) };
   }
 
   ensure_inkos_json(&inkos_dir);
 
-  let raw_built_entry = inkos_dir
-    .join("packages")
-    .join("studio")
-    .join("dist")
-    .join("api")
-    .join("index.js");
+  let raw_built_entry = inkos_dir.join("packages").join("studio").join("dist").join("api").join("index.js");
 
-  let studio_entry = if raw_built_entry.exists() {
-    clean_win_path(raw_built_entry.canonicalize().unwrap_or(raw_built_entry))
-  } else {
-    raw_built_entry
-  };
+  let studio_entry = if raw_built_entry.exists() { clean_win_path(raw_built_entry.canonicalize().unwrap_or(raw_built_entry)) } else { raw_built_entry };
 
   if !studio_entry.is_file() {
-    return InkosStatusResponse {
-      status: "failed".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: None,
-      error: Some(format!(
-        "INKOS_ENTRY_NOT_FOUND: InkOS Studio entry file missing at {}. Please run: cd {} && pnpm --filter @actalk/inkos-studio build",
-        studio_entry.display(),
-        inkos_dir.display()
-      )),
-    };
+    return InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some(format!("INKOS_ENTRY_NOT_FOUND: InkOS Studio entry file missing at {}. Please run: cd {} && pnpm --filter @actalk/inkos-studio build", studio_entry.display(), inkos_dir.display())) };
   }
 
-  let studio_html = inkos_dir
-    .join("packages")
-    .join("studio")
-    .join("dist")
-    .join("index.html");
+  let studio_html = inkos_dir.join("packages").join("studio").join("dist").join("index.html");
 
   if !studio_html.is_file() {
-    return InkosStatusResponse {
-      status: "failed".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: None,
-      error: Some(format!(
-        "INKOS_NOT_BUILT: InkOS Studio index.html missing at {}. Please run: cd {} && pnpm --filter @actalk/inkos-studio build",
-        studio_html.display(),
-        inkos_dir.display()
-      )),
-    };
+    return InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some(format!("INKOS_NOT_BUILT: InkOS Studio index.html missing at {}. Please run: cd {} && pnpm --filter @actalk/inkos-studio build", studio_html.display(), inkos_dir.display())) };
   }
 
   let node_exe = resolve_node_executable();
@@ -289,13 +208,7 @@ pub fn inkos_start_command(
   println!("[InkOS] studio_entry.is_file() = {}", studio_entry.is_file());
 
   let mut cmd = Command::new(&node_exe);
-  cmd.arg(&studio_entry)
-    .arg(&project_root)
-    .env("INKOS_STUDIO_PORT", "4567")
-    .env("INKOS_PROJECT_ROOT", &project_root)
-    .current_dir(&inkos_dir)
-    .stdout(Stdio::inherit())
-    .stderr(Stdio::inherit());
+  cmd.arg(&studio_entry).arg(&project_root).env("INKOS_STUDIO_PORT", "4567").env("INKOS_PROJECT_ROOT", &project_root).current_dir(&inkos_dir).stdout(Stdio::inherit()).stderr(Stdio::inherit());
 
   println!("[InkOS] program = {:?}", cmd.get_program());
   println!("[InkOS] args = {:?}", cmd.get_args().collect::<Vec<_>>());
@@ -303,14 +216,8 @@ pub fn inkos_start_command(
   let mut child = match cmd.spawn() {
     Ok(c) => c,
     Err(e) => {
-      return InkosStatusResponse {
-        status: "failed".to_string(),
-        ui_ready: false,
-        api_ready: false,
-        message: None,
-        error: Some(format!("INKOS_SPAWN_FAILED: Failed to spawn InkOS process with node: {}", e)),
-      };
-    }
+      return InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some(format!("INKOS_SPAWN_FAILED: Failed to spawn InkOS process with node: {}", e)) };
+    },
   };
 
   // Poll for readiness on port 4567 while verifying process stays alive
@@ -320,39 +227,18 @@ pub fn inkos_start_command(
   while start_time.elapsed() < timeout {
     match child.try_wait() {
       Ok(Some(exit_status)) => {
-        return InkosStatusResponse {
-          status: "failed".to_string(),
-          ui_ready: false,
-          api_ready: false,
-          message: None,
-          error: Some(format!(
-            "INKOS_PROCESS_EXITED: InkOS process exited prematurely with code {}",
-            exit_status
-          )),
-        };
-      }
-      Ok(None) => {}
+        return InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some(format!("INKOS_PROCESS_EXITED: InkOS process exited prematurely with code {}", exit_status)) };
+      },
+      Ok(None) => {},
       Err(err) => {
-        return InkosStatusResponse {
-          status: "failed".to_string(),
-          ui_ready: false,
-          api_ready: false,
-          message: None,
-          error: Some(format!("INKOS_SPAWN_FAILED: Process status error: {}", err)),
-        };
-      }
+        return InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some(format!("INKOS_SPAWN_FAILED: Process status error: {}", err)) };
+      },
     }
 
     if is_port_open(4567) {
       let mut lock = manager.child.lock().unwrap_or_else(|e| e.into_inner());
       *lock = Some(child);
-      return InkosStatusResponse {
-        status: "ready".to_string(),
-        ui_ready: true,
-        api_ready: true,
-        message: Some("InkOS Studio single-process server started successfully on port 4567".to_string()),
-        error: None,
-      };
+      return InkosStatusResponse { status: "ready".to_string(), ui_ready: true, api_ready: true, message: Some("InkOS Studio single-process server started successfully on port 4567".to_string()), error: None };
     }
 
     thread::sleep(Duration::from_millis(400));
@@ -361,19 +247,11 @@ pub fn inkos_start_command(
   let mut lock = manager.child.lock().unwrap_or_else(|e| e.into_inner());
   *lock = Some(child);
 
-  InkosStatusResponse {
-    status: "failed".to_string(),
-    ui_ready: false,
-    api_ready: false,
-    message: None,
-    error: Some("INKOS_START_TIMEOUT: Timed out waiting for port 4567 after 25s".to_string()),
-  }
+  InkosStatusResponse { status: "failed".to_string(), ui_ready: false, api_ready: false, message: None, error: Some("INKOS_START_TIMEOUT: Timed out waiting for port 4567 after 25s".to_string()) }
 }
 
 #[tauri::command]
-pub fn inkos_stop_command(
-  manager: State<'_, InkosProcessManager>,
-) -> InkosStatusResponse {
+pub fn inkos_stop_command(manager: State<'_, InkosProcessManager>) -> InkosStatusResponse {
   let mut lock = manager.child.lock().unwrap_or_else(|e| e.into_inner());
   if let Some(mut child) = lock.take() {
     let pid = child.id();
@@ -382,25 +260,11 @@ pub fn inkos_stop_command(
 
     #[cfg(target_os = "windows")]
     {
-      let _ = background_command(Command::new("taskkill"))
-        .args(["/PID", &pid.to_string(), "/T", "/F"])
-        .output();
+      let _ = background_command(Command::new("taskkill")).args(["/PID", &pid.to_string(), "/T", "/F"]).output();
     }
 
-    InkosStatusResponse {
-      status: "stopped".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: Some("InkOS process terminated".to_string()),
-      error: None,
-    }
+    InkosStatusResponse { status: "stopped".to_string(), ui_ready: false, api_ready: false, message: Some("InkOS process terminated".to_string()), error: None }
   } else {
-    InkosStatusResponse {
-      status: "stopped".to_string(),
-      ui_ready: false,
-      api_ready: false,
-      message: Some("No InkOS process handle found".to_string()),
-      error: None,
-    }
+    InkosStatusResponse { status: "stopped".to_string(), ui_ready: false, api_ready: false, message: Some("No InkOS process handle found".to_string()), error: None }
   }
 }

@@ -1,5 +1,10 @@
 [workspace]
 resolver = "2"
+exclude = [
+  "runtimes/donut/src-tauri",
+  "vynaro",
+  "vynaro/src-tauri",
+]
 
 # This block defines the workspace members.
 # When we add a library or binary crate, it needs an entry here.

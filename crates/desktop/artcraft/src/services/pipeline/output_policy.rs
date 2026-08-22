@@ -13,11 +13,7 @@ use log::info;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 
-const WINDOWS_RESERVED_NAMES: &[&str] = &[
-  "CON", "PRN", "AUX", "NUL",
-  "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-  "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-];
+const WINDOWS_RESERVED_NAMES: &[&str] = &["CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"];
 
 /// Sanitizes a page name into a Windows-safe folder component.
 ///
@@ -31,13 +27,7 @@ pub fn sanitize_page_name(name: &str) -> String {
   }
 
   // Filter forbidden characters
-  let mut sanitized: String = trimmed
-    .chars()
-    .filter(|c| {
-      !matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*')
-        && !c.is_control()
-    })
-    .collect();
+  let mut sanitized: String = trimmed.chars().filter(|c| !matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') && !c.is_control()).collect();
 
   // Strip trailing dots and spaces (Windows forbidden on directory names)
   sanitized = sanitized.trim_end_matches(['.', ' ']).trim().to_string();
@@ -82,14 +72,9 @@ impl OutputPathResolver {
     let date_str = current_local_date_string();
 
     let root_file_name = root_path.file_name().and_then(|s| s.to_str()).unwrap_or("");
-    let is_already_page_dir = root_file_name.eq_ignore_ascii_case(page_name.trim())
-      || root_file_name.eq_ignore_ascii_case(&safe_page);
+    let is_already_page_dir = root_file_name.eq_ignore_ascii_case(page_name.trim()) || root_file_name.eq_ignore_ascii_case(&safe_page);
 
-    let target = if is_already_page_dir {
-      root_path.join(&date_str)
-    } else {
-      root_path.join(&safe_page).join(&date_str)
-    };
+    let target = if is_already_page_dir { root_path.join(&date_str) } else { root_path.join(&safe_page).join(&date_str) };
 
     Ok(target)
   }
@@ -98,9 +83,7 @@ impl OutputPathResolver {
   pub fn prepare_output_directory(output_root: &str, page_name: &str) -> Result<PathBuf, String> {
     let dir = Self::resolve_page_date_directory(output_root, page_name)?;
 
-    fs::create_dir_all(&dir).map_err(|e| {
-      format!("OUTPUT_DIRECTORY_CREATE_FAILED: Cannot create directory {}: {e}", dir.display())
-    })?;
+    fs::create_dir_all(&dir).map_err(|e| format!("OUTPUT_DIRECTORY_CREATE_FAILED: Cannot create directory {}: {e}", dir.display()))?;
 
     // Verify writable with a temporary probe file
     let probe_path = dir.join(format!(".write_test_{}", uuid::Uuid::new_v4()));
@@ -121,11 +104,7 @@ impl OutputPathResolver {
   /// Format: `HH-mm-ss_<short_job_id>_<artifact_type>.<ext>`
   pub fn generate_final_filename(job_id: &str, artifact_type: &str, ext: &str) -> String {
     let time_str = current_local_time_string();
-    let short_id = if job_id.len() >= 8 {
-      &job_id[..8]
-    } else {
-      job_id
-    };
+    let short_id = if job_id.len() >= 8 { &job_id[..8] } else { job_id };
     let clean_type = artifact_type.replace([' ', '-', '/'], "_");
     let clean_ext = ext.trim_start_matches('.');
 
@@ -149,9 +128,7 @@ impl OutputPathResolver {
     }
 
     // Try copy then verify size to support cross-volume transfers safely
-    fs::copy(source_file, &dest_path).map_err(|e| {
-      format!("OUTPUT_FINALIZE_FAILED: Failed to copy file to {}: {e}", dest_path.display())
-    })?;
+    fs::copy(source_file, &dest_path).map_err(|e| format!("OUTPUT_FINALIZE_FAILED: Failed to copy file to {}: {e}", dest_path.display()))?;
 
     info!("[OutputPolicy] Published final output from {} to {}", source_file.display(), dest_path.display());
     Ok(dest_path)

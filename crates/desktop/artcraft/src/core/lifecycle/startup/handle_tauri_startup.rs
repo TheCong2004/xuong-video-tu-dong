@@ -7,6 +7,7 @@ use crate::core::lifecycle::startup::tasks::spawn_capcut_mate_backend::{health_r
 use crate::core::lifecycle::startup::tasks::spawn_discord_presence_thread::spawn_discord_presence_thread;
 use crate::core::lifecycle::startup::tasks::spawn_main_window_thread::spawn_main_window_thread;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::{health_ready as omniroute_health_ready, spawn_omniroute_backend};
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::start_runtime_supervisor;
 use crate::core::lifecycle::startup::tasks::spawn_sora_task_polling_thread::spawn_sora_task_polling_thread;
 use crate::core::lifecycle::startup::tasks::spawn_storyteller_threads::spawn_storyteller_threads;
 use crate::core::providers::credentials::provider_credential_loading_cache::ProviderCredentialLoadingCache;
@@ -35,6 +36,11 @@ use tauri::{AppHandle, Manager};
 
 pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_configs: AppEnvConfigs, artcraft_platform_info: ArtcraftPlatformInfo, artcraft_usage_tracker: ArtcraftUsageTracker, storyteller_creds_manager: StorytellerCredentialManager, sora_credential_manager: SoraCredentialManager, sora_task_queue: SoraTaskQueue, mj_creds_manager: MidjourneyCredentialManager, grok_creds_manager: GrokCredentialManager, grok_image_prompt_queue: GrokImagePromptQueue, worldlabs_bearer_bridge: WorldlabsBearerBridge, worldlabs_creds_manager: WorldlabsCredentialManager, credential_cache: ProviderCredentialLoadingCache, command_dispatcher: CommandDispatcher) -> AnyhowResult<()> {
   set_app_log_level(&app, &root)?;
+
+  // Floword owns the headless Donut runtime. It is intentionally started in a
+  // background thread so the Studio can render while runtime health is pending.
+  let app_for_donut = app.clone();
+  std::thread::spawn(move || start_runtime_supervisor(&app_for_donut));
 
   // Python backend: capcut-mate owns :30000 (the single always-on Python port).
   // (artcraft-server.exe / spawn_unified_backend removed — it fought capcut-mate
@@ -97,10 +103,7 @@ pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_con
   tauri::async_runtime::spawn(pipeline_worker_thread(app.clone(), root.clone(), task_database.clone(), command_dispatcher));
 
   // Publishing worker: handles automated/approved social posting (FB, TikTok, YT Shorts)
-  crate::services::publishing::threads::publishing_worker_thread::PublishingWorkerThread::start(
-    app.clone(),
-    task_database.get_connection().clone(),
-  );
+  crate::services::publishing::threads::publishing_worker_thread::PublishingWorkerThread::start(app.clone(), task_database.get_connection().clone());
 
   spawn_discord_presence_thread()?;
 

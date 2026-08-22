@@ -280,24 +280,9 @@ fn is_healthy_connection(connection: &OmniRouteConnectionSummary) -> bool {
 }
 
 fn filter_video_models_by_active_connections(models: Vec<OmniRouteModel>, connections: &[OmniRouteConnectionSummary]) -> Vec<OmniRouteModel> {
-  let active_providers = connections
-    .iter()
-    .filter(|connection| is_healthy_connection(connection))
-    .map(|connection| connection.provider.trim().to_ascii_lowercase())
-    .filter(|provider| !provider.is_empty())
-    .collect::<HashSet<_>>();
+  let active_providers = connections.iter().filter(|connection| is_healthy_connection(connection)).map(|connection| connection.provider.trim().to_ascii_lowercase()).filter(|provider| !provider.is_empty()).collect::<HashSet<_>>();
 
-  models
-    .into_iter()
-    .filter(|model| model.model_type == "video" || model.model_type.starts_with("video"))
-    .filter(|model| {
-      [&model.provider, &model.owned_by, model.id.split('/').next().unwrap_or("")]
-        .into_iter()
-        .map(|provider| provider.trim().to_ascii_lowercase())
-        .filter(|provider| !provider.is_empty())
-        .any(|provider| active_providers.contains(&provider))
-    })
-    .collect()
+  models.into_iter().filter(|model| model.model_type == "video" || model.model_type.starts_with("video")).filter(|model| [&model.provider, &model.owned_by, model.id.split('/').next().unwrap_or("")].into_iter().map(|provider| provider.trim().to_ascii_lowercase()).filter(|provider| !provider.is_empty()).any(|provider| active_providers.contains(&provider))).collect()
 }
 
 pub async fn list_video_models() -> AnyhowResult<Vec<OmniRouteModel>> {
@@ -322,13 +307,7 @@ fn normalize_video_http_error(status: u16, body: &str) -> OmniRouteVideoError {
 /// Request video generation from OmniRoute. Returns a normalized result containing
 /// the direct download URL for the generated video. OmniRoute handles all provider
 /// selection, authentication, async polling, and fallback internally.
-pub async fn generate_video(
-  model: &str,
-  prompt: &str,
-  duration_seconds: Option<u16>,
-  aspect_ratio: Option<&str>,
-  timeout_secs: u64,
-) -> Result<OmniRouteVideoResult, OmniRouteVideoError> {
+pub async fn generate_video(model: &str, prompt: &str, duration_seconds: Option<u16>, aspect_ratio: Option<&str>, timeout_secs: u64) -> Result<OmniRouteVideoResult, OmniRouteVideoError> {
   let base_url = get_llm_base_url();
   let url = format!("{}/v1/videos/generations", base_url.trim_end_matches('/'));
 
@@ -343,10 +322,7 @@ pub async fn generate_video(
     body["aspect_ratio"] = serde_json::Value::from(ratio);
   }
 
-  let client = Client::builder()
-    .timeout(Duration::from_secs(timeout_secs))
-    .build()
-    .map_err(|e| OmniRouteVideoError::Unavailable(e.to_string()))?;
+  let client = Client::builder().timeout(Duration::from_secs(timeout_secs)).build().map_err(|e| OmniRouteVideoError::Unavailable(e.to_string()))?;
 
   let mut req = client.post(&url).json(&body);
   if let Some(key) = get_llm_api_key() {
@@ -355,22 +331,10 @@ pub async fn generate_video(
 
   info!("OMNIROUTE_REQUEST capability=video_generation model={model} url={url}");
 
-  let response = req.send().await.map_err(|e| {
-    if e.is_timeout() {
-      OmniRouteVideoError::ProviderTimeout
-    } else {
-      OmniRouteVideoError::Unavailable(e.to_string())
-    }
-  })?;
+  let response = req.send().await.map_err(|e| if e.is_timeout() { OmniRouteVideoError::ProviderTimeout } else { OmniRouteVideoError::Unavailable(e.to_string()) })?;
 
   let status = response.status().as_u16();
-  let provider_header = response
-    .headers()
-    .get("x-omniroute-provider")
-    .or_else(|| response.headers().get("x-provider"))
-    .and_then(|v| v.to_str().ok())
-    .unwrap_or("omniroute")
-    .to_string();
+  let provider_header = response.headers().get("x-omniroute-provider").or_else(|| response.headers().get("x-provider")).and_then(|v| v.to_str().ok()).unwrap_or("omniroute").to_string();
 
   if !response.status().is_success() {
     let body_text = response.text().await.unwrap_or_default();
@@ -379,7 +343,7 @@ pub async fn generate_video(
   }
 
   let text = response.text().await.map_err(|e| OmniRouteVideoError::GenerationFailed(e.to_string()))?;
-  let parsed: Value = serde_json::from_str(&text).map_err(|e| OmniRouteVideoError::GenerationFailed(format!("JSON parse: {e}")))? ;
+  let parsed: Value = serde_json::from_str(&text).map_err(|e| OmniRouteVideoError::GenerationFailed(format!("JSON parse: {e}")))?;
 
   // OmniRoute video responses follow an OpenAI-compatible `{created, data: [{url}]}` shape.
   let data = parsed.get("data").and_then(|v| v.as_array()).ok_or_else(|| OmniRouteVideoError::GenerationFailed("missing data array in response".to_string()))?;
@@ -663,16 +627,8 @@ mod tests {
 
   #[test]
   fn video_catalog_requires_an_active_matching_provider_connection() {
-    let models = vec![
-      OmniRouteModel { id: "veoaifree-web/veo".into(), provider: String::new(), owned_by: "veoaifree-web".into(), model_type: "video".into() },
-      OmniRouteModel { id: "runway/gen-4".into(), provider: "runway".into(), owned_by: "runway".into(), model_type: "video".into() },
-      OmniRouteModel { id: "gemini-2.5-flash".into(), provider: "gemini".into(), owned_by: "google".into(), model_type: "chat".into() },
-    ];
-    let connections = vec![
-      OmniRouteConnectionSummary { provider: "gemini".into(), is_active: true, test_status: "active".into() },
-      OmniRouteConnectionSummary { provider: "runway".into(), is_active: true, test_status: "active".into() },
-      OmniRouteConnectionSummary { provider: "runway".into(), is_active: true, test_status: "rate_limited".into() },
-    ];
+    let models = vec![OmniRouteModel { id: "veoaifree-web/veo".into(), provider: String::new(), owned_by: "veoaifree-web".into(), model_type: "video".into() }, OmniRouteModel { id: "runway/gen-4".into(), provider: "runway".into(), owned_by: "runway".into(), model_type: "video".into() }, OmniRouteModel { id: "gemini-2.5-flash".into(), provider: "gemini".into(), owned_by: "google".into(), model_type: "chat".into() }];
+    let connections = vec![OmniRouteConnectionSummary { provider: "gemini".into(), is_active: true, test_status: "active".into() }, OmniRouteConnectionSummary { provider: "runway".into(), is_active: true, test_status: "active".into() }, OmniRouteConnectionSummary { provider: "runway".into(), is_active: true, test_status: "rate_limited".into() }];
 
     let usable = filter_video_models_by_active_connections(models, &connections);
 
@@ -682,10 +638,7 @@ mod tests {
   #[test]
   fn multiple_healthy_provider_accounts_share_the_same_video_model_pool() {
     let models = vec![OmniRouteModel { id: "seedance/v1".into(), provider: "seedance".into(), owned_by: "seedance".into(), model_type: "video".into() }];
-    let connections = vec![
-      OmniRouteConnectionSummary { provider: "seedance".into(), is_active: true, test_status: "active".into() },
-      OmniRouteConnectionSummary { provider: "seedance".into(), is_active: true, test_status: "active".into() },
-    ];
+    let connections = vec![OmniRouteConnectionSummary { provider: "seedance".into(), is_active: true, test_status: "active".into() }, OmniRouteConnectionSummary { provider: "seedance".into(), is_active: true, test_status: "active".into() }];
 
     let usable = filter_video_models_by_active_connections(models, &connections);
 

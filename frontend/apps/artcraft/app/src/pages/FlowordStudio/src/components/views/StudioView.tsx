@@ -21,7 +21,7 @@ import {
   Copy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ContentPage, IngestFlowordSourceImageResponse, ingestFlowordSourceImage, ArtifactRef as FlowordArtifactRef } from '../../api/flowordClient';
+import { ContentPage, IngestFlowordSourceImageResponse, ingestFlowordSourceImage, ArtifactRef as FlowordArtifactRef, DonutProfileEnriched } from '../../api/flowordClient';
 import { WorkflowInput, WorkflowRun, ArtifactRef } from '../../services/workflowEngine';
 
 interface StudioViewProps {
@@ -32,6 +32,7 @@ interface StudioViewProps {
   isRunning: boolean;
   onRunWorkflow: (input: WorkflowInput) => Promise<void>;
   onCancelWorkflow: () => Promise<void>;
+  profiles?: DonutProfileEnriched[];
 }
 
 export const StudioView: React.FC<StudioViewProps> = ({
@@ -42,6 +43,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
   isRunning,
   onRunWorkflow,
   onCancelWorkflow,
+  profiles = [],
 }) => {
   const [pipelineType, setPipelineType] = useState<'grok_content_pipeline' | 'grok_image_edit' | 'floword_video_pipeline'>('grok_content_pipeline');
   const [mode, setMode] = useState<'simple' | 'advanced'>('simple');
@@ -82,7 +84,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           });
           setSourceImageArtifact(res.artifact);
           setSourceImagePath(res.artifact.location);
-          setSourceImagePreviewUrl(res.preview_url);
+          setSourceImagePreviewUrl(base64Data || res.preview_url);
           toast.success('Đã lưu ảnh nguồn vào storage!', { id: toastId });
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
@@ -209,12 +211,12 @@ export const StudioView: React.FC<StudioViewProps> = ({
   };
 
   const GROK_STAGES = [
-    { key: 'QUEUED', label: '1. Ingest & Page Affinity', desc: 'Immutable snapshot & worker assignment' },
-    { key: 'GENERATING_IMAGE', label: '2. Grok Image Edit', desc: 'Synthesize edited image via Grok' },
-    { key: 'CONVERTING_9_16', label: '3. Grok 9:16 Expand', desc: 'Expand canvas to vertical 9:16' },
-    { key: 'GENERATING_VIDEO', label: '4. Grok Video Synthesis', desc: 'Diffusion motion synthesis' },
-    { key: 'SAVING_LOCAL', label: '5. Save Storage', desc: 'Persist to Page output root' },
-    { key: 'READY_TO_POST', label: '6. Ready to Post', desc: 'Verified local master video' },
+    { key: 'QUEUED', label: '1. Nạp Ảnh & Gán Hồ Sơ', desc: 'Lưu trữ ảnh gốc & phân bổ trình duyệt' },
+    { key: 'GENERATING_IMAGE', label: '2. Chỉnh Sửa Ảnh (Grok Flux)', desc: 'Tạo ảnh mới theo prompt từ ảnh nguồn' },
+    { key: 'CONVERTING_9_16', label: '3. Mở Rộng Khung Dọc 9:16', desc: 'Mở rộng tỷ lệ 9:16 giữ nguyên chủ thể' },
+    { key: 'GENERATING_VIDEO', label: '4. Tạo Chuyển Động Video', desc: 'Tạo chuyển động video bằng AI Grok' },
+    { key: 'SAVING_LOCAL', label: '5. Lưu File Vào Máy', desc: 'Lưu video master vào thư mục Page' },
+    { key: 'READY_TO_POST', label: '6. Sẵn Sàng Xuất Bản', desc: 'Video hoàn thiện sẵn sàng đăng tải' },
   ];
 
   const latestVideoArtifact = activeRun?.artifacts?.find(
@@ -236,16 +238,16 @@ export const StudioView: React.FC<StudioViewProps> = ({
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-bold text-white">Floword Studio Editor</h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/[0.06] text-zinc-300">
-                {selectedPage?.name || 'General Production'}
+                {selectedPage?.name || 'Sản Xuất Chung'}
               </span>
               {selectedPage?.browser_profile_id && (
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                  Profile: {selectedPage.browser_profile_id}
+                  Hồ Sơ: {selectedPage.browser_profile_id}
                 </span>
               )}
             </div>
             <div className="text-[11px] text-zinc-400 mt-0.5">
-              Production Phase 1: Ingest Image &rarr; Grok Edit &rarr; 9:16 &rarr; Video &rarr; Local Save.
+              Quy Trình Tự Động: Nạp Ảnh &rarr; Sửa Grok &rarr; 9:16 &rarr; Tạo Video &rarr; Lưu Về Máy.
             </div>
           </div>
         </div>
@@ -260,7 +262,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 mode === 'simple' ? 'bg-white/[0.1] text-white shadow' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              Simple Mode
+              Chế Độ Cơ Bản
             </button>
             <button
               type="button"
@@ -269,7 +271,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 mode === 'advanced' ? 'bg-white/[0.1] text-white shadow' : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              Advanced Mode
+              Chế Độ Nâng Cao
             </button>
           </div>
 
@@ -280,7 +282,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 text-xs font-semibold border border-rose-500/30 transition"
             >
               <RotateCcw className="h-3.5 w-3.5 animate-spin" />
-              Stop Run
+              Dừng Chạy
             </button>
           ) : (
             <button
@@ -289,7 +291,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               className="flex items-center gap-2 px-5 py-2 rounded-xl bg-gradient-to-r from-[#e54d5e] to-[#c23b4c] hover:from-[#f05c6d] hover:to-[#d04657] text-white text-xs font-semibold shadow-lg shadow-rose-500/20 transition transform active:scale-95"
             >
               <Play className="h-4 w-4 fill-white" />
-              Run Production Pipeline
+              Chạy Quy Trình Sản Xuất
             </button>
           )}
         </div>
@@ -302,7 +304,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           <div>
             <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
               <Layers className="h-4 w-4 text-rose-400" />
-              Grok Pipeline Stages
+              Giai Đoạn Sản Xuất Grok
             </div>
 
             <div className="space-y-2">
@@ -337,12 +339,12 @@ export const StudioView: React.FC<StudioViewProps> = ({
 
           <div className="mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-[11px] text-zinc-400 space-y-1">
             <div className="flex items-center justify-between">
-              <span>Profile Affinity:</span>
-              <span className="text-blue-400 font-mono font-medium">{selectedPage?.browser_profile_id || 'Chưa gán profile'}</span>
+              <span>Hồ Sơ Trình Duyệt:</span>
+              <span className="text-blue-400 font-mono font-medium">{selectedPage?.browser_profile_id || 'Chưa gán hồ sơ'}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>Output Path:</span>
-              <span className="text-zinc-400 font-mono text-[10px] truncate max-w-[140px]">{selectedPage?.output_root || 'Not set'}</span>
+              <span>Thư Mục Đầu Ra:</span>
+              <span className="text-zinc-400 font-mono text-[10px] truncate max-w-[140px]">{selectedPage?.output_root || 'Chưa thiết lập'}</span>
             </div>
           </div>
         </div>
@@ -351,23 +353,23 @@ export const StudioView: React.FC<StudioViewProps> = ({
         <div className="lg:col-span-5 rounded-2xl bg-[#121622] border border-white/[0.08] p-4 overflow-y-auto space-y-4 text-xs">
           <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
             <FileText className="h-4 w-4 text-rose-400" />
-            Content Specification
+            Cấu Hình Nội Dung & Prompt
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Pipeline Workflow Mode</label>
+            <label className="block text-zinc-400 mb-1 font-medium">Chế Độ Quy Trình</label>
             <select
               value={pipelineType}
               onChange={(e) => setPipelineType(e.target.value as any)}
               className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 font-semibold"
             >
-              <option value="grok_content_pipeline">Grok Full Production (Image Edit &rarr; 9:16 &rarr; Video &rarr; Local Save)</option>
-              <option value="grok_image_edit">Grok Image Edit Only</option>
+              <option value="grok_content_pipeline">Grok Tự Động Toàn Diện (Sửa Ảnh &rarr; 9:16 &rarr; Tạo Video &rarr; Lưu File)</option>
+              <option value="grok_image_edit">Chỉ Chỉnh Sửa Ảnh Bằng Grok</option>
             </select>
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Target Page / Preset</label>
+            <label className="block text-zinc-400 mb-1 font-medium">Chọn Page / Kênh Đích</label>
             <select
               value={activePageId || ''}
               onChange={(e) => onSelectPage(e.target.value)}
@@ -384,7 +386,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           {/* DRAG / DROP / PASTE SOURCE IMAGE BOX */}
           <div>
             <label className="block text-zinc-400 mb-1 font-medium">
-              Source Image <span className="text-rose-400">* (Kéo thả, Paste Ctrl+V hoặc chọn file)</span>
+              Ảnh Nguồn <span className="text-rose-400">* (Kéo thả, Dán Ctrl+V hoặc bấm để chọn file)</span>
             </label>
 
             <input
@@ -421,7 +423,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Source Image Ready
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Ảnh Nguồn Đã Sẵn Sàng
                     </div>
                     <div className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
                       {sourceImagePath}
@@ -452,7 +454,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                     {isIngesting ? 'Đang lưu ảnh nguồn...' : 'Kéo thả ảnh hoặc dán Ctrl+V tại đây'}
                   </div>
                   <div className="text-[10px] text-zinc-500 mt-0.5">
-                    Hỗ trợ PNG, JPG, WEBP &bull; Nhấp để duyệt file
+                    Hỗ trợ PNG, JPG, WEBP &bull; Bấm để duyệt file
                   </div>
                 </div>
               )}
@@ -460,7 +462,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium">Video Topic / Title</label>
+            <label className="block text-zinc-400 mb-1 font-medium">Chủ Đề / Tiêu Đề Video</label>
             <input
               type="text"
               value={topic}
@@ -471,7 +473,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
 
           <div>
             <label className="block text-zinc-400 mb-1 font-medium">
-              Image Edit Prompt (Grok FLUX)
+              Prompt Chỉnh Sửa Ảnh (Grok FLUX)
               {selectedPage?.default_image_prompt && !imagePrompt && (
                 <span className="text-[10px] text-zinc-500 ml-2">(Kế thừa từ Page)</span>
               )}
@@ -480,7 +482,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               rows={3}
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
-              placeholder={selectedPage?.default_image_prompt || 'Nhập prompt chỉnh sửa ảnh Grok...'}
+              placeholder={selectedPage?.default_image_prompt || 'Nhập mô tả / prompt để Grok chỉnh sửa ảnh...'}
               className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
             />
           </div>
@@ -488,7 +490,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           {pipelineType === 'grok_content_pipeline' && (
             <div>
               <label className="block text-zinc-400 mb-1 font-medium">
-                9:16 Vertical Outpaint Prompt
+                Prompt Mở Rộng Khung Dọc 9:16
                 {selectedPage?.default_expand_9_16_prompt && !expand916Prompt && (
                   <span className="text-[10px] text-zinc-500 ml-2">(Kế thừa từ Page)</span>
                 )}
@@ -497,7 +499,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 rows={2}
                 value={expand916Prompt}
                 onChange={(e) => setExpand916Prompt(e.target.value)}
-                placeholder={selectedPage?.default_expand_9_16_prompt || 'Nhập prompt mở rộng khung hình 9:16...'}
+                placeholder={selectedPage?.default_expand_9_16_prompt || 'Nhập prompt mở rộng khung hình dọc 9:16...'}
                 className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
               />
             </div>
@@ -506,7 +508,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           {pipelineType === 'grok_content_pipeline' && (
             <div>
               <label className="block text-zinc-400 mb-1 font-medium">
-                Video Motion Animation Prompt
+                Prompt Tạo Chuyển Động Video
                 {selectedPage?.default_video_prompt && !videoPrompt && (
                   <span className="text-[10px] text-zinc-500 ml-2">(Kế thừa từ Page)</span>
                 )}
@@ -515,7 +517,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 rows={2}
                 value={videoPrompt}
                 onChange={(e) => setVideoPrompt(e.target.value)}
-                placeholder={selectedPage?.default_video_prompt || 'Nhập prompt chuyển động video Grok...'}
+                placeholder={selectedPage?.default_video_prompt || 'Nhập prompt mô tả chuyển động camera/nhân vật...'}
                 className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
               />
             </div>
@@ -523,7 +525,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <label className="block text-zinc-400 mb-1 font-medium text-xs">Publishing Title</label>
+              <label className="block text-zinc-400 mb-1 font-medium text-xs">Tiêu Đề Khi Xuất Bản</label>
               <input
                 type="text"
                 value={title}
@@ -533,19 +535,19 @@ export const StudioView: React.FC<StudioViewProps> = ({
               />
             </div>
             <div>
-              <label className="block text-zinc-400 mb-1 font-medium text-xs">Structured Hashtags</label>
+              <label className="block text-zinc-400 mb-1 font-medium text-xs">Hashtag Bài Đăng</label>
               <input
                 type="text"
                 value={hashtags}
                 onChange={(e) => setHashtags(e.target.value)}
-                placeholder="cinema, review, viral, movies..."
+                placeholder="review, phim, viral, giaitri..."
                 className="w-full px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium text-xs">Publishing Caption</label>
+            <label className="block text-zinc-400 mb-1 font-medium text-xs">Nội Dung Bài Đăng (Caption)</label>
             <textarea
               rows={2}
               value={caption}
@@ -555,7 +557,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           </div>
 
           <div>
-            <label className="block text-zinc-400 mb-1 font-medium text-xs">Social Description (YouTube / SEO)</label>
+            <label className="block text-zinc-400 mb-1 font-medium text-xs">Mô Tả Chi Tiết (YouTube / SEO)</label>
             <textarea
               rows={2}
               value={description}
@@ -572,14 +574,14 @@ export const StudioView: React.FC<StudioViewProps> = ({
           <div className="flex-1 rounded-2xl bg-[#121622] border border-white/[0.08] p-4 flex flex-col overflow-hidden">
             <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-2">
               <Eye className="h-4 w-4 text-rose-400" />
-              Live Stage Preview
+              Xem Trước Trực Tiếp
             </div>
 
             <div className="flex-1 rounded-xl bg-black/40 border border-white/[0.05] flex flex-col items-center justify-center p-3 text-center overflow-hidden">
               {latestVideoArtifact ? (
                 <div className="w-full h-full flex flex-col items-center justify-center">
                   <div className="text-[11px] font-semibold text-emerald-400 mb-1 flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Video Ready: {latestVideoArtifact.name}
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Video Đã Hoàn Tất: {latestVideoArtifact.name}
                   </div>
                   <div className="text-[9px] text-zinc-400 font-mono truncate max-w-full px-2">
                     {latestVideoArtifact.path}
@@ -588,7 +590,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               ) : latestImageArtifact ? (
                 <div className="w-full h-full flex flex-col items-center justify-center">
                   <div className="text-[11px] font-semibold text-blue-400 mb-1">
-                    Generated Frame: {latestImageArtifact.name}
+                    Khung Hình Đã Tạo: {latestImageArtifact.name}
                   </div>
                   <div className="text-[9px] text-zinc-400 font-mono truncate max-w-full px-2">
                     {latestImageArtifact.path}
@@ -598,10 +600,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 <>
                   <Video className="h-8 w-8 text-zinc-600 mb-2" />
                   <div className="text-xs font-medium text-zinc-400">
-                    {isRunning ? `Stage: ${activeRun?.businessStatus || activeRun?.currentStage}...` : 'Ready for generation preview'}
+                    {isRunning ? `Giai đoạn: ${activeRun?.businessStatus || activeRun?.currentStage}...` : 'Sẵn sàng xem trước kết quả'}
                   </div>
                   <p className="text-[10px] text-zinc-600 mt-1 max-w-xs">
-                    Generated frames and video timeline will stream directly into this view.
+                    Hình ảnh và video tạo bởi Grok sẽ hiển thị trực tiếp tại đây.
                   </p>
                 </>
               )}
@@ -612,24 +614,83 @@ export const StudioView: React.FC<StudioViewProps> = ({
           <div className="h-48 rounded-2xl bg-[#0d1017] border border-white/[0.08] p-3 flex flex-col font-mono text-[11px] overflow-hidden">
             <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
-                <Terminal className="h-3.5 w-3.5" />
-                Execution Activity Log
+                <Terminal className="h-3.5 w-3.5 text-zinc-400" />
+                Nhật Ký Tiến Trình Thực Thi
               </span>
-              {activeRun?.businessStatus && (
-                <span className="text-rose-400 font-bold">{activeRun.businessStatus}</span>
-              )}
+              <div className="flex items-center gap-2">
+                {activeRun?.businessStatus && (
+                  <span className="text-rose-400 font-bold">{activeRun.businessStatus}</span>
+                )}
+                <button
+                  type="button"
+                  title="Sao chép toàn bộ nhật ký"
+                  onClick={() => {
+                    const lines = ['[00:00] Động cơ Floword đã sẵn sàng.'];
+                    if (selectedPage) {
+                      lines.push(`[00:01] Page đích: ${selectedPage.name}`);
+                      const profileId = selectedPage.browser_profile_id;
+                      const boundProfile = profileId ? profiles.find((p) => p.id === profileId) : undefined;
+                      if (profileId) {
+                        lines.push(`[00:02] Hồ sơ trình duyệt: ${boundProfile?.name ?? profileId} / ${profileId}`);
+                        lines.push(`[00:03] Trạng thái: ${boundProfile?.is_running ? `${boundProfile.worker_state || 'Đang chạy'}${boundProfile.grok_logged_in ? ' ● Grok ✓' : ''}${boundProfile.extension_ready ? ' ● Ext ✓' : ''}` : 'Đang tắt'}`);
+                      } else {
+                        lines.push('[00:02] Hồ sơ trình duyệt: (chưa gán)');
+                      }
+                    }
+                    if (activeRun) {
+                      lines.push(`[CÔNG VIỆC] ID: ${activeRun.id}`);
+                      lines.push(`[TRẠNG THÁI] ${activeRun.businessStatus || activeRun.status}`);
+                      if (activeRun.errorMessage) {
+                        lines.push(`[LỖI] ${activeRun.errorMessage}`);
+                      }
+                    }
+                    navigator.clipboard.writeText(lines.join('\n'));
+                    toast.success('Đã sao chép nhật ký!');
+                  }}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/[0.06] hover:bg-white/[0.12] text-zinc-300 hover:text-white transition text-[10px] font-sans font-medium"
+                >
+                  <Copy className="h-3 w-3" />
+                  <span>Sao chép</span>
+                </button>
+              </div>
             </div>
             <div className="flex-1 overflow-y-auto space-y-1 text-zinc-400 pt-1">
-              <div className="text-zinc-600">[00:00] Floword Engine Ready.</div>
-              {selectedPage && (
-                <div className="text-zinc-600">[00:01] Target Page Bound: {selectedPage.name}</div>
-              )}
+              <div className="text-zinc-600">[00:00] Động cơ Floword đã sẵn sàng.</div>
+              {selectedPage && (() => {
+                const profileId = selectedPage.browser_profile_id;
+                const boundProfile = profileId
+                  ? profiles.find((p) => p.id === profileId)
+                  : undefined;
+                return (
+                  <>
+                    <div className="text-zinc-500">[00:01] Page đích: {selectedPage.name}</div>
+                    {profileId ? (
+                      <>
+                        <div className="text-blue-400">
+                          [00:02] Hồ sơ trình duyệt: {boundProfile?.name ?? profileId} / {profileId}
+                        </div>
+                        <div className={boundProfile?.is_running ? 'text-emerald-400' : 'text-zinc-500'}>
+                          [00:03] Trạng thái: {boundProfile?.is_running
+                            ? `${boundProfile.worker_state || 'Đang chạy'}${
+                                boundProfile.grok_logged_in ? ' ● Grok ✓' : ''
+                              }${
+                                boundProfile.extension_ready ? ' ● Ext ✓' : ''
+                              }`
+                            : 'Đang tắt — hồ sơ sẽ tự động bật khi bắt đầu công việc'}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-amber-400">[00:02] Hồ sơ trình duyệt: (chưa gán — vào Cài đặt Page để gán)</div>
+                    )}
+                  </>
+                );
+              })()}
               {activeRun && (
                 <>
-                  <div className="text-blue-400">[JOB] ID: {activeRun.id}</div>
-                  <div className="text-emerald-400">[STATUS] {activeRun.businessStatus || activeRun.status}</div>
+                  <div className="text-blue-400">[CÔNG VIỆC] ID: {activeRun.id}</div>
+                  <div className="text-emerald-400">[TRẠNG THÁI] {activeRun.businessStatus || activeRun.status}</div>
                   {activeRun.errorMessage && (
-                    <div className="text-rose-400">[ERROR] {activeRun.errorMessage}</div>
+                    <div className="text-rose-400">[LỖI] {activeRun.errorMessage}</div>
                   )}
                 </>
               )}

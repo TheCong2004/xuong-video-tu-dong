@@ -99,22 +99,13 @@ pub struct WebArticleDocument {
   pub retrieved_at: String,
 }
 
-pub async fn ingest_web_story_source(
-  url: &str,
-  workflow_root: &Path,
-  workflow_id: &str,
-  cancel_flag: Arc<AtomicBool>,
-) -> Result<IngestAnalyzeResult, IngestAnalyzeError> {
+pub async fn ingest_web_story_source(url: &str, workflow_root: &Path, workflow_id: &str, cancel_flag: Arc<AtomicBool>) -> Result<IngestAnalyzeResult, IngestAnalyzeError> {
   check_cancelled(&cancel_flag)?;
   std::fs::create_dir_all(workflow_root).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("cannot create artifact root: {error}"), false))?;
   let ingest_dir = workflow_root.join("ingest_analyze");
   std::fs::create_dir_all(&ingest_dir).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("cannot create ingest directory: {error}"), false))?;
 
-  let client = reqwest::Client::builder()
-    .timeout(std::time::Duration::from_secs(30))
-    .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    .build()
-    .map_err(|error| runtime_error("WEB_CONTENT_FETCH_FAILED", format!("cannot build HTTP client: {error}"), false))?;
+  let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)).user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36").build().map_err(|error| runtime_error("WEB_CONTENT_FETCH_FAILED", format!("cannot build HTTP client: {error}"), false))?;
 
   let response = tokio::select! {
     result = client.get(url).send() => result,
@@ -143,44 +134,17 @@ pub async fn ingest_web_story_source(
   write_json(&metadata_path, &json!({ "acquisition": "web_story", "url": url, "title": &article.title, "author": &article.author, "word_count": word_count }))?;
   write_json(&scenes_path, &json!({ "threshold": 0.0, "cuts_seconds": [], "scenes": [] }))?;
 
-  let source_text_artifact = ArtifactStore::register_typed_artifact(
-    workflow_root,
-    workflow_id,
-    StageId::IngestAnalyze,
-    "web_story_extractor",
-    ArtifactKind::SourceText,
-    &source_text_path,
-    json!({ "url": url, "title": &article.title, "source_type": "web_article" }),
-  ).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("failed to register source_text: {error}"), false))?;
+  let source_text_artifact = ArtifactStore::register_typed_artifact(workflow_root, workflow_id, StageId::IngestAnalyze, "web_story_extractor", ArtifactKind::SourceText, &source_text_path, json!({ "url": url, "title": &article.title, "source_type": "web_article" })).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("failed to register source_text: {error}"), false))?;
 
-  let source_meta_artifact = ArtifactStore::register_typed_artifact(
-    workflow_root,
-    workflow_id,
-    StageId::IngestAnalyze,
-    "web_story_extractor",
-    ArtifactKind::SourceMetadata,
-    &metadata_path,
-    json!({ "url": url, "title": &article.title }),
-  ).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("failed to register source_metadata: {error}"), false))?;
+  let source_meta_artifact = ArtifactStore::register_typed_artifact(workflow_root, workflow_id, StageId::IngestAnalyze, "web_story_extractor", ArtifactKind::SourceMetadata, &metadata_path, json!({ "url": url, "title": &article.title })).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("failed to register source_metadata: {error}"), false))?;
 
-  let scenes_artifact = ArtifactStore::register_typed_artifact(
-    workflow_root,
-    workflow_id,
-    StageId::IngestAnalyze,
-    "web_story_extractor",
-    ArtifactKind::Scenes,
-    &scenes_path,
-    json!({ "scene_count": 0 }),
-  ).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("failed to register scenes: {error}"), false))?;
+  let scenes_artifact = ArtifactStore::register_typed_artifact(workflow_root, workflow_id, StageId::IngestAnalyze, "web_story_extractor", ArtifactKind::Scenes, &scenes_path, json!({ "scene_count": 0 })).map_err(|error| runtime_error("INGEST_STORAGE_FAILED", format!("failed to register scenes: {error}"), false))?;
 
   let text_ref = source_text_artifact.to_artifact_ref(StageId::IngestAnalyze).map_err(|error| runtime_error("INGEST_ARTIFACT_INVALID", error.to_string(), false))?;
   let meta_ref = source_meta_artifact.to_artifact_ref(StageId::IngestAnalyze).map_err(|error| runtime_error("INGEST_ARTIFACT_INVALID", error.to_string(), false))?;
   let scenes_ref = scenes_artifact.to_artifact_ref(StageId::IngestAnalyze).map_err(|error| runtime_error("INGEST_ARTIFACT_INVALID", error.to_string(), false))?;
 
-  Ok(IngestAnalyzeResult {
-    artifact_refs: vec![text_ref, meta_ref, scenes_ref],
-    physical_artifacts: vec![source_text_artifact, source_meta_artifact, scenes_artifact],
-  })
+  Ok(IngestAnalyzeResult { artifact_refs: vec![text_ref, meta_ref, scenes_ref], physical_artifacts: vec![source_text_artifact, source_meta_artifact, scenes_artifact] })
 }
 
 pub fn extract_article_content(url: &str, raw_html: &str) -> Result<WebArticleDocument, IngestAnalyzeError> {
@@ -189,14 +153,7 @@ pub fn extract_article_content(url: &str, raw_html: &str) -> Result<WebArticleDo
   let text = extract_clean_text(raw_html);
   let retrieved_at = chrono::Utc::now().to_rfc3339();
 
-  Ok(WebArticleDocument {
-    url: url.to_string(),
-    title,
-    author,
-    text,
-    source_type: "web_article".to_string(),
-    retrieved_at,
-  })
+  Ok(WebArticleDocument { url: url.to_string(), title, author, text, source_type: "web_article".to_string(), retrieved_at })
 }
 
 fn extract_html_title(html: &str) -> Option<String> {
@@ -264,11 +221,7 @@ fn extract_clean_text(html: &str) -> String {
   }
 
   let text = strip_html_tags(&clean);
-  let lines: Vec<&str> = text
-    .lines()
-    .map(str::trim)
-    .filter(|l| !l.is_empty())
-    .collect();
+  let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
   lines.join("\n\n")
 }
 
@@ -285,13 +238,7 @@ fn strip_html_tags(html: &str) -> String {
       result.push(ch);
     }
   }
-  result
-    .replace("&nbsp;", " ")
-    .replace("&amp;", "&")
-    .replace("&lt;", "<")
-    .replace("&gt;", ">")
-    .replace("&quot;", "\"")
-    .replace("&#39;", "'")
+  result.replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"").replace("&#39;", "'")
 }
 
 async fn wait_for_cancel_flag(flag: &Arc<AtomicBool>) {

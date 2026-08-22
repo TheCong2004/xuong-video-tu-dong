@@ -27,7 +27,6 @@ impl std::fmt::Display for PageConfigError {
 
 impl std::error::Error for PageConfigError {}
 
-
 /// Canonical immutable Page Snapshot attached to a Job upon creation.
 /// Once created, this snapshot NEVER changes even if the user edits the mutable ContentPage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,21 +49,7 @@ pub struct FlowordJobPageSnapshot {
 impl FlowordJobPageSnapshot {
   /// Construct snapshot from a mutable ContentPage record.
   pub fn from_content_page(page: &ContentPage) -> Self {
-    Self {
-      page_id: page.id.clone(),
-      page_name: page.name.clone(),
-      slug: page.slug.clone(),
-      output_root: page.output_root.clone(),
-      browser_profile_id: page.browser_profile_id.clone(),
-      worker_pool_id: page.worker_pool_id.clone(),
-      target_platform: page.target_platform.clone(),
-      default_image_prompt: page.default_image_prompt.clone(),
-      default_expand_9_16_prompt: page.default_expand_9_16_prompt.clone(),
-      default_video_prompt: page.default_video_prompt.clone(),
-      default_language: page.default_language.clone(),
-      default_tone: page.default_tone.clone(),
-      default_aspect_ratio: page.default_aspect_ratio.clone(),
-    }
+    Self { page_id: page.id.clone(), page_name: page.name.clone(), slug: page.slug.clone(), output_root: page.output_root.clone(), browser_profile_id: page.browser_profile_id.clone(), worker_pool_id: page.worker_pool_id.clone(), target_platform: page.target_platform.clone(), default_image_prompt: page.default_image_prompt.clone(), default_expand_9_16_prompt: page.default_expand_9_16_prompt.clone(), default_video_prompt: page.default_video_prompt.clone(), default_language: page.default_language.clone(), default_tone: page.default_tone.clone(), default_aspect_ratio: page.default_aspect_ratio.clone() }
   }
 }
 
@@ -74,25 +59,16 @@ impl FlowordJobPageSnapshot {
 /// 2. Do NOT re-read mutable ContentPage fields for values already captured in snapshot.
 /// 3. For legacy Jobs created before page_snapshot existed: fallback to ContentPage and emit LEGACY_PAGE_SNAPSHOT_MISSING event.
 /// 4. Output root must not be empty.
-pub async fn resolve_job_page_config(
-  job: &PipelineJob,
-  db: &TaskDbConnection,
-) -> Result<FlowordJobPageSnapshot, PageConfigError> {
+pub async fn resolve_job_page_config(job: &PipelineJob, db: &TaskDbConnection) -> Result<FlowordJobPageSnapshot, PageConfigError> {
   let job_id_str = job.id.as_str().to_string();
 
   // 1. Try parsing immutable page_snapshot
   if let Some(snapshot_raw) = job.maybe_page_snapshot.as_deref() {
     if let Ok(snapshot) = serde_json::from_str::<FlowordJobPageSnapshot>(snapshot_raw) {
       if snapshot.output_root.trim().is_empty() {
-        return Err(PageConfigError::OutputRootMissing {
-          page_id: snapshot.page_id.clone(),
-          page_name: snapshot.page_name.clone(),
-        });
+        return Err(PageConfigError::OutputRootMissing { page_id: snapshot.page_id.clone(), page_name: snapshot.page_name.clone() });
       }
-      info!(
-        "[PageConfigResolver] Using immutable page snapshot for job '{}' (page_id: '{}', profile: '{:?}', output_root: '{}')",
-        job_id_str, snapshot.page_id, snapshot.browser_profile_id, snapshot.output_root
-      );
+      info!("[PageConfigResolver] Using immutable page snapshot for job '{}' (page_id: '{}', profile: '{:?}', output_root: '{}')", job_id_str, snapshot.page_id, snapshot.browser_profile_id, snapshot.output_root);
       return Ok(snapshot);
     }
   }
@@ -102,11 +78,7 @@ pub async fn resolve_job_page_config(
     pid.to_string()
   } else if let Some(input_raw) = job.maybe_input_payload.as_deref() {
     if let Ok(val) = serde_json::from_str::<serde_json::Value>(input_raw) {
-      val.get("page_id")
-        .or_else(|| val.get("page"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string()
+      val.get("page_id").or_else(|| val.get("page")).and_then(|v| v.as_str()).unwrap_or("").to_string()
     } else {
       String::new()
     }
@@ -118,48 +90,18 @@ pub async fn resolve_job_page_config(
     return Err(PageConfigError::PageIdMissing { job_id: job_id_str });
   }
 
-  warn!(
-    "[PageConfigResolver] Job '{}' missing immutable page_snapshot. Performing legacy fallback to ContentPage '{}'",
-    job_id_str, page_id
-  );
+  warn!("[PageConfigResolver] Job '{}' missing immutable page_snapshot. Performing legacy fallback to ContentPage '{}'", job_id_str, page_id);
 
-  let maybe_page = get_content_page_by_id(GetContentPageByIdArgs {
-    db,
-    id: &page_id,
-  })
-  .await
-  .map_err(|e| PageConfigError::DatabaseError {
-    page_id: page_id.clone(),
-    source: anyhow::anyhow!("{e}"),
-  })?;
+  let maybe_page = get_content_page_by_id(GetContentPageByIdArgs { db, id: &page_id }).await.map_err(|e| PageConfigError::DatabaseError { page_id: page_id.clone(), source: anyhow::anyhow!("{e}") })?;
 
-  let page = maybe_page.ok_or_else(|| PageConfigError::PageNotFound {
-    page_id: page_id.clone(),
-    job_id: job_id_str.clone(),
-  })?;
+  let page = maybe_page.ok_or_else(|| PageConfigError::PageNotFound { page_id: page_id.clone(), job_id: job_id_str.clone() })?;
 
   if page.output_root.trim().is_empty() {
-    return Err(PageConfigError::OutputRootMissing {
-      page_id: page.id.clone(),
-      page_name: page.name.clone(),
-    });
+    return Err(PageConfigError::OutputRootMissing { page_id: page.id.clone(), page_name: page.name.clone() });
   }
 
   // Emit durable warning event that legacy fallback occurred
-  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
-    db,
-    id: None,
-    job_id: &job_id_str,
-    sequence: 1,
-    stage_id: Some("PAGE_CONFIG_RESOLVER"),
-    business_status: None,
-    event_type: "LEGACY_PAGE_SNAPSHOT_MISSING",
-    level: "WARN",
-    message: "Job lacked immutable page snapshot; fell back to current ContentPage configuration",
-    error_code: None,
-    metadata_json: Some(&serde_json::json!({ "fallback_page_id": page_id }).to_string()),
-  })
-  .await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db, id: None, job_id: &job_id_str, sequence: 1, stage_id: Some("PAGE_CONFIG_RESOLVER"), business_status: None, event_type: "LEGACY_PAGE_SNAPSHOT_MISSING", level: "WARN", message: "Job lacked immutable page snapshot; fell back to current ContentPage configuration", error_code: None, metadata_json: Some(&serde_json::json!({ "fallback_page_id": page_id }).to_string()) }).await;
 
   Ok(FlowordJobPageSnapshot::from_content_page(&page))
 }
@@ -182,58 +124,16 @@ mod tests {
       let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
 
       // 1. Create Page A
-      let page_a = create_content_page(CreateContentPageArgs {
-        db: &db,
-        id: None,
-        name: "Page A",
-        slug: Some("page-a"),
-        output_root: "D:\\Stage A",
-        target_platform: None,
-        default_model_id: None,
-        default_workflow_id: None,
-        default_language: None,
-        default_tone: None,
-        default_aspect_ratio: None,
-        browser_profile_id: Some("PROFILE_A"),
-        worker_pool_id: None,
-        default_image_prompt: Some("PROMPT_A"),
-        default_expand_9_16_prompt: None,
-        default_video_prompt: None,
-      }).await.unwrap();
+      let page_a = create_content_page(CreateContentPageArgs { db: &db, id: None, name: "Page A", slug: Some("page-a"), output_root: "D:\\Stage A", target_platform: None, default_model_id: None, default_workflow_id: None, default_language: None, default_tone: None, default_aspect_ratio: None, browser_profile_id: Some("PROFILE_A"), worker_pool_id: None, default_image_prompt: Some("PROMPT_A"), default_expand_9_16_prompt: None, default_video_prompt: None }).await.unwrap();
 
       // 2. Enqueue Job with snapshot of Page A
       let snapshot = FlowordJobPageSnapshot::from_content_page(&page_a);
       let snapshot_str = serde_json::to_string(&snapshot).unwrap();
 
-      let job_id = create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::Pending,
-        current_stage: PipelineStage::Queued,
-        maybe_page_id: Some(&page_a.id),
-        maybe_input_payload: Some(r#"{"workflow_mode":"grok_content_pipeline"}"#),
-        maybe_page_snapshot: Some(&snapshot_str),
-        maybe_business_status: Some("QUEUED"),
-      }).await.unwrap();
+      let job_id = create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::Pending, current_stage: PipelineStage::Queued, maybe_page_id: Some(&page_a.id), maybe_input_payload: Some(r#"{"workflow_mode":"grok_content_pipeline"}"#), maybe_page_snapshot: Some(&snapshot_str), maybe_business_status: Some("QUEUED") }).await.unwrap();
 
       // 3. User edits Page A to Page B (changes profile, output root, prompt)
-      update_content_page(UpdateContentPageArgs {
-        db: &db,
-        id: &page_a.id,
-        name: "Page B",
-        slug: Some("page-b"),
-        output_root: "D:\\Stage B",
-        target_platform: None,
-        default_model_id: None,
-        default_workflow_id: None,
-        default_language: None,
-        default_tone: None,
-        default_aspect_ratio: None,
-        browser_profile_id: Some("PROFILE_B"),
-        worker_pool_id: None,
-        default_image_prompt: Some("PROMPT_B"),
-        default_expand_9_16_prompt: None,
-        default_video_prompt: None,
-      }).await.unwrap();
+      update_content_page(UpdateContentPageArgs { db: &db, id: &page_a.id, name: "Page B", slug: Some("page-b"), output_root: "D:\\Stage B", target_platform: None, default_model_id: None, default_workflow_id: None, default_language: None, default_tone: None, default_aspect_ratio: None, browser_profile_id: Some("PROFILE_B"), worker_pool_id: None, default_image_prompt: Some("PROMPT_B"), default_expand_9_16_prompt: None, default_video_prompt: None }).await.unwrap();
 
       // 4. Resolve Job config -> MUST still have Page A snapshot values
       let job = get_pipeline_job_by_id(GetPipelineJobByIdArgs { db: &db, pipeline_job_id: &job_id }).await.unwrap().unwrap();
@@ -253,35 +153,10 @@ mod tests {
       let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
 
       // 1. Create Page
-      let legacy_page = create_content_page(CreateContentPageArgs {
-        db: &db,
-        id: None,
-        name: "Legacy Page",
-        slug: Some("legacy-page"),
-        output_root: "D:\\LegacyOutput",
-        target_platform: None,
-        default_model_id: None,
-        default_workflow_id: None,
-        default_language: None,
-        default_tone: None,
-        default_aspect_ratio: None,
-        browser_profile_id: Some("PROFILE_LEGACY"),
-        worker_pool_id: None,
-        default_image_prompt: Some("LEGACY_PROMPT"),
-        default_expand_9_16_prompt: None,
-        default_video_prompt: None,
-      }).await.unwrap();
+      let legacy_page = create_content_page(CreateContentPageArgs { db: &db, id: None, name: "Legacy Page", slug: Some("legacy-page"), output_root: "D:\\LegacyOutput", target_platform: None, default_model_id: None, default_workflow_id: None, default_language: None, default_tone: None, default_aspect_ratio: None, browser_profile_id: Some("PROFILE_LEGACY"), worker_pool_id: None, default_image_prompt: Some("LEGACY_PROMPT"), default_expand_9_16_prompt: None, default_video_prompt: None }).await.unwrap();
 
       // 2. Enqueue Job WITHOUT snapshot
-      let job_id = create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::Pending,
-        current_stage: PipelineStage::Queued,
-        maybe_page_id: Some(&legacy_page.id),
-        maybe_input_payload: Some(r#"{"workflow_mode":"grok_content_pipeline"}"#),
-        maybe_page_snapshot: None,
-        maybe_business_status: Some("QUEUED"),
-      }).await.unwrap();
+      let job_id = create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::Pending, current_stage: PipelineStage::Queued, maybe_page_id: Some(&legacy_page.id), maybe_input_payload: Some(r#"{"workflow_mode":"grok_content_pipeline"}"#), maybe_page_snapshot: None, maybe_business_status: Some("QUEUED") }).await.unwrap();
 
       let job = get_pipeline_job_by_id(GetPipelineJobByIdArgs { db: &db, pipeline_job_id: &job_id }).await.unwrap().unwrap();
       let resolved = resolve_job_page_config(&job, &db).await.unwrap();
@@ -298,24 +173,7 @@ mod tests {
       let temp = tempfile::tempdir().unwrap();
       let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
 
-      let page = create_content_page(CreateContentPageArgs {
-        db: &db,
-        id: None,
-        name: "Test Page",
-        slug: Some("test-page"),
-        output_root: "D:\\TestOutput",
-        target_platform: Some("tiktok"),
-        default_model_id: None,
-        default_workflow_id: None,
-        default_language: None,
-        default_tone: None,
-        default_aspect_ratio: None,
-        browser_profile_id: Some("PROFILE_1"),
-        worker_pool_id: None,
-        default_image_prompt: Some("Default Image Prompt"),
-        default_expand_9_16_prompt: None,
-        default_video_prompt: None,
-      }).await.unwrap();
+      let page = create_content_page(CreateContentPageArgs { db: &db, id: None, name: "Test Page", slug: Some("test-page"), output_root: "D:\\TestOutput", target_platform: Some("tiktok"), default_model_id: None, default_workflow_id: None, default_language: None, default_tone: None, default_aspect_ratio: None, browser_profile_id: Some("PROFILE_1"), worker_pool_id: None, default_image_prompt: Some("Default Image Prompt"), default_expand_9_16_prompt: None, default_video_prompt: None }).await.unwrap();
 
       let payload = serde_json::json!({
         "workflow_mode": "grok_content_pipeline",
@@ -329,15 +187,7 @@ mod tests {
       });
       let payload_str = serde_json::to_string(&payload).unwrap();
 
-      let job_id = create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::Pending,
-        current_stage: PipelineStage::Queued,
-        maybe_page_id: Some(&page.id),
-        maybe_input_payload: Some(&payload_str),
-        maybe_page_snapshot: None,
-        maybe_business_status: Some("QUEUED"),
-      }).await.unwrap();
+      let job_id = create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::Pending, current_stage: PipelineStage::Queued, maybe_page_id: Some(&page.id), maybe_input_payload: Some(&payload_str), maybe_page_snapshot: None, maybe_business_status: Some("QUEUED") }).await.unwrap();
 
       let job = get_pipeline_job_by_id(GetPipelineJobByIdArgs { db: &db, pipeline_job_id: &job_id }).await.unwrap().unwrap();
       let read_payload_str = job.maybe_input_payload.expect("Should have payload");
@@ -345,15 +195,8 @@ mod tests {
 
       assert_eq!(read_val.get("image_prompt").and_then(|v| v.as_str()), Some("Create cinematic neon portrait of hero"));
       assert_eq!(read_val.get("caption").and_then(|v| v.as_str()), Some("Phim này đáng xem cuối tuần"));
-      assert_ne!(
-        read_val.get("image_prompt").and_then(|v| v.as_str()),
-        read_val.get("caption").and_then(|v| v.as_str()),
-        "Caption must NOT equal image prompt"
-      );
-      assert_eq!(
-        read_val.get("hashtags").and_then(|v| v.as_array()).unwrap(),
-        &vec![serde_json::json!("cinema"), serde_json::json!("viral")]
-      );
+      assert_ne!(read_val.get("image_prompt").and_then(|v| v.as_str()), read_val.get("caption").and_then(|v| v.as_str()), "Caption must NOT equal image prompt");
+      assert_eq!(read_val.get("hashtags").and_then(|v| v.as_array()).unwrap(), &vec![serde_json::json!("cinema"), serde_json::json!("viral")]);
       assert_eq!(read_val.get("description").and_then(|v| v.as_str()), Some("Top action movie recommendation"));
     });
   }

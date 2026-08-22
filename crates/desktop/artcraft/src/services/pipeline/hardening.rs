@@ -90,9 +90,7 @@ fn stage_is_reusable(context: &PipelineContext, stage: StageId) -> bool {
   }
   let required = |kind: &ArtifactKind| state.output_artifact_ids.iter().any(|id| context.artifact_refs.iter().find(|artifact| artifact.artifact_id == *id && artifact.kind == *kind && artifact.produced_by_stage == stage).is_some_and(|artifact| artifact.validate().is_ok()));
   let generated_visual_is_valid = context.artifact_refs.iter().any(|artifact| artifact.kind == ArtifactKind::GeneratedVideo && artifact.validate().is_ok());
-  expected_kinds(stage).iter().all(required)
-    && (stage != StageId::MediaTimeline || !matches!(context.workflow_mode.as_str(), "original" | "original_creation") || generated_visual_is_valid)
-    && (stage != StageId::Capcut || context.output_mode != "render_video" || required(&ArtifactKind::RenderedVideo))
+  expected_kinds(stage).iter().all(required) && (stage != StageId::MediaTimeline || !matches!(context.workflow_mode.as_str(), "original" | "original_creation") || generated_visual_is_valid) && (stage != StageId::Capcut || context.output_mode != "render_video" || required(&ArtifactKind::RenderedVideo))
 }
 
 const fn expected_kinds(stage: StageId) -> &'static [ArtifactKind] {

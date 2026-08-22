@@ -11,7 +11,7 @@ use crate::core::commands::response::success_response_wrapper::SerializeMarker;
 use crate::core::state::data_dir::app_data_root::AppDataRoot;
 use crate::core::state::task_database::TaskDatabase;
 use crate::core::threads::main_window_thread::persist_storyteller_cookies_task::sync_storyteller_credentials_from_http_plugin;
-use crate::services::pipeline::clients::browser_runtime_client::{list_workers as list_browser_workers, BrowserWorkerInfo};
+use crate::services::pipeline::clients::browser_runtime_client::{list_workers as list_browser_workers, list_donut_profiles, BrowserWorkerInfo, DonutProfileInfo};
 use crate::services::pipeline::clients::capcut_mate_client::health_check as capcut_mate_health_check;
 use crate::services::pipeline::clients::omniroute_client::{health_check as llm_health_check, list_models as omniroute_list_models, list_video_models as omniroute_list_video_models};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, ContentSource, PipelineContext, StageId, StageState};
@@ -64,6 +64,7 @@ use sqlite_tasks::queries::floword_settings::get_floword_setting::get_floword_se
 use sqlite_tasks::queries::floword_settings::upsert_floword_setting::{upsert_floword_setting, UpsertFlowordSettingArgs};
 use crate::services::pipeline::bulk_import_service::{BulkImportRow, BulkImportService, BulkValidationSummary, BulkCommitResponse};
 use crate::services::pipeline::system_health_probes::{SystemHealthProbes, StorageHealthReport, SystemReadinessReport};
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::{RuntimeSupervisor, RuntimeSupervisorState};
 use std::collections::HashSet;
 use std::time::Instant;
 use tauri::{AppHandle, Manager, State};
@@ -160,20 +161,12 @@ pub async fn enqueue_floword_workflow(task_database: State<'_, TaskDatabase>, re
     None => return Err(internal_error("Select a Page before running the workflow.", None)),
   };
 
-  if req.prompt.trim().is_empty()
-    && req.image_prompt.as_ref().map(|p| p.trim().is_empty()).unwrap_or(true)
-    && req.source_urls.as_ref().map(|values| values.is_empty()).unwrap_or(true)
-    && req.source_files.as_ref().map(|values| values.is_empty()).unwrap_or(true)
-    && req.source_image_artifact.is_none()
-  {
+  if req.prompt.trim().is_empty() && req.image_prompt.as_ref().map(|p| p.trim().is_empty()).unwrap_or(true) && req.source_urls.as_ref().map(|values| values.is_empty()).unwrap_or(true) && req.source_files.as_ref().map(|values| values.is_empty()).unwrap_or(true) && req.source_image_artifact.is_none() {
     return Err(internal_error("Prompt, image_prompt, source_urls, source_files, and source_image_artifact are all empty", None));
   }
 
   // Authoritative ContentPage lookup for immutable page snapshot
-  let maybe_page = get_content_page_by_id(GetContentPageByIdArgs {
-    db: task_database.get_connection(),
-    id: page_id,
-  }).await.map_err(|e| internal_error(&format!("Failed to query content page: {e}"), None))?;
+  let maybe_page = get_content_page_by_id(GetContentPageByIdArgs { db: task_database.get_connection(), id: page_id }).await.map_err(|e| internal_error(&format!("Failed to query content page: {e}"), None))?;
 
   let page = maybe_page.ok_or_else(|| internal_error(&format!("ContentPage with id '{page_id}' not found in database"), None))?;
 
@@ -193,15 +186,7 @@ pub async fn enqueue_floword_workflow(task_database: State<'_, TaskDatabase>, re
   let page_snapshot_str = serde_json::to_string(&page_snapshot).unwrap_or_default();
   let input_payload = serde_json::to_string(&req).map_err(|e| internal_error(&format!("Failed to serialize input payload: {e}"), None))?;
 
-  let job_id = create_pipeline_job(CreatePipelineJobArgs {
-    db: task_database.get_connection(),
-    status: TaskStatus::Pending,
-    current_stage: PipelineStage::Queued,
-    maybe_page_id: Some(page_id),
-    maybe_input_payload: Some(&input_payload),
-    maybe_page_snapshot: Some(&page_snapshot_str),
-    maybe_business_status: Some("QUEUED"),
-  }).await.map_err(|err| {
+  let job_id = create_pipeline_job(CreatePipelineJobArgs { db: task_database.get_connection(), status: TaskStatus::Pending, current_stage: PipelineStage::Queued, maybe_page_id: Some(page_id), maybe_input_payload: Some(&input_payload), maybe_page_snapshot: Some(&page_snapshot_str), maybe_business_status: Some("QUEUED") }).await.map_err(|err| {
     error!("[Floword] enqueue create_pipeline_job failed: {:?}", err);
     internal_error("Failed to insert pipeline job", None)
   })?;
@@ -218,19 +203,7 @@ pub async fn enqueue_floword_workflow(task_database: State<'_, TaskDatabase>, re
     return Err(internal_error("Pipeline job vanished immediately after insert", Some(job_id.as_str())));
   }
 
-  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
-    db: task_database.get_connection(),
-    id: None,
-    job_id: job_id.as_str(),
-    sequence: 1,
-    stage_id: Some("QUEUED"),
-    business_status: Some("QUEUED"),
-    event_type: "JOB_CREATED",
-    level: "INFO",
-    message: &format!("Workflow job enqueued for Page '{}'", page.name),
-    error_code: None,
-    metadata_json: Some(&page_snapshot_str),
-  }).await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: job_id.as_str(), sequence: 1, stage_id: Some("QUEUED"), business_status: Some("QUEUED"), event_type: "JOB_CREATED", level: "INFO", message: &format!("Workflow job enqueued for Page '{}'", page.name), error_code: None, metadata_json: Some(&page_snapshot_str) }).await;
 
   info!("[Floword] enqueued job_id={} for page_id={} (readback OK)", job_id.as_str(), page_id);
 
@@ -356,12 +329,7 @@ pub async fn cancel_floword_workflow(task_database: State<'_, TaskDatabase>, req
     }
   }
 
-  let updated = update_pipeline_job_status(UpdatePipelineJobStatusArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    status: TaskStatus::CancelledByUser,
-    maybe_business_status: Some("CANCELLED"),
-  }).await.map_err(|err| {
+  let updated = update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, status: TaskStatus::CancelledByUser, maybe_business_status: Some("CANCELLED") }).await.map_err(|err| {
     error!("[Floword] cancel update_status failed: {:?}", err);
     internal_error("Failed to update job status", Some(&request.job_id))
   })?;
@@ -412,12 +380,10 @@ pub async fn retry_floword_step(task_database: State<'_, TaskDatabase>, request:
     "GROK_EXPAND_916" | "GROK_EXPAND_9_16" | "CONVERTING_9_16" => (PipelineStage::ScriptReady, "IMAGE_DONE"),
     "GROK_VIDEO" | "GENERATING_VIDEO" => (PipelineStage::MediaTimeline, "IMAGE_9_16_DONE"),
     "LOCAL_SAVE" | "SAVING_LOCAL" => (PipelineStage::DraftSaving, "VIDEO_DONE"),
-    _ => {
-      match resume_stage_for_step(&request.step_id) {
-        Some(stage) => (stage, "QUEUED"),
-        None => return Err(bad_request(&format!("Unknown step_id '{}'", request.step_id), &request.job_id)),
-      }
-    }
+    _ => match resume_stage_for_step(&request.step_id) {
+      Some(stage) => (stage, "QUEUED"),
+      None => return Err(bad_request(&format!("Unknown step_id '{}'", request.step_id), &request.job_id)),
+    },
   };
 
   let mut outputs = job.maybe_stage_outputs.as_deref().and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or_else(|| json!({}));
@@ -469,47 +435,24 @@ pub async fn retry_floword_step(task_database: State<'_, TaskDatabase>, request:
       } else {
         invalidate_outputs_from_stage(&mut outputs, resume_stage);
       }
-    }
+    },
   }
 
   let step_retry_count = bump_retry_count(&mut outputs, &request.step_id);
   let outputs_string = serde_json::to_string(&outputs).map_err(|e| internal_error(&format!("Failed to serialize outputs: {e}"), Some(&request.job_id)))?;
 
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    current_stage: resume_stage,
-    maybe_stage_outputs: Some(&outputs_string),
-    maybe_business_status: Some(new_business_status),
-  }).await.map_err(|err| {
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, current_stage: resume_stage, maybe_stage_outputs: Some(&outputs_string), maybe_business_status: Some(new_business_status) }).await.map_err(|err| {
     error!("[Floword] retry update_stage failed: {:?}", err);
     internal_error("Failed to update job stage", Some(&request.job_id))
   })?;
 
   // Clear failure message and reset status back to Pending
-  let retried = update_pipeline_job_status(UpdatePipelineJobStatusArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    status: TaskStatus::Pending,
-    maybe_business_status: Some(new_business_status),
-  }).await.map_err(|err| {
+  let retried = update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, status: TaskStatus::Pending, maybe_business_status: Some(new_business_status) }).await.map_err(|err| {
     error!("[Floword] retry update_status failed: {:?}", err);
     internal_error("Failed to reset job status", Some(&request.job_id))
   })?;
 
-  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
-    db: task_database.get_connection(),
-    id: None,
-    job_id: &request.job_id,
-    sequence: 50,
-    stage_id: Some(&request.step_id),
-    business_status: Some(new_business_status),
-    event_type: "RETRY_REQUESTED",
-    level: "INFO",
-    message: &format!("Stage '{}' retry requested (attempt {})", request.step_id, step_retry_count),
-    error_code: None,
-    metadata_json: None,
-  }).await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &request.job_id, sequence: 50, stage_id: Some(&request.step_id), business_status: Some(new_business_status), event_type: "RETRY_REQUESTED", level: "INFO", message: &format!("Stage '{}' retry requested (attempt {})", request.step_id, step_retry_count), error_code: None, metadata_json: None }).await;
 
   Ok(RetryFlowordStepResponse { retried, job_id: request.job_id.clone(), resumed_stage: resume_stage.to_str().to_string(), step_retry_count }.into())
 }
@@ -520,58 +463,23 @@ pub struct RetryFlowordJobFromStartRequest {
 }
 
 #[tauri::command]
-pub async fn retry_floword_job_from_start(
-  task_database: State<'_, TaskDatabase>,
-  request: RetryFlowordJobFromStartRequest,
-) -> ResponseOrError<RetryFlowordStepResponse, FlowordErrorDetails> {
+pub async fn retry_floword_job_from_start(task_database: State<'_, TaskDatabase>, request: RetryFlowordJobFromStartRequest) -> ResponseOrError<RetryFlowordStepResponse, FlowordErrorDetails> {
   info!("[FlowordDB] command=retry_from_start job_id={}", request.job_id);
   let pipeline_job_id = PipelineJobId::new_from_str(&request.job_id);
 
-  let job = get_pipeline_job_by_id(GetPipelineJobByIdArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-  }).await.map_err(|err| internal_error(&format!("Query failed: {err}"), Some(&request.job_id)))?
-    .ok_or_else(|| not_found(&request.job_id))?;
+  let job = get_pipeline_job_by_id(GetPipelineJobByIdArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id }).await.map_err(|err| internal_error(&format!("Query failed: {err}"), Some(&request.job_id)))?.ok_or_else(|| not_found(&request.job_id))?;
 
   let mut outputs = json!({});
   let step_retry_count = bump_retry_count(&mut outputs, "job_start");
   let outputs_string = serde_json::to_string(&outputs).unwrap_or_default();
 
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    current_stage: PipelineStage::Queued,
-    maybe_stage_outputs: Some(&outputs_string),
-    maybe_business_status: Some("QUEUED"),
-  }).await.map_err(|err| internal_error(&format!("Stage reset failed: {err}"), Some(&request.job_id)))?;
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, current_stage: PipelineStage::Queued, maybe_stage_outputs: Some(&outputs_string), maybe_business_status: Some("QUEUED") }).await.map_err(|err| internal_error(&format!("Stage reset failed: {err}"), Some(&request.job_id)))?;
 
-  let retried = update_pipeline_job_status(UpdatePipelineJobStatusArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    status: TaskStatus::Pending,
-    maybe_business_status: Some("QUEUED"),
-  }).await.map_err(|err| internal_error(&format!("Status reset failed: {err}"), Some(&request.job_id)))?;
+  let retried = update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, status: TaskStatus::Pending, maybe_business_status: Some("QUEUED") }).await.map_err(|err| internal_error(&format!("Status reset failed: {err}"), Some(&request.job_id)))?;
 
-  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs {
-    db: task_database.get_connection(),
-    id: None,
-    job_id: &request.job_id,
-    sequence: 50,
-    stage_id: Some("QUEUED"),
-    business_status: Some("QUEUED"),
-    event_type: "RETRY_FROM_START",
-    level: "INFO",
-    message: "Full job retry requested from start",
-    error_code: None,
-    metadata_json: None,
-  }).await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &request.job_id, sequence: 50, stage_id: Some("QUEUED"), business_status: Some("QUEUED"), event_type: "RETRY_FROM_START", level: "INFO", message: "Full job retry requested from start", error_code: None, metadata_json: None }).await;
 
-  Ok(RetryFlowordStepResponse {
-    retried,
-    job_id: request.job_id,
-    resumed_stage: PipelineStage::Queued.to_str().to_string(),
-    step_retry_count,
-  }.into())
+  Ok(RetryFlowordStepResponse { retried, job_id: request.job_id, resumed_stage: PipelineStage::Queued.to_str().to_string(), step_retry_count }.into())
 }
 
 #[derive(Deserialize)]
@@ -601,22 +509,11 @@ pub async fn skip_floword_research(task_database: State<'_, TaskDatabase>, reque
   outputs["pipeline_context"] = serde_json::to_value(context).map_err(|error| internal_error(&format!("Failed to serialize pipeline context: {error}"), Some(&request.job_id)))?;
   let step_retry_count = bump_retry_count(&mut outputs, "research");
   let outputs_string = serde_json::to_string(&outputs).map_err(|error| internal_error(&format!("Failed to serialize outputs: {error}"), Some(&request.job_id)))?;
-  update_pipeline_job_stage(UpdatePipelineJobStageArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    current_stage: PipelineStage::Research,
-    maybe_stage_outputs: Some(&outputs_string),
-    maybe_business_status: Some("GENERATING_IMAGE"),
-  }).await.map_err(|err| {
+  update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, current_stage: PipelineStage::Research, maybe_stage_outputs: Some(&outputs_string), maybe_business_status: Some("GENERATING_IMAGE") }).await.map_err(|err| {
     error!("[Floword] skip research update_stage failed: {:?}", err);
     internal_error("Failed to update research stage", Some(&request.job_id))
   })?;
-  let retried = update_pipeline_job_status(UpdatePipelineJobStatusArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    status: TaskStatus::Pending,
-    maybe_business_status: Some("GENERATING_IMAGE"),
-  }).await.map_err(|err| {
+  let retried = update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, status: TaskStatus::Pending, maybe_business_status: Some("GENERATING_IMAGE") }).await.map_err(|err| {
     error!("[Floword] skip research update_status failed: {:?}", err);
     internal_error("Failed to resume job after skipping research", Some(&request.job_id))
   })?;
@@ -672,17 +569,7 @@ pub struct FlowordVisualProviderResponse {
 impl SerializeMarker for FlowordVisualProviderResponse {}
 
 fn visual_provider_response(provider: &str, status: &str, capabilities: Vec<String>, message: &str) -> FlowordVisualProviderResponse {
-  FlowordVisualProviderResponse {
-    provider: provider.to_string(),
-    status: status.to_string(),
-    capabilities,
-    credential_type: "OmniRoute-managed provider credential".to_string(),
-    credential_source: "OmniRoute AI gateway (managed externally)".to_string(),
-    auth_method: "OmniRoute API key".to_string(),
-    oauth_supported: false,
-    api_key_supported: true,
-    message: message.to_string(),
-  }
+  FlowordVisualProviderResponse { provider: provider.to_string(), status: status.to_string(), capabilities, credential_type: "OmniRoute-managed provider credential".to_string(), credential_source: "OmniRoute AI gateway (managed externally)".to_string(), auth_method: "OmniRoute API key".to_string(), oauth_supported: false, api_key_supported: true, message: message.to_string() }
 }
 
 /// Query OmniRoute for available video-capable models. Reports `configured` when
@@ -693,12 +580,7 @@ pub async fn get_floword_visual_provider() -> ResponseOrErrorMessage<FlowordVisu
   match omniroute_list_video_models().await {
     Ok(video_models) => {
       if video_models.is_empty() {
-        let response = visual_provider_response(
-          "OmniRoute (no video provider)",
-          "not_configured",
-          vec!["Text".to_string(), "Voice".to_string()],
-          "No active, healthy video-provider connection was found. Gemini/OpenCode keys can generate text but do not authorize video. Add and test one or more Veo, Runway, Seedance, Sora, or other video-provider connections; OmniRoute will rotate their keys and fall back across providers.",
-        );
+        let response = visual_provider_response("OmniRoute (no video provider)", "not_configured", vec!["Text".to_string(), "Voice".to_string()], "No active, healthy video-provider connection was found. Gemini/OpenCode keys can generate text but do not authorize video. Add and test one or more Veo, Runway, Seedance, Sora, or other video-provider connections; OmniRoute will rotate their keys and fall back across providers.");
         Ok(response.into())
       } else {
         let model_ids: Vec<String> = video_models.iter().take(3).map(|m| m.id.clone()).collect();
@@ -707,18 +589,13 @@ pub async fn get_floword_visual_provider() -> ResponseOrErrorMessage<FlowordVisu
         let response = visual_provider_response("OmniRoute", "configured", capabilities, &message);
         Ok(response.into())
       }
-    }
+    },
     Err(error) => {
       let message = format!("OmniRoute unavailable for video model discovery: {error}");
       warn!("OMNIROUTE_UNAVAILABLE visual_provider_check: {}", message);
-      let response = visual_provider_response(
-        "OmniRoute (unavailable)",
-        "not_configured",
-        vec![],
-        &message,
-      );
+      let response = visual_provider_response("OmniRoute (unavailable)", "not_configured", vec![], &message);
       Ok(response.into())
-    }
+    },
   }
 }
 
@@ -731,37 +608,22 @@ pub async fn test_floword_visual_provider() -> ResponseOrErrorMessage<FlowordVis
   match omniroute_list_video_models().await {
     Ok(video_models) => {
       if video_models.is_empty() {
-        let response = visual_provider_response(
-          "OmniRoute (no video provider)",
-          "not_configured",
-          vec![],
-          "OmniRoute is reachable, but its video catalog has no matching active/healthy provider connection. Add video-provider keys with distinct account names and test them in OmniRoute.",
-        );
+        let response = visual_provider_response("OmniRoute (no video provider)", "not_configured", vec![], "OmniRoute is reachable, but its video catalog has no matching active/healthy provider connection. Add video-provider keys with distinct account names and test them in OmniRoute.");
         Ok(response.into())
       } else {
         let model_ids: Vec<String> = video_models.iter().take(5).map(|m| m.id.clone()).collect();
         let message = format!("OmniRoute video pool verified: {} connected model(s) ({}). Active accounts can complement each other's quota.", video_models.len(), model_ids.join(", "));
         info!("OMNIROUTE_VIDEO_CAPABILITY_VERIFIED models={}", model_ids.join(","));
-        let response = visual_provider_response(
-          "OmniRoute",
-          "configured",
-          vec!["Video".to_string(), "Text-to-Video".to_string()],
-          &message,
-        );
+        let response = visual_provider_response("OmniRoute", "configured", vec!["Video".to_string(), "Text-to-Video".to_string()], &message);
         Ok(response.into())
       }
-    }
+    },
     Err(error) => {
       let message = format!("OmniRoute test failed — model catalog unreachable: {error}");
       warn!("OMNIROUTE_UNAVAILABLE visual_provider_test: {}", message);
-      let response = visual_provider_response(
-        "OmniRoute (unavailable)",
-        "invalid",
-        vec![],
-        &message,
-      );
+      let response = visual_provider_response("OmniRoute (unavailable)", "invalid", vec![], &message);
       Ok(response.into())
-    }
+    },
   }
 }
 
@@ -800,6 +662,7 @@ pub async fn get_floword_readiness(app: AppHandle, task_database: State<'_, Task
 
   services.push(check_youwee(&app).await);
   services.push(check_vynaro(&app).await);
+  services.push(check_donut_runtime(&app));
 
   services.push(check_artcraft(&app));
 
@@ -812,9 +675,19 @@ pub async fn get_floword_readiness(app: AppHandle, task_database: State<'_, Task
   // Minimum bar for the draft_only pipeline the worker actually implements:
   // storage + OmniRoute + CapCut Mate all ready.
   let ready_ids: HashSet<&str> = services.iter().filter(|s| s.status == "ready").map(|s| s.id.as_str()).collect();
-  let is_ready_for_execution = ready_ids.contains("storage") && ready_ids.contains("omniroute") && ready_ids.contains("capcut");
+  let is_ready_for_execution = ready_ids.contains("storage") && ready_ids.contains("omniroute") && ready_ids.contains("capcut") && ready_ids.contains("donut-runtime");
 
   Ok(FlowordReadinessResponse { services, is_ready_for_execution }.into())
+}
+
+fn check_donut_runtime(app: &AppHandle) -> FlowordServiceHealth {
+  let started = Instant::now();
+  let Some(supervisor) = app.try_state::<RuntimeSupervisor>() else {
+    return FlowordServiceHealth { id: "donut-runtime".to_string(), status: "unavailable".to_string(), latency_ms: started.elapsed().as_millis() as u64, error_code: Some("SUPERVISOR_UNAVAILABLE".to_string()), message: Some("Donut runtime supervisor is not initialized".to_string()) };
+  };
+  let status = supervisor.status();
+  let ready = matches!(status.state, RuntimeSupervisorState::Ready);
+  FlowordServiceHealth { id: "donut-runtime".to_string(), status: if ready { "ready" } else { "unavailable" }.to_string(), latency_ms: started.elapsed().as_millis() as u64, error_code: if ready { None } else { Some(format!("RUNTIME_{:?}", status.state)) }, message: status.last_error }
 }
 
 // ---------------------------------------------------------------------------
@@ -852,23 +725,7 @@ fn get_response_from_job(job: &PipelineJob) -> GetFlowordWorkflowResponse {
   let input_payload_val = job.maybe_input_payload.as_deref().and_then(|s| serde_json::from_str::<Value>(s).ok());
   let b_status = derive_business_status(job);
 
-  GetFlowordWorkflowResponse {
-    job_id: job.id.as_str().to_string(),
-    page_id: job.maybe_page_id.clone(),
-    page_snapshot: page_snapshot_val,
-    status: job.status.to_str().to_string(),
-    business_status: b_status,
-    current_stage: job.current_stage.to_str().to_string(),
-    input_payload: input_payload_val,
-    failure_message: job.maybe_on_failure_message.clone(),
-    failure_code: job.maybe_failure_code.clone(),
-    failure_stage: job.maybe_failure_stage.clone(),
-    stage_outputs: job.maybe_stage_outputs.clone(),
-    stage_states: stage_states_from_outputs(job.maybe_stage_outputs.as_deref()),
-    created_at: job.created_at,
-    started_at: job.maybe_started_at,
-    completed_at: job.maybe_completed_at,
-  }
+  GetFlowordWorkflowResponse { job_id: job.id.as_str().to_string(), page_id: job.maybe_page_id.clone(), page_snapshot: page_snapshot_val, status: job.status.to_str().to_string(), business_status: b_status, current_stage: job.current_stage.to_str().to_string(), input_payload: input_payload_val, failure_message: job.maybe_on_failure_message.clone(), failure_code: job.maybe_failure_code.clone(), failure_stage: job.maybe_failure_stage.clone(), stage_outputs: job.maybe_stage_outputs.clone(), stage_states: stage_states_from_outputs(job.maybe_stage_outputs.as_deref()), created_at: job.created_at, started_at: job.maybe_started_at, completed_at: job.maybe_completed_at }
 }
 
 fn stage_states_from_outputs(stage_outputs: Option<&str>) -> Vec<StageState> {
@@ -994,7 +851,13 @@ async fn check_omniroute() -> FlowordServiceHealth {
   match llm_health_check().await {
     Ok(()) => FlowordServiceHealth { id: "omniroute".to_string(), status: "ready".to_string(), latency_ms: start.elapsed().as_millis() as u64, error_code: None, message: None },
     Err(e) => {
-      let status = if e.contains("UNAUTHORIZED") || e.contains("FORBIDDEN") { "auth_required" } else if e.contains("TIMEOUT") { "degraded" } else { "unavailable" };
+      let status = if e.contains("UNAUTHORIZED") || e.contains("FORBIDDEN") {
+        "auth_required"
+      } else if e.contains("TIMEOUT") {
+        "degraded"
+      } else {
+        "unavailable"
+      };
       FlowordServiceHealth { id: "omniroute".to_string(), status: status.to_string(), latency_ms: start.elapsed().as_millis() as u64, error_code: Some(OMNIROUTE_UNAVAILABLE.to_string()), message: Some(e) }
     },
   }
@@ -1035,9 +898,7 @@ fn check_artcraft(app: &AppHandle) -> FlowordServiceHealth {
   let start = Instant::now();
   let manager = app.state::<StorytellerCredentialManager>();
   // Refresh cookies from the HTTP plugin and check the account session.
-  let result = sync_storyteller_credentials_from_http_plugin(app, &manager)
-    .map_err(|_| "Unable to read the ArtCraft account cookie store".to_string())
-    .and_then(|()| manager.is_account_configured().map_err(|_| "Unable to inspect the ArtCraft account session".to_string()));
+  let result = sync_storyteller_credentials_from_http_plugin(app, &manager).map_err(|_| "Unable to read the ArtCraft account cookie store".to_string()).and_then(|()| manager.is_account_configured().map_err(|_| "Unable to inspect the ArtCraft account session".to_string()));
   match result {
     Ok(true) => FlowordServiceHealth { id: "artcraft".to_string(), status: "ready".to_string(), latency_ms: start.elapsed().as_millis() as u64, error_code: None, message: Some("ArtCraft account session configured".to_string()) },
     Ok(false) => FlowordServiceHealth { id: "artcraft".to_string(), status: "auth_required".to_string(), latency_ms: start.elapsed().as_millis() as u64, error_code: Some("ARTCRAFT_AUTH_REQUIRED".to_string()), message: Some("ArtCraft account login required".to_string()) },
@@ -1114,31 +975,15 @@ pub struct UpdateContentPageRequest {
 }
 
 #[tauri::command]
-pub async fn list_content_pages_command(
-  task_database: State<'_, TaskDatabase>,
-  include_archived: Option<bool>,
-) -> ResponseOrError<ListContentPagesResponse, FlowordErrorDetails> {
-  let list = list_content_pages(ListContentPagesArgs {
-    db: task_database.get_connection(),
-    include_archived: include_archived.unwrap_or(false),
-  })
-  .await
-  .map_err(|e| internal_error(&format!("Failed to list content pages: {e}"), None))?;
+pub async fn list_content_pages_command(task_database: State<'_, TaskDatabase>, include_archived: Option<bool>) -> ResponseOrError<ListContentPagesResponse, FlowordErrorDetails> {
+  let list = list_content_pages(ListContentPagesArgs { db: task_database.get_connection(), include_archived: include_archived.unwrap_or(false) }).await.map_err(|e| internal_error(&format!("Failed to list content pages: {e}"), None))?;
 
   Ok(ListContentPagesResponse { pages: list.pages }.into())
 }
 
 #[tauri::command]
-pub async fn get_content_page_command(
-  task_database: State<'_, TaskDatabase>,
-  page_id: String,
-) -> ResponseOrError<ContentPageResponse, FlowordErrorDetails> {
-  let maybe_page = get_content_page_by_id(GetContentPageByIdArgs {
-    db: task_database.get_connection(),
-    id: &page_id,
-  })
-  .await
-  .map_err(|e| internal_error(&format!("Failed to get content page: {e}"), None))?;
+pub async fn get_content_page_command(task_database: State<'_, TaskDatabase>, page_id: String) -> ResponseOrError<ContentPageResponse, FlowordErrorDetails> {
+  let maybe_page = get_content_page_by_id(GetContentPageByIdArgs { db: task_database.get_connection(), id: &page_id }).await.map_err(|e| internal_error(&format!("Failed to get content page: {e}"), None))?;
 
   match maybe_page {
     Some(page) => Ok(ContentPageResponse { page }.into()),
@@ -1147,10 +992,7 @@ pub async fn get_content_page_command(
 }
 
 #[tauri::command]
-pub async fn create_content_page_command(
-  task_database: State<'_, TaskDatabase>,
-  request: CreateContentPageRequest,
-) -> ResponseOrError<ContentPageResponse, FlowordErrorDetails> {
+pub async fn create_content_page_command(task_database: State<'_, TaskDatabase>, request: CreateContentPageRequest) -> ResponseOrError<ContentPageResponse, FlowordErrorDetails> {
   if request.name.trim().is_empty() {
     return Err(internal_error("Page name cannot be empty", None));
   }
@@ -1158,35 +1000,13 @@ pub async fn create_content_page_command(
     return Err(internal_error("Output root path cannot be empty", None));
   }
 
-  let page = create_content_page(CreateContentPageArgs {
-    db: task_database.get_connection(),
-    id: request.id.as_deref(),
-    name: request.name.trim(),
-    slug: request.slug.as_deref(),
-    output_root: request.output_root.trim(),
-    target_platform: request.target_platform.as_deref(),
-    default_model_id: request.default_model_id.as_deref(),
-    default_workflow_id: request.default_workflow_id.as_deref(),
-    default_language: request.default_language.as_deref(),
-    default_tone: request.default_tone.as_deref(),
-    default_aspect_ratio: request.default_aspect_ratio.as_deref(),
-    browser_profile_id: request.browser_profile_id.as_deref(),
-    worker_pool_id: request.worker_pool_id.as_deref(),
-    default_image_prompt: request.default_image_prompt.as_deref(),
-    default_expand_9_16_prompt: request.default_expand_9_16_prompt.as_deref(),
-    default_video_prompt: request.default_video_prompt.as_deref(),
-  })
-  .await
-  .map_err(|e| internal_error(&format!("Failed to create content page: {e}"), None))?;
+  let page = create_content_page(CreateContentPageArgs { db: task_database.get_connection(), id: request.id.as_deref(), name: request.name.trim(), slug: request.slug.as_deref(), output_root: request.output_root.trim(), target_platform: request.target_platform.as_deref(), default_model_id: request.default_model_id.as_deref(), default_workflow_id: request.default_workflow_id.as_deref(), default_language: request.default_language.as_deref(), default_tone: request.default_tone.as_deref(), default_aspect_ratio: request.default_aspect_ratio.as_deref(), browser_profile_id: request.browser_profile_id.as_deref(), worker_pool_id: request.worker_pool_id.as_deref(), default_image_prompt: request.default_image_prompt.as_deref(), default_expand_9_16_prompt: request.default_expand_9_16_prompt.as_deref(), default_video_prompt: request.default_video_prompt.as_deref() }).await.map_err(|e| internal_error(&format!("Failed to create content page: {e}"), None))?;
 
   Ok(ContentPageResponse { page }.into())
 }
 
 #[tauri::command]
-pub async fn update_content_page_command(
-  task_database: State<'_, TaskDatabase>,
-  request: UpdateContentPageRequest,
-) -> ResponseOrError<ContentPageResponse, FlowordErrorDetails> {
+pub async fn update_content_page_command(task_database: State<'_, TaskDatabase>, request: UpdateContentPageRequest) -> ResponseOrError<ContentPageResponse, FlowordErrorDetails> {
   if request.id.trim().is_empty() {
     return Err(internal_error("Page ID cannot be empty", None));
   }
@@ -1197,60 +1017,23 @@ pub async fn update_content_page_command(
     return Err(internal_error("Output root path cannot be empty", None));
   }
 
-  let page = update_content_page(UpdateContentPageArgs {
-    db: task_database.get_connection(),
-    id: request.id.trim(),
-    name: request.name.trim(),
-    slug: request.slug.as_deref(),
-    output_root: request.output_root.trim(),
-    target_platform: request.target_platform.as_deref(),
-    default_model_id: request.default_model_id.as_deref(),
-    default_workflow_id: request.default_workflow_id.as_deref(),
-    default_language: request.default_language.as_deref(),
-    default_tone: request.default_tone.as_deref(),
-    default_aspect_ratio: request.default_aspect_ratio.as_deref(),
-    browser_profile_id: request.browser_profile_id.as_deref(),
-    worker_pool_id: request.worker_pool_id.as_deref(),
-    default_image_prompt: request.default_image_prompt.as_deref(),
-    default_expand_9_16_prompt: request.default_expand_9_16_prompt.as_deref(),
-    default_video_prompt: request.default_video_prompt.as_deref(),
-  })
-  .await
-  .map_err(|e| internal_error(&format!("Failed to update content page: {e}"), None))?;
+  let page = update_content_page(UpdateContentPageArgs { db: task_database.get_connection(), id: request.id.trim(), name: request.name.trim(), slug: request.slug.as_deref(), output_root: request.output_root.trim(), target_platform: request.target_platform.as_deref(), default_model_id: request.default_model_id.as_deref(), default_workflow_id: request.default_workflow_id.as_deref(), default_language: request.default_language.as_deref(), default_tone: request.default_tone.as_deref(), default_aspect_ratio: request.default_aspect_ratio.as_deref(), browser_profile_id: request.browser_profile_id.as_deref(), worker_pool_id: request.worker_pool_id.as_deref(), default_image_prompt: request.default_image_prompt.as_deref(), default_expand_9_16_prompt: request.default_expand_9_16_prompt.as_deref(), default_video_prompt: request.default_video_prompt.as_deref() }).await.map_err(|e| internal_error(&format!("Failed to update content page: {e}"), None))?;
 
   Ok(ContentPageResponse { page }.into())
 }
 
 #[tauri::command]
-pub async fn archive_content_page_command(
-  task_database: State<'_, TaskDatabase>,
-  page_id: String,
-  is_archived: Option<bool>,
-) -> ResponseOrError<ArchiveContentPageResponse, FlowordErrorDetails> {
-  let success = archive_content_page(ArchiveContentPageArgs {
-    db: task_database.get_connection(),
-    id: &page_id,
-    is_archived: is_archived.unwrap_or(true),
-  })
-  .await
-  .map_err(|e| internal_error(&format!("Failed to archive content page: {e}"), None))?;
+pub async fn archive_content_page_command(task_database: State<'_, TaskDatabase>, page_id: String, is_archived: Option<bool>) -> ResponseOrError<ArchiveContentPageResponse, FlowordErrorDetails> {
+  let success = archive_content_page(ArchiveContentPageArgs { db: task_database.get_connection(), id: &page_id, is_archived: is_archived.unwrap_or(true) }).await.map_err(|e| internal_error(&format!("Failed to archive content page: {e}"), None))?;
 
   Ok(ArchiveContentPageResponse { success }.into())
 }
 
 #[tauri::command]
-pub async fn resolve_floword_output_path_command(
-  output_root: String,
-  page_name: String,
-) -> ResponseOrError<ResolveOutputPathResponse, FlowordErrorDetails> {
-  let dir = OutputPathResolver::resolve_page_date_directory(&output_root, &page_name)
-    .map_err(|e| internal_error(&e, None))?;
+pub async fn resolve_floword_output_path_command(output_root: String, page_name: String) -> ResponseOrError<ResolveOutputPathResponse, FlowordErrorDetails> {
+  let dir = OutputPathResolver::resolve_page_date_directory(&output_root, &page_name).map_err(|e| internal_error(&e, None))?;
 
-  Ok(ResolveOutputPathResponse {
-    output_directory: dir.to_string_lossy().to_string(),
-    date_string: crate::services::pipeline::output_policy::current_local_date_string(),
-    sanitized_page_name: crate::services::pipeline::output_policy::sanitize_page_name(&page_name),
-  }.into())
+  Ok(ResolveOutputPathResponse { output_directory: dir.to_string_lossy().to_string(), date_string: crate::services::pipeline::output_policy::current_local_date_string(), sanitized_page_name: crate::services::pipeline::output_policy::sanitize_page_name(&page_name) }.into())
 }
 
 // ---------------------------------------------------------------------------
@@ -1270,8 +1053,47 @@ pub async fn list_browser_workers_command() -> ResponseOrError<ListBrowserWorker
     Err(e) => {
       warn!("[Floword] list_browser_workers failed: {e}");
       Ok(ListBrowserWorkersResponse { workers: Vec::new() }.into())
-    }
+    },
   }
+}
+
+/// Returns the full Donut Profile Catalog — all browser profiles regardless
+/// of running state. Use this (not list_browser_workers) to populate
+/// Page → Profile dropdowns in the UI. Join with workers for runtime status.
+#[derive(Serialize)]
+pub struct ListDonutProfilesCommandResponse {
+  pub profiles: Vec<DonutProfileInfo>,
+}
+impl SerializeMarker for ListDonutProfilesCommandResponse {}
+
+#[tauri::command]
+pub async fn list_donut_profiles_command() -> ResponseOrError<ListDonutProfilesCommandResponse, FlowordErrorDetails> {
+  match list_donut_profiles().await {
+    Ok(resp) => Ok(ListDonutProfilesCommandResponse { profiles: resp.profiles }.into()),
+    Err(e) => {
+      warn!("[Floword] list_donut_profiles failed: {e}");
+      // Return empty list — Donut may not be running; UI handles gracefully
+      Ok(ListDonutProfilesCommandResponse { profiles: Vec::new() }.into())
+    },
+  }
+}
+
+#[derive(Serialize)]
+pub struct OpenDonutBrowserGuiResponse {
+  pub success: bool,
+}
+impl SerializeMarker for OpenDonutBrowserGuiResponse {}
+
+#[tauri::command]
+pub async fn open_donut_browser_gui_command() -> ResponseOrError<OpenDonutBrowserGuiResponse, FlowordErrorDetails> {
+  info!("[Floword] Opening Donut Browser Desktop App");
+
+  // Launch Donut Browser Desktop App Window (Tauri Desktop App)
+  let _ = std::process::Command::new("cmd")
+    .args(["/c", "cd /d D:\\capcutpolot\\donutbrowser && pnpm tauri dev"])
+    .spawn();
+
+  Ok(OpenDonutBrowserGuiResponse { success: true }.into())
 }
 
 #[derive(Deserialize)]
@@ -1290,10 +1112,7 @@ pub struct IngestFlowordSourceImageResponse {
 impl SerializeMarker for IngestFlowordSourceImageResponse {}
 
 #[tauri::command]
-pub async fn ingest_floword_source_image_command(
-  app_data_root: State<'_, AppDataRoot>,
-  request: IngestFlowordSourceImageRequest,
-) -> ResponseOrError<IngestFlowordSourceImageResponse, FlowordErrorDetails> {
+pub async fn ingest_floword_source_image_command(app_data_root: State<'_, AppDataRoot>, request: IngestFlowordSourceImageRequest) -> ResponseOrError<IngestFlowordSourceImageResponse, FlowordErrorDetails> {
   let raw_bytes: Vec<u8> = if let Some(path) = request.file_path.as_deref().filter(|s| !s.trim().is_empty()) {
     let p = std::path::Path::new(path);
     if !p.exists() {
@@ -1301,14 +1120,9 @@ pub async fn ingest_floword_source_image_command(
     }
     std::fs::read(p).map_err(|e| internal_error(&format!("Failed to read file: {e}"), None))?
   } else if let Some(b64) = request.base64_data.as_deref().filter(|s| !s.trim().is_empty()) {
-    let clean_b64 = if let Some(idx) = b64.find(',') {
-      &b64[idx + 1..]
-    } else {
-      b64
-    };
+    let clean_b64 = if let Some(idx) = b64.find(',') { &b64[idx + 1..] } else { b64 };
     use base64::Engine;
-    base64::engine::general_purpose::STANDARD.decode(clean_b64.trim())
-      .map_err(|e| internal_error(&format!("Failed to decode base64 image data: {e}"), None))?
+    base64::engine::general_purpose::STANDARD.decode(clean_b64.trim()).map_err(|e| internal_error(&format!("Failed to decode base64 image data: {e}"), None))?
   } else {
     return Err(internal_error("Either file_path or base64_data must be provided", None));
   };
@@ -1317,19 +1131,16 @@ pub async fn ingest_floword_source_image_command(
     return Err(internal_error("Image data is empty (0 bytes)", None));
   }
 
-  let (mime_type, ext) = detect_image_mime(&raw_bytes)
-    .map_err(|e| internal_error(&e, None))?;
+  let (mime_type, ext) = detect_image_mime(&raw_bytes).map_err(|e| internal_error(&e, None))?;
   let hash = compute_sha256(&raw_bytes);
   let size_bytes = raw_bytes.len() as u64;
 
   let artifacts_dir = app_data_root.pipeline_artifacts_dir().join("sources");
-  std::fs::create_dir_all(&artifacts_dir)
-    .map_err(|e| internal_error(&format!("Cannot create sources artifact directory: {e}"), None))?;
+  std::fs::create_dir_all(&artifacts_dir).map_err(|e| internal_error(&format!("Cannot create sources artifact directory: {e}"), None))?;
 
   let target_filename = format!("{hash}.{ext}");
   let target_file_path = artifacts_dir.join(&target_filename);
-  std::fs::write(&target_file_path, &raw_bytes)
-    .map_err(|e| internal_error(&format!("Cannot write artifact file: {e}"), None))?;
+  std::fs::write(&target_file_path, &raw_bytes).map_err(|e| internal_error(&format!("Cannot write artifact file: {e}"), None))?;
 
   let location_str = target_file_path.to_string_lossy().to_string();
   let artifact = ArtifactRef {
@@ -1349,10 +1160,7 @@ pub async fn ingest_floword_source_image_command(
 
   let preview_url = format!("artcraft-asset://localhost/{}", location_str.replace('\\', "/"));
 
-  Ok(IngestFlowordSourceImageResponse {
-    artifact,
-    preview_url,
-  }.into())
+  Ok(IngestFlowordSourceImageResponse { artifact, preview_url }.into())
 }
 
 #[derive(Serialize)]
@@ -1362,13 +1170,8 @@ pub struct FlowordSettingsResponse {
 impl SerializeMarker for FlowordSettingsResponse {}
 
 #[tauri::command]
-pub async fn get_floword_settings_command(
-  task_database: State<'_, TaskDatabase>,
-) -> ResponseOrError<FlowordSettingsResponse, FlowordErrorDetails> {
-  let val = get_app_setting(GetAppSettingArgs {
-    db: task_database.get_connection(),
-    key: "floword.max_concurrent_jobs",
-  }).await.ok().flatten().and_then(|v| v.parse::<usize>().ok()).unwrap_or(3).clamp(1, 20);
+pub async fn get_floword_settings_command(task_database: State<'_, TaskDatabase>) -> ResponseOrError<FlowordSettingsResponse, FlowordErrorDetails> {
+  let val = get_app_setting(GetAppSettingArgs { db: task_database.get_connection(), key: "floword.max_concurrent_jobs" }).await.ok().flatten().and_then(|v| v.parse::<usize>().ok()).unwrap_or(3).clamp(1, 20);
 
   Ok(FlowordSettingsResponse { max_concurrent_jobs: val }.into())
 }
@@ -1379,17 +1182,10 @@ pub struct UpdateFlowordSettingsRequest {
 }
 
 #[tauri::command]
-pub async fn update_floword_settings_command(
-  task_database: State<'_, TaskDatabase>,
-  request: UpdateFlowordSettingsRequest,
-) -> ResponseOrError<FlowordSettingsResponse, FlowordErrorDetails> {
+pub async fn update_floword_settings_command(task_database: State<'_, TaskDatabase>, request: UpdateFlowordSettingsRequest) -> ResponseOrError<FlowordSettingsResponse, FlowordErrorDetails> {
   let clamped = request.max_concurrent_jobs.clamp(1, 20);
   let val_str = clamped.to_string();
-  let _ = set_app_setting(SetAppSettingArgs {
-    db: task_database.get_connection(),
-    key: "floword.max_concurrent_jobs",
-    value: &val_str,
-  }).await.map_err(|e| internal_error(&format!("Failed to save setting: {e}"), None))?;
+  let _ = set_app_setting(SetAppSettingArgs { db: task_database.get_connection(), key: "floword.max_concurrent_jobs", value: &val_str }).await.map_err(|e| internal_error(&format!("Failed to save setting: {e}"), None))?;
 
   Ok(FlowordSettingsResponse { max_concurrent_jobs: clamped }.into())
 }
@@ -1406,14 +1202,8 @@ pub struct ListPipelineJobEventsResponse {
 impl SerializeMarker for ListPipelineJobEventsResponse {}
 
 #[tauri::command]
-pub async fn list_pipeline_job_events_command(
-  task_database: State<'_, TaskDatabase>,
-  request: ListPipelineJobEventsRequest,
-) -> ResponseOrError<ListPipelineJobEventsResponse, FlowordErrorDetails> {
-  let events = list_pipeline_job_events(ListPipelineJobEventsArgs {
-    db: task_database.get_connection(),
-    job_id: &request.job_id,
-  }).await.map_err(|e| internal_error(&format!("Failed to query job events: {e}"), Some(&request.job_id)))?;
+pub async fn list_pipeline_job_events_command(task_database: State<'_, TaskDatabase>, request: ListPipelineJobEventsRequest) -> ResponseOrError<ListPipelineJobEventsResponse, FlowordErrorDetails> {
+  let events = list_pipeline_job_events(ListPipelineJobEventsArgs { db: task_database.get_connection(), job_id: &request.job_id }).await.map_err(|e| internal_error(&format!("Failed to query job events: {e}"), Some(&request.job_id)))?;
 
   Ok(ListPipelineJobEventsResponse { events }.into())
 }
@@ -1438,22 +1228,8 @@ pub struct ListJobPublicationsResponse {
 impl SerializeMarker for ListJobPublicationsResponse {}
 
 #[tauri::command]
-pub async fn list_job_publications_command(
-  task_database: State<'_, TaskDatabase>,
-  request: ListJobPublicationsRequest,
-) -> ResponseOrError<ListJobPublicationsResponse, FlowordErrorDetails> {
-  let publications = list_job_publications(
-    task_database.get_connection(),
-    ListJobPublicationsArgs {
-      job_id: request.job_id,
-      page_id: request.page_id,
-      platform: request.platform,
-      status: request.status,
-      limit: request.limit,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to list job publications: {e}"), None))?;
+pub async fn list_job_publications_command(task_database: State<'_, TaskDatabase>, request: ListJobPublicationsRequest) -> ResponseOrError<ListJobPublicationsResponse, FlowordErrorDetails> {
+  let publications = list_job_publications(task_database.get_connection(), ListJobPublicationsArgs { job_id: request.job_id, page_id: request.page_id, platform: request.platform, status: request.status, limit: request.limit }).await.map_err(|e| internal_error(&format!("Failed to list job publications: {e}"), None))?;
 
   Ok(ListJobPublicationsResponse { publications }.into())
 }
@@ -1471,63 +1247,23 @@ pub struct PublicationActionResponse {
 impl SerializeMarker for PublicationActionResponse {}
 
 #[tauri::command]
-pub async fn approve_publication_command(
-  task_database: State<'_, TaskDatabase>,
-  request: ApprovePublicationRequest,
-) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
+pub async fn approve_publication_command(task_database: State<'_, TaskDatabase>, request: ApprovePublicationRequest) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
   let db = task_database.get_connection();
-  let pub_record = get_job_publication_by_id(db, &request.publication_id)
-    .await
-    .map_err(|e| internal_error(&format!("Database query error: {e}"), None))?
-    .ok_or_else(|| not_found(&request.publication_id))?;
+  let pub_record = get_job_publication_by_id(db, &request.publication_id).await.map_err(|e| internal_error(&format!("Database query error: {e}"), None))?.ok_or_else(|| not_found(&request.publication_id))?;
 
-  let (new_status, scheduled_at) = if let Some(sched) = request.scheduled_at {
-    ("SCHEDULED", Some(sched))
-  } else {
-    ("READY_TO_POST", None)
-  };
+  let (new_status, scheduled_at) = if let Some(sched) = request.scheduled_at { ("SCHEDULED", Some(sched)) } else { ("READY_TO_POST", None) };
 
-  let updated = update_job_publication(
-    db,
-    UpdateJobPublicationArgs {
-      id: pub_record.id.clone(),
-      status: Some(new_status.to_string()),
-      scheduled_at,
-      approved_at: Some(chrono::Utc::now().timestamp()),
-      posted_at: None,
-      platform_post_id: None,
-      post_url: None,
-      title: None,
-      caption: None,
-      last_error_code: None,
-      last_error_message: None,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to update publication: {e}"), Some(&pub_record.job_id)))?;
+  let updated = update_job_publication(db, UpdateJobPublicationArgs { id: pub_record.id.clone(), status: Some(new_status.to_string()), scheduled_at, approved_at: Some(chrono::Utc::now().timestamp()), posted_at: None, platform_post_id: None, post_url: None, title: None, caption: None, last_error_code: None, last_error_message: None }).await.map_err(|e| internal_error(&format!("Failed to update publication: {e}"), Some(&pub_record.job_id)))?;
 
   let stage_str = format!("PUBLISH_{}", pub_record.platform.to_uppercase());
   let msg_str = format!("Bản ghi xuất bản {} [{}] đã được duyệt (Status: {})", pub_record.platform, pub_record.id, new_status);
   let meta_str = serde_json::json!({
     "publication_id": pub_record.id,
     "scheduled_at": scheduled_at
-  }).to_string();
+  })
+  .to_string();
 
-  let _ = insert_pipeline_job_event(
-    InsertPipelineJobEventArgs {
-      db,
-      id: None,
-      job_id: &pub_record.job_id,
-      sequence: 25,
-      stage_id: Some(&stage_str),
-      business_status: Some(new_status),
-      event_type: if scheduled_at.is_some() { "SCHEDULED" } else { "APPROVED" },
-      level: "INFO",
-      message: &msg_str,
-      error_code: None,
-      metadata_json: Some(&meta_str),
-    },
-  ).await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db, id: None, job_id: &pub_record.job_id, sequence: 25, stage_id: Some(&stage_str), business_status: Some(new_status), event_type: if scheduled_at.is_some() { "SCHEDULED" } else { "APPROVED" }, level: "INFO", message: &msg_str, error_code: None, metadata_json: Some(&meta_str) }).await;
 
   Ok(PublicationActionResponse { publication: updated }.into())
 }
@@ -1539,57 +1275,21 @@ pub struct RejectPublicationRequest {
 }
 
 #[tauri::command]
-pub async fn reject_publication_command(
-  task_database: State<'_, TaskDatabase>,
-  request: RejectPublicationRequest,
-) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
+pub async fn reject_publication_command(task_database: State<'_, TaskDatabase>, request: RejectPublicationRequest) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
   let db = task_database.get_connection();
-  let pub_record = get_job_publication_by_id(db, &request.publication_id)
-    .await
-    .map_err(|e| internal_error(&format!("Database query error: {e}"), None))?
-    .ok_or_else(|| not_found(&request.publication_id))?;
+  let pub_record = get_job_publication_by_id(db, &request.publication_id).await.map_err(|e| internal_error(&format!("Database query error: {e}"), None))?.ok_or_else(|| not_found(&request.publication_id))?;
 
-  let updated = update_job_publication(
-    db,
-    UpdateJobPublicationArgs {
-      id: pub_record.id.clone(),
-      status: Some("CANCELLED".to_string()),
-      scheduled_at: None,
-      approved_at: None,
-      posted_at: None,
-      platform_post_id: None,
-      post_url: None,
-      title: None,
-      caption: None,
-      last_error_code: Some("REJECTED_BY_USER".to_string()),
-      last_error_message: request.reason.clone(),
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to reject publication: {e}"), Some(&pub_record.job_id)))?;
+  let updated = update_job_publication(db, UpdateJobPublicationArgs { id: pub_record.id.clone(), status: Some("CANCELLED".to_string()), scheduled_at: None, approved_at: None, posted_at: None, platform_post_id: None, post_url: None, title: None, caption: None, last_error_code: Some("REJECTED_BY_USER".to_string()), last_error_message: request.reason.clone() }).await.map_err(|e| internal_error(&format!("Failed to reject publication: {e}"), Some(&pub_record.job_id)))?;
 
   let stage_str = format!("PUBLISH_{}", pub_record.platform.to_uppercase());
   let msg_str = format!("Bản ghi xuất bản {} [{}] đã bị từ chối: {:?}", pub_record.platform, pub_record.id, request.reason);
   let meta_str = serde_json::json!({
     "publication_id": pub_record.id,
     "reason": request.reason
-  }).to_string();
+  })
+  .to_string();
 
-  let _ = insert_pipeline_job_event(
-    InsertPipelineJobEventArgs {
-      db,
-      id: None,
-      job_id: &pub_record.job_id,
-      sequence: 26,
-      stage_id: Some(&stage_str),
-      business_status: Some("CANCELLED"),
-      event_type: "CANCELLED",
-      level: "INFO",
-      message: &msg_str,
-      error_code: None,
-      metadata_json: Some(&meta_str),
-    },
-  ).await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db, id: None, job_id: &pub_record.job_id, sequence: 26, stage_id: Some(&stage_str), business_status: Some("CANCELLED"), event_type: "CANCELLED", level: "INFO", message: &msg_str, error_code: None, metadata_json: Some(&meta_str) }).await;
 
   Ok(PublicationActionResponse { publication: updated }.into())
 }
@@ -1602,75 +1302,30 @@ pub struct SchedulePublicationRequest {
 }
 
 #[tauri::command]
-pub async fn schedule_publication_command(
-  task_database: State<'_, TaskDatabase>,
-  request: SchedulePublicationRequest,
-) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
+pub async fn schedule_publication_command(task_database: State<'_, TaskDatabase>, request: SchedulePublicationRequest) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
   let db = task_database.get_connection();
-  let pub_record = get_job_publication_by_id(db, &request.publication_id)
-    .await
-    .map_err(|e| internal_error(&format!("Database query error: {e}"), None))?
-    .ok_or_else(|| not_found(&request.publication_id))?;
+  let pub_record = get_job_publication_by_id(db, &request.publication_id).await.map_err(|e| internal_error(&format!("Database query error: {e}"), None))?.ok_or_else(|| not_found(&request.publication_id))?;
 
   let scheduled_timestamp = if request.use_page_default_slot.unwrap_or(false) {
-    let targets = list_publish_targets_for_page(db, &pub_record.page_id)
-      .await
-      .unwrap_or_default();
-    let default_slots = targets.iter()
-      .find(|t| t.platform == pub_record.platform)
-      .map(|t| t.default_slots_json.as_str())
-      .unwrap_or("[\"08:30\", \"10:00\", \"17:00\", \"22:00\"]");
+    let targets = list_publish_targets_for_page(db, &pub_record.page_id).await.unwrap_or_default();
+    let default_slots = targets.iter().find(|t| t.platform == pub_record.platform).map(|t| t.default_slots_json.as_str()).unwrap_or("[\"08:30\", \"10:00\", \"17:00\", \"22:00\"]");
 
-    crate::services::publishing::slot_allocator::allocate_next_available_slot(
-      db,
-      &pub_record.page_id,
-      default_slots,
-    ).await
+    crate::services::publishing::slot_allocator::allocate_next_available_slot(db, &pub_record.page_id, default_slots).await
   } else {
     request.scheduled_at.unwrap_or_else(|| chrono::Utc::now().timestamp() + 3600)
   };
 
-  let updated = update_job_publication(
-    db,
-    UpdateJobPublicationArgs {
-      id: pub_record.id.clone(),
-      status: Some("SCHEDULED".to_string()),
-      scheduled_at: Some(scheduled_timestamp),
-      approved_at: Some(chrono::Utc::now().timestamp()),
-      posted_at: None,
-      platform_post_id: None,
-      post_url: None,
-      title: None,
-      caption: None,
-      last_error_code: None,
-      last_error_message: None,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to schedule publication: {e}"), Some(&pub_record.job_id)))?;
+  let updated = update_job_publication(db, UpdateJobPublicationArgs { id: pub_record.id.clone(), status: Some("SCHEDULED".to_string()), scheduled_at: Some(scheduled_timestamp), approved_at: Some(chrono::Utc::now().timestamp()), posted_at: None, platform_post_id: None, post_url: None, title: None, caption: None, last_error_code: None, last_error_message: None }).await.map_err(|e| internal_error(&format!("Failed to schedule publication: {e}"), Some(&pub_record.job_id)))?;
 
   let stage_str = format!("PUBLISH_{}", pub_record.platform.to_uppercase());
   let msg_str = format!("Lên lịch đăng tải {} [{}] tại timestamp {}", pub_record.platform, pub_record.id, scheduled_timestamp);
   let meta_str = serde_json::json!({
     "publication_id": pub_record.id,
     "scheduled_at": scheduled_timestamp
-  }).to_string();
+  })
+  .to_string();
 
-  let _ = insert_pipeline_job_event(
-    InsertPipelineJobEventArgs {
-      db,
-      id: None,
-      job_id: &pub_record.job_id,
-      sequence: 27,
-      stage_id: Some(&stage_str),
-      business_status: Some("SCHEDULED"),
-      event_type: "SCHEDULED",
-      level: "INFO",
-      message: &msg_str,
-      error_code: None,
-      metadata_json: Some(&meta_str),
-    },
-  ).await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db, id: None, job_id: &pub_record.job_id, sequence: 27, stage_id: Some(&stage_str), business_status: Some("SCHEDULED"), event_type: "SCHEDULED", level: "INFO", message: &msg_str, error_code: None, metadata_json: Some(&meta_str) }).await;
 
   Ok(PublicationActionResponse { publication: updated }.into())
 }
@@ -1681,56 +1336,20 @@ pub struct RetryPublicationRequest {
 }
 
 #[tauri::command]
-pub async fn retry_publication_command(
-  task_database: State<'_, TaskDatabase>,
-  request: RetryPublicationRequest,
-) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
+pub async fn retry_publication_command(task_database: State<'_, TaskDatabase>, request: RetryPublicationRequest) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
   let db = task_database.get_connection();
-  let pub_record = get_job_publication_by_id(db, &request.publication_id)
-    .await
-    .map_err(|e| internal_error(&format!("Database query error: {e}"), None))?
-    .ok_or_else(|| not_found(&request.publication_id))?;
+  let pub_record = get_job_publication_by_id(db, &request.publication_id).await.map_err(|e| internal_error(&format!("Database query error: {e}"), None))?.ok_or_else(|| not_found(&request.publication_id))?;
 
-  let updated = update_job_publication(
-    db,
-    UpdateJobPublicationArgs {
-      id: pub_record.id.clone(),
-      status: Some("READY_TO_POST".to_string()),
-      scheduled_at: None,
-      approved_at: Some(chrono::Utc::now().timestamp()),
-      posted_at: None,
-      platform_post_id: None,
-      post_url: None,
-      title: None,
-      caption: None,
-      last_error_code: None,
-      last_error_message: None,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to retry publication: {e}"), Some(&pub_record.job_id)))?;
+  let updated = update_job_publication(db, UpdateJobPublicationArgs { id: pub_record.id.clone(), status: Some("READY_TO_POST".to_string()), scheduled_at: None, approved_at: Some(chrono::Utc::now().timestamp()), posted_at: None, platform_post_id: None, post_url: None, title: None, caption: None, last_error_code: None, last_error_message: None }).await.map_err(|e| internal_error(&format!("Failed to retry publication: {e}"), Some(&pub_record.job_id)))?;
 
   let stage_str = format!("PUBLISH_{}", pub_record.platform.to_uppercase());
   let msg_str = format!("Khởi chạy lại lệnh đăng tải {} [{}]", pub_record.platform, pub_record.id);
   let meta_str = serde_json::json!({
     "publication_id": pub_record.id
-  }).to_string();
+  })
+  .to_string();
 
-  let _ = insert_pipeline_job_event(
-    InsertPipelineJobEventArgs {
-      db,
-      id: None,
-      job_id: &pub_record.job_id,
-      sequence: 28,
-      stage_id: Some(&stage_str),
-      business_status: Some("READY_TO_POST"),
-      event_type: "RETRY_INITIATED",
-      level: "INFO",
-      message: &msg_str,
-      error_code: None,
-      metadata_json: Some(&meta_str),
-    },
-  ).await;
+  let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db, id: None, job_id: &pub_record.job_id, sequence: 28, stage_id: Some(&stage_str), business_status: Some("READY_TO_POST"), event_type: "RETRY_INITIATED", level: "INFO", message: &msg_str, error_code: None, metadata_json: Some(&meta_str) }).await;
 
   Ok(PublicationActionResponse { publication: updated }.into())
 }
@@ -1741,34 +1360,11 @@ pub struct PostNowPublicationRequest {
 }
 
 #[tauri::command]
-pub async fn post_now_publication_command(
-  task_database: State<'_, TaskDatabase>,
-  request: PostNowPublicationRequest,
-) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
+pub async fn post_now_publication_command(task_database: State<'_, TaskDatabase>, request: PostNowPublicationRequest) -> ResponseOrError<PublicationActionResponse, FlowordErrorDetails> {
   let db = task_database.get_connection();
-  let pub_record = get_job_publication_by_id(db, &request.publication_id)
-    .await
-    .map_err(|e| internal_error(&format!("Database query error: {e}"), None))?
-    .ok_or_else(|| not_found(&request.publication_id))?;
+  let pub_record = get_job_publication_by_id(db, &request.publication_id).await.map_err(|e| internal_error(&format!("Database query error: {e}"), None))?.ok_or_else(|| not_found(&request.publication_id))?;
 
-  let updated = update_job_publication(
-    db,
-    UpdateJobPublicationArgs {
-      id: pub_record.id.clone(),
-      status: Some("READY_TO_POST".to_string()),
-      scheduled_at: None,
-      approved_at: Some(chrono::Utc::now().timestamp()),
-      posted_at: None,
-      platform_post_id: None,
-      post_url: None,
-      title: None,
-      caption: None,
-      last_error_code: None,
-      last_error_message: None,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to update publication to post now: {e}"), Some(&pub_record.job_id)))?;
+  let updated = update_job_publication(db, UpdateJobPublicationArgs { id: pub_record.id.clone(), status: Some("READY_TO_POST".to_string()), scheduled_at: None, approved_at: Some(chrono::Utc::now().timestamp()), posted_at: None, platform_post_id: None, post_url: None, title: None, caption: None, last_error_code: None, last_error_message: None }).await.map_err(|e| internal_error(&format!("Failed to update publication to post now: {e}"), Some(&pub_record.job_id)))?;
 
   Ok(PublicationActionResponse { publication: updated }.into())
 }
@@ -1785,13 +1381,8 @@ pub struct ListContentPagePublishTargetsResponse {
 impl SerializeMarker for ListContentPagePublishTargetsResponse {}
 
 #[tauri::command]
-pub async fn list_content_page_publish_targets_command(
-  task_database: State<'_, TaskDatabase>,
-  request: ListContentPagePublishTargetsRequest,
-) -> ResponseOrError<ListContentPagePublishTargetsResponse, FlowordErrorDetails> {
-  let targets = list_publish_targets_for_page(task_database.get_connection(), &request.page_id)
-    .await
-    .map_err(|e| internal_error(&format!("Failed to list page publish targets: {e}"), None))?;
+pub async fn list_content_page_publish_targets_command(task_database: State<'_, TaskDatabase>, request: ListContentPagePublishTargetsRequest) -> ResponseOrError<ListContentPagePublishTargetsResponse, FlowordErrorDetails> {
+  let targets = list_publish_targets_for_page(task_database.get_connection(), &request.page_id).await.map_err(|e| internal_error(&format!("Failed to list page publish targets: {e}"), None))?;
 
   Ok(ListContentPagePublishTargetsResponse { targets }.into())
 }
@@ -1817,46 +1408,11 @@ pub struct UpsertContentPagePublishTargetResponse {
 impl SerializeMarker for UpsertContentPagePublishTargetResponse {}
 
 #[tauri::command]
-pub async fn upsert_content_page_publish_target_command(
-  task_database: State<'_, TaskDatabase>,
-  request: UpsertContentPagePublishTargetRequest,
-) -> ResponseOrError<UpsertContentPagePublishTargetResponse, FlowordErrorDetails> {
+pub async fn upsert_content_page_publish_target_command(task_database: State<'_, TaskDatabase>, request: UpsertContentPagePublishTargetRequest) -> ResponseOrError<UpsertContentPagePublishTargetResponse, FlowordErrorDetails> {
   let pool = task_database.get_connection();
 
-  let target = if let Some(target_id) = request.id {
-    update_publish_target(
-      pool,
-      UpdatePublishTargetArgs {
-        id: target_id,
-        enabled: Some(request.enabled),
-        account_label: request.account_label,
-        destination_id: Some(request.destination_id),
-        destination_handle: request.destination_handle,
-        browser_profile_id: Some(request.browser_profile_id),
-        post_mode: request.post_mode,
-        default_slots_json: request.default_slots_json,
-      },
-    )
-    .await
-    .map_err(|e| internal_error(&format!("Failed to update publish target: {e}"), None))?
-  } else {
-    create_publish_target(
-      pool,
-      CreatePublishTargetArgs {
-        page_id: request.page_id,
-        platform: request.platform,
-        enabled: request.enabled,
-        account_label: request.account_label,
-        destination_id: request.destination_id,
-        destination_handle: request.destination_handle,
-        browser_profile_id: request.browser_profile_id,
-        post_mode: request.post_mode,
-        default_slots_json: request.default_slots_json,
-      },
-    )
-    .await
-    .map_err(|e| internal_error(&format!("Failed to create publish target: {e}"), None))?
-  };
+  let target =
+    if let Some(target_id) = request.id { update_publish_target(pool, UpdatePublishTargetArgs { id: target_id, enabled: Some(request.enabled), account_label: request.account_label, destination_id: Some(request.destination_id), destination_handle: request.destination_handle, browser_profile_id: Some(request.browser_profile_id), post_mode: request.post_mode, default_slots_json: request.default_slots_json }).await.map_err(|e| internal_error(&format!("Failed to update publish target: {e}"), None))? } else { create_publish_target(pool, CreatePublishTargetArgs { page_id: request.page_id, platform: request.platform, enabled: request.enabled, account_label: request.account_label, destination_id: request.destination_id, destination_handle: request.destination_handle, browser_profile_id: request.browser_profile_id, post_mode: request.post_mode, default_slots_json: request.default_slots_json }).await.map_err(|e| internal_error(&format!("Failed to create publish target: {e}"), None))? };
 
   Ok(UpsertContentPagePublishTargetResponse { target }.into())
 }
@@ -1873,13 +1429,8 @@ pub struct DeleteContentPagePublishTargetResponse {
 impl SerializeMarker for DeleteContentPagePublishTargetResponse {}
 
 #[tauri::command]
-pub async fn delete_content_page_publish_target_command(
-  task_database: State<'_, TaskDatabase>,
-  request: DeleteContentPagePublishTargetRequest,
-) -> ResponseOrError<DeleteContentPagePublishTargetResponse, FlowordErrorDetails> {
-  delete_publish_target(task_database.get_connection(), &request.id)
-    .await
-    .map_err(|e| internal_error(&format!("Failed to delete publish target: {e}"), None))?;
+pub async fn delete_content_page_publish_target_command(task_database: State<'_, TaskDatabase>, request: DeleteContentPagePublishTargetRequest) -> ResponseOrError<DeleteContentPagePublishTargetResponse, FlowordErrorDetails> {
+  delete_publish_target(task_database.get_connection(), &request.id).await.map_err(|e| internal_error(&format!("Failed to delete publish target: {e}"), None))?;
 
   Ok(DeleteContentPagePublishTargetResponse { success: true }.into())
 }
@@ -1904,24 +1455,8 @@ pub struct DashboardSummaryResponse {
 impl SerializeMarker for DashboardSummaryResponse {}
 
 #[tauri::command]
-pub async fn floword_dashboard_summary_command(
-  task_database: State<'_, TaskDatabase>,
-  request: DashboardSummaryRequest,
-) -> ResponseOrError<DashboardSummaryResponse, FlowordErrorDetails> {
-  let summary = get_dashboard_summary(
-    task_database.get_connection(),
-    DashboardSummaryQueryArgs {
-      page_id: request.page_id,
-      date_from: request.date_from,
-      date_to: request.date_to,
-      status: request.status,
-      business_status: None,
-      task_status: None,
-      platform: request.platform,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to compute dashboard summary: {e}"), None))?;
+pub async fn floword_dashboard_summary_command(task_database: State<'_, TaskDatabase>, request: DashboardSummaryRequest) -> ResponseOrError<DashboardSummaryResponse, FlowordErrorDetails> {
+  let summary = get_dashboard_summary(task_database.get_connection(), DashboardSummaryQueryArgs { page_id: request.page_id, date_from: request.date_from, date_to: request.date_to, status: request.status, business_status: None, task_status: None, platform: request.platform }).await.map_err(|e| internal_error(&format!("Failed to compute dashboard summary: {e}"), None))?;
 
   Ok(DashboardSummaryResponse { summary }.into())
 }
@@ -1944,24 +1479,8 @@ pub struct ListPipelineJobsPaginatedResponse {
 impl SerializeMarker for ListPipelineJobsPaginatedResponse {}
 
 #[tauri::command]
-pub async fn list_pipeline_jobs_paginated_command(
-  task_database: State<'_, TaskDatabase>,
-  request: ListPipelineJobsPaginatedRequest,
-) -> ResponseOrError<ListPipelineJobsPaginatedResponse, FlowordErrorDetails> {
-  let result = list_pipeline_jobs_paginated(
-    task_database.get_connection(),
-    ListPipelineJobsPaginatedArgs {
-      page_id: request.page_id,
-      status: request.status,
-      date_from: request.date_from,
-      date_to: request.date_to,
-      search_query: request.search_query,
-      limit: request.limit,
-      offset: request.offset,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to list paginated jobs: {e}"), None))?;
+pub async fn list_pipeline_jobs_paginated_command(task_database: State<'_, TaskDatabase>, request: ListPipelineJobsPaginatedRequest) -> ResponseOrError<ListPipelineJobsPaginatedResponse, FlowordErrorDetails> {
+  let result = list_pipeline_jobs_paginated(task_database.get_connection(), ListPipelineJobsPaginatedArgs { page_id: request.page_id, status: request.status, date_from: request.date_from, date_to: request.date_to, search_query: request.search_query, limit: request.limit, offset: request.offset }).await.map_err(|e| internal_error(&format!("Failed to list paginated jobs: {e}"), None))?;
 
   Ok(ListPipelineJobsPaginatedResponse { result }.into())
 }
@@ -1979,10 +1498,7 @@ pub struct ValidateBulkImportResponse {
 impl SerializeMarker for ValidateBulkImportResponse {}
 
 #[tauri::command]
-pub async fn validate_bulk_import_command(
-  task_database: State<'_, TaskDatabase>,
-  request: ValidateBulkImportRequest,
-) -> ResponseOrError<ValidateBulkImportResponse, FlowordErrorDetails> {
+pub async fn validate_bulk_import_command(task_database: State<'_, TaskDatabase>, request: ValidateBulkImportRequest) -> ResponseOrError<ValidateBulkImportResponse, FlowordErrorDetails> {
   let rows = if let Some(content) = request.csv_content {
     let matrix = BulkImportService::parse_csv_content(&content);
     BulkImportService::map_raw_rows_to_import_rows(&matrix)
@@ -2008,13 +1524,8 @@ pub struct CommitBulkImportResponse {
 impl SerializeMarker for CommitBulkImportResponse {}
 
 #[tauri::command]
-pub async fn commit_bulk_import_command(
-  task_database: State<'_, TaskDatabase>,
-  request: CommitBulkImportRequest,
-) -> ResponseOrError<CommitBulkImportResponse, FlowordErrorDetails> {
-  let result = BulkImportService::commit_import(task_database.get_connection(), request.rows)
-    .await
-    .map_err(|e| internal_error(&e, None))?;
+pub async fn commit_bulk_import_command(task_database: State<'_, TaskDatabase>, request: CommitBulkImportRequest) -> ResponseOrError<CommitBulkImportResponse, FlowordErrorDetails> {
+  let result = BulkImportService::commit_import(task_database.get_connection(), request.rows).await.map_err(|e| internal_error(&e, None))?;
 
   Ok(CommitBulkImportResponse { result }.into())
 }
@@ -2026,12 +1537,8 @@ pub struct ListPromptTemplatesResponse {
 impl SerializeMarker for ListPromptTemplatesResponse {}
 
 #[tauri::command]
-pub async fn list_prompt_templates_command(
-  task_database: State<'_, TaskDatabase>,
-) -> ResponseOrError<ListPromptTemplatesResponse, FlowordErrorDetails> {
-  let templates = list_prompt_templates(task_database.get_connection())
-    .await
-    .map_err(|e| internal_error(&format!("Failed to list prompt templates: {e}"), None))?;
+pub async fn list_prompt_templates_command(task_database: State<'_, TaskDatabase>) -> ResponseOrError<ListPromptTemplatesResponse, FlowordErrorDetails> {
+  let templates = list_prompt_templates(task_database.get_connection()).await.map_err(|e| internal_error(&format!("Failed to list prompt templates: {e}"), None))?;
 
   Ok(ListPromptTemplatesResponse { templates }.into())
 }
@@ -2052,38 +1559,9 @@ pub struct UpsertPromptTemplateResponse {
 impl SerializeMarker for UpsertPromptTemplateResponse {}
 
 #[tauri::command]
-pub async fn upsert_prompt_template_command(
-  task_database: State<'_, TaskDatabase>,
-  request: UpsertPromptTemplateRequest,
-) -> ResponseOrError<UpsertPromptTemplateResponse, FlowordErrorDetails> {
+pub async fn upsert_prompt_template_command(task_database: State<'_, TaskDatabase>, request: UpsertPromptTemplateRequest) -> ResponseOrError<UpsertPromptTemplateResponse, FlowordErrorDetails> {
   let db = task_database.get_connection();
-  let template = if let Some(id) = request.id {
-    update_prompt_template(
-      db,
-      UpdatePromptTemplateArgs {
-        id,
-        name: Some(request.name),
-        image_prompt: Some(request.image_prompt),
-        expand_prompt: request.expand_prompt,
-        video_prompt: Some(request.video_prompt),
-      },
-    )
-    .await
-    .map_err(|e| internal_error(&format!("Failed to update prompt template: {e}"), None))?
-  } else {
-    create_prompt_template(
-      db,
-      CreatePromptTemplateArgs {
-        id: None,
-        name: request.name,
-        image_prompt: request.image_prompt,
-        expand_prompt: request.expand_prompt,
-        video_prompt: request.video_prompt,
-      },
-    )
-    .await
-    .map_err(|e| internal_error(&format!("Failed to create prompt template: {e}"), None))?
-  };
+  let template = if let Some(id) = request.id { update_prompt_template(db, UpdatePromptTemplateArgs { id, name: Some(request.name), image_prompt: Some(request.image_prompt), expand_prompt: request.expand_prompt, video_prompt: Some(request.video_prompt) }).await.map_err(|e| internal_error(&format!("Failed to update prompt template: {e}"), None))? } else { create_prompt_template(db, CreatePromptTemplateArgs { id: None, name: request.name, image_prompt: request.image_prompt, expand_prompt: request.expand_prompt, video_prompt: request.video_prompt }).await.map_err(|e| internal_error(&format!("Failed to create prompt template: {e}"), None))? };
 
   Ok(UpsertPromptTemplateResponse { template }.into())
 }
@@ -2100,13 +1578,8 @@ pub struct DeletePromptTemplateResponse {
 impl SerializeMarker for DeletePromptTemplateResponse {}
 
 #[tauri::command]
-pub async fn delete_prompt_template_command(
-  task_database: State<'_, TaskDatabase>,
-  request: DeletePromptTemplateRequest,
-) -> ResponseOrError<DeletePromptTemplateResponse, FlowordErrorDetails> {
-  delete_prompt_template(task_database.get_connection(), &request.id)
-    .await
-    .map_err(|e| internal_error(&format!("Failed to delete prompt template: {e}"), None))?;
+pub async fn delete_prompt_template_command(task_database: State<'_, TaskDatabase>, request: DeletePromptTemplateRequest) -> ResponseOrError<DeletePromptTemplateResponse, FlowordErrorDetails> {
+  delete_prompt_template(task_database.get_connection(), &request.id).await.map_err(|e| internal_error(&format!("Failed to delete prompt template: {e}"), None))?;
 
   Ok(DeletePromptTemplateResponse { success: true }.into())
 }
@@ -2123,13 +1596,8 @@ pub struct GetFlowordSystemSettingResponse {
 impl SerializeMarker for GetFlowordSystemSettingResponse {}
 
 #[tauri::command]
-pub async fn get_floword_system_setting_command(
-  task_database: State<'_, TaskDatabase>,
-  request: GetFlowordSystemSettingRequest,
-) -> ResponseOrError<GetFlowordSystemSettingResponse, FlowordErrorDetails> {
-  let setting = get_floword_setting(task_database.get_connection(), &request.key)
-    .await
-    .map_err(|e| internal_error(&format!("Failed to get floword setting: {e}"), None))?;
+pub async fn get_floword_system_setting_command(task_database: State<'_, TaskDatabase>, request: GetFlowordSystemSettingRequest) -> ResponseOrError<GetFlowordSystemSettingResponse, FlowordErrorDetails> {
+  let setting = get_floword_setting(task_database.get_connection(), &request.key).await.map_err(|e| internal_error(&format!("Failed to get floword setting: {e}"), None))?;
 
   Ok(GetFlowordSystemSettingResponse { setting }.into())
 }
@@ -2147,19 +1615,8 @@ pub struct UpdateFlowordSystemSettingResponse {
 impl SerializeMarker for UpdateFlowordSystemSettingResponse {}
 
 #[tauri::command]
-pub async fn update_floword_system_setting_command(
-  task_database: State<'_, TaskDatabase>,
-  request: UpdateFlowordSystemSettingRequest,
-) -> ResponseOrError<UpdateFlowordSystemSettingResponse, FlowordErrorDetails> {
-  let setting = upsert_floword_setting(
-    task_database.get_connection(),
-    UpsertFlowordSettingArgs {
-      key: request.key,
-      value_json: request.value_json,
-    },
-  )
-  .await
-  .map_err(|e| internal_error(&format!("Failed to update floword setting: {e}"), None))?;
+pub async fn update_floword_system_setting_command(task_database: State<'_, TaskDatabase>, request: UpdateFlowordSystemSettingRequest) -> ResponseOrError<UpdateFlowordSystemSettingResponse, FlowordErrorDetails> {
+  let setting = upsert_floword_setting(task_database.get_connection(), UpsertFlowordSettingArgs { key: request.key, value_json: request.value_json }).await.map_err(|e| internal_error(&format!("Failed to update floword setting: {e}"), None))?;
 
   Ok(UpdateFlowordSystemSettingResponse { setting }.into())
 }
@@ -2176,10 +1633,7 @@ pub struct CheckStorageHealthResponse {
 impl SerializeMarker for CheckStorageHealthResponse {}
 
 #[tauri::command]
-pub async fn check_storage_health_command(
-  task_database: State<'_, TaskDatabase>,
-  request: CheckStorageHealthRequest,
-) -> ResponseOrError<CheckStorageHealthResponse, FlowordErrorDetails> {
+pub async fn check_storage_health_command(task_database: State<'_, TaskDatabase>, request: CheckStorageHealthRequest) -> ResponseOrError<CheckStorageHealthResponse, FlowordErrorDetails> {
   let report = SystemHealthProbes::probe_page_storage(task_database.get_connection(), &request.page_id).await;
   Ok(CheckStorageHealthResponse { report }.into())
 }
@@ -2191,10 +1645,7 @@ pub struct CheckSystemReadinessResponse {
 impl SerializeMarker for CheckSystemReadinessResponse {}
 
 #[tauri::command]
-pub async fn check_system_readiness_command(
-  task_database: State<'_, TaskDatabase>,
-  app_data_root: State<'_, AppDataRoot>,
-) -> ResponseOrError<CheckSystemReadinessResponse, FlowordErrorDetails> {
+pub async fn check_system_readiness_command(task_database: State<'_, TaskDatabase>, app_data_root: State<'_, AppDataRoot>) -> ResponseOrError<CheckSystemReadinessResponse, FlowordErrorDetails> {
   let artifact_dir = app_data_root.pipeline_artifacts_dir();
   let report = SystemHealthProbes::probe_system_readiness(task_database.get_connection(), artifact_dir).await;
   Ok(CheckSystemReadinessResponse { report }.into())

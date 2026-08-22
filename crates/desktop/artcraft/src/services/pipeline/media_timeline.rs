@@ -262,7 +262,17 @@ mod tests {
     let workflow_root = root.join("artifacts/phase5-runtime-rust");
     let timing: Value = serde_json::from_slice(&std::fs::read(root.join("artifacts/phase4-runtime-stage/voice/voice_timing.json")).unwrap()).unwrap();
     let segments = timing["segments"].as_array().unwrap();
-    let input = MediaTimelineInput { source_video: Some(ArtifactInput { artifact_id: "runtime-source-video-artifact".into(), path: root.join("test_data/video/mp4/golden_sun_garoh.mp4").to_string_lossy().to_string(), duration_seconds: None, scene_id: None }), visual_assets: vec![], scene_plan: None, scenes: json!({ "scenes": [{"start_seconds": 0.0, "end_seconds": 7.584}, {"start_seconds": 7.584, "end_seconds": 15.168}] }), script: json!({ "scenes": [{"id": "scene-1", "narration": segments[0]["text"]}, {"id": "scene-2", "narration": segments[1]["text"]}] }), voice_audio: ArtifactInput { artifact_id: "runtime-voice-audio-artifact".into(), path: root.join("artifacts/phase4-runtime-stage/voice/voice.mp3").to_string_lossy().to_string(), duration_seconds: None, scene_id: None }, voice_timing: timing, output_dir: workflow_root.join("media_timeline").to_string_lossy().to_string(), input_artifact_ids: vec!["runtime-source-video-artifact".into(), "runtime-scenes-artifact".into(), "runtime-script-artifact".into(), "runtime-voice-audio-artifact".into(), "runtime-voice-timing-artifact".into()] };
+    let input = MediaTimelineInput {
+      source_video: Some(ArtifactInput { artifact_id: "runtime-source-video-artifact".into(), path: root.join("test_data/video/mp4/golden_sun_garoh.mp4").to_string_lossy().to_string(), duration_seconds: None, scene_id: None }),
+      visual_assets: vec![],
+      scene_plan: None,
+      scenes: json!({ "scenes": [{"start_seconds": 0.0, "end_seconds": 7.584}, {"start_seconds": 7.584, "end_seconds": 15.168}] }),
+      script: json!({ "scenes": [{"id": "scene-1", "narration": segments[0]["text"]}, {"id": "scene-2", "narration": segments[1]["text"]}] }),
+      voice_audio: ArtifactInput { artifact_id: "runtime-voice-audio-artifact".into(), path: root.join("artifacts/phase4-runtime-stage/voice/voice.mp3").to_string_lossy().to_string(), duration_seconds: None, scene_id: None },
+      voice_timing: timing,
+      output_dir: workflow_root.join("media_timeline").to_string_lossy().to_string(),
+      input_artifact_ids: vec!["runtime-source-video-artifact".into(), "runtime-scenes-artifact".into(), "runtime-script-artifact".into(), "runtime-voice-audio-artifact".into(), "runtime-voice-timing-artifact".into()],
+    };
     let output = run_openmontage(&input, Arc::new(AtomicBool::new(false))).await.unwrap();
     let timeline = ArtifactStore::register_typed_artifact(&workflow_root, "phase5-runtime", StageId::MediaTimeline, "openmontage", ArtifactKind::Timeline, &output.timeline_path, json!({"input_artifact_ids": input.input_artifact_ids})).unwrap();
     let captions = ArtifactStore::register_typed_artifact(&workflow_root, "phase5-runtime", StageId::MediaTimeline, "openmontage", ArtifactKind::Captions, &output.captions_path, json!({"duration_seconds": output.timeline["durationSeconds"]})).unwrap();

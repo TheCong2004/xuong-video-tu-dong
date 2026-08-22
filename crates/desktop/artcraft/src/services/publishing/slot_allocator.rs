@@ -3,31 +3,14 @@ use sqlite_tasks::connection::TaskDbConnection;
 
 /// Computes next available slot datetime for a page given its default slot list (e.g. ["08:30", "10:00", "17:00", "22:00"]).
 /// Checks existing scheduled publications for that page to avoid slot collision.
-pub async fn allocate_next_available_slot(
-  db: &TaskDbConnection,
-  page_id: &str,
-  default_slots_json: &str,
-) -> i64 {
-  let slots: Vec<String> = serde_json::from_str(default_slots_json).unwrap_or_else(|_| {
-    vec![
-      "08:30".to_string(),
-      "10:00".to_string(),
-      "17:00".to_string(),
-      "22:00".to_string(),
-    ]
-  });
+pub async fn allocate_next_available_slot(db: &TaskDbConnection, page_id: &str, default_slots_json: &str) -> i64 {
+  let slots: Vec<String> = serde_json::from_str(default_slots_json).unwrap_or_else(|_| vec!["08:30".to_string(), "10:00".to_string(), "17:00".to_string(), "22:00".to_string()]);
 
   let now = Local::now();
   let mut target_date = now.date_naive();
 
   // Query existing scheduled publications for this page in the future
-  let scheduled_rows: Vec<(i64,)> = sqlx::query_as(
-    "SELECT scheduled_at FROM job_publications WHERE page_id = $1 AND scheduled_at IS NOT NULL AND status IN ('SCHEDULED', 'READY_TO_POST', 'POSTING', 'POSTED')",
-  )
-  .bind(page_id)
-  .fetch_all(db.get_pool())
-  .await
-  .unwrap_or_default();
+  let scheduled_rows: Vec<(i64,)> = sqlx::query_as("SELECT scheduled_at FROM job_publications WHERE page_id = $1 AND scheduled_at IS NOT NULL AND status IN ('SCHEDULED', 'READY_TO_POST', 'POSTING', 'POSTED')").bind(page_id).fetch_all(db.get_pool()).await.unwrap_or_default();
 
   let scheduled_timestamps: Vec<i64> = scheduled_rows.into_iter().map(|(t,)| t).collect();
 
@@ -49,9 +32,7 @@ pub async fn allocate_next_available_slot(
           // Must be in the future (at least 2 minutes from now)
           if ts > now.timestamp() + 120 {
             // Check collision (allow +/- 5 minutes margin)
-            let is_taken = scheduled_timestamps.iter().any(|&existing_ts| {
-              (existing_ts - ts).abs() < 300
-            });
+            let is_taken = scheduled_timestamps.iter().any(|&existing_ts| (existing_ts - ts).abs() < 300);
 
             if !is_taken {
               return ts;

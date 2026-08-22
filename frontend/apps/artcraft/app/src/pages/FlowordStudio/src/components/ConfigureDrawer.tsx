@@ -75,39 +75,39 @@ export const ConfigureDrawer: React.FC<ConfigureDrawerProps> = ({
       >
         <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
           <div>
-            <h2 id="floword-configure-title" className="text-base font-semibold text-white">Configure</h2>
-            <p className="mt-1 text-xs text-zinc-500">Runtime capabilities and advanced workflow settings.</p>
+            <h2 id="floword-configure-title" className="text-base font-semibold text-white">Cấu Hình Hệ Thống</h2>
+            <p className="mt-1 text-xs text-zinc-500">Năng lực runtime và các thiết lập pipeline nâng cao.</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close Configure" className="rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white">
+          <button type="button" onClick={onClose} aria-label="Đóng Cấu Hình" className="rounded-lg p-2 text-zinc-400 hover:bg-white/[0.06] hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </header>
 
         <div className="flex-1 space-y-6 overflow-y-auto p-5">
           <section aria-labelledby="configure-ai">
-            <h3 id="configure-ai" className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">AI</h3>
+            <h3 id="configure-ai" className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Mô Hình AI</h3>
             <CapabilityToolsView tool="providers" />
           </section>
 
           <VisualGenerationProvider />
 
           <section className="floword-card p-5" aria-labelledby="configure-voice">
-            <h3 id="configure-voice" className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Voice</h3>
+            <h3 id="configure-voice" className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Giọng Đọc & Ngôn Ngữ</h3>
             <div className="mt-3 grid gap-4 sm:grid-cols-2">
-              <div><div className="text-xs text-zinc-500">Voice</div><div className="mt-1 text-sm capitalize text-white">{input.tone}</div></div>
-              <div><div className="text-xs text-zinc-500">Language</div><div className="mt-1 text-sm text-white">{input.language}</div></div>
+              <div><div className="text-xs text-zinc-500">Tông giọng</div><div className="mt-1 text-sm capitalize text-white">{input.tone}</div></div>
+              <div><div className="text-xs text-zinc-500">Ngôn ngữ</div><div className="mt-1 text-sm text-white">{input.language}</div></div>
             </div>
           </section>
 
           <section className="floword-card p-5" aria-labelledby="configure-capabilities">
-            <h3 id="configure-capabilities" className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Media</h3>
+            <h3 id="configure-capabilities" className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Media & Dựng Phim</h3>
             <StatusRow label="OpenMontage / FFmpeg" health={readiness.openMontage} />
-            <h3 className="mb-1 mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Research</h3>
+            <h3 className="mb-1 mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Thu Thập Dữ Liệu</h3>
             <StatusRow label="MediaCrawler" health={readiness.mediaCrawler} />
-            <h3 className="mb-1 mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Automation</h3>
+            <h3 className="mb-1 mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Tự Động Hóa Trình Duyệt</h3>
             <StatusRow label="Playwright / CDP" health={readiness.playwrightCdp} />
-            <h3 className="mb-1 mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Output</h3>
-            <StatusRow label="CapCut Mate" health={readiness.mateAgent} />
+            <h3 className="mb-1 mt-5 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Kết Nối CapCut</h3>
+            <StatusRow label="CapCut Mate Agent" health={readiness.mateAgent} />
           </section>
 
           <section aria-labelledby="configure-research-session">

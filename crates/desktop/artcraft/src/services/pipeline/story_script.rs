@@ -98,18 +98,7 @@ pub fn prepare_story_script(context: &PipelineContext) -> Result<StoryScriptInpu
     _ => None,
   };
 
-  Ok(StoryScriptInput {
-    prompt: context.prompt.clone(),
-    language: context.language.clone(),
-    target_duration_seconds: context.target_duration_seconds,
-    model_id: context.model_id.clone(),
-    input_artifact_ids,
-    source_metadata,
-    scenes,
-    research,
-    source_text,
-    workflow_mode: context.workflow_mode.clone(),
-  })
+  Ok(StoryScriptInput { prompt: context.prompt.clone(), language: context.language.clone(), target_duration_seconds: context.target_duration_seconds, model_id: context.model_id.clone(), input_artifact_ids, source_metadata, scenes, research, source_text, workflow_mode: context.workflow_mode.clone() })
 }
 
 fn read_json(artifact: &crate::services::pipeline::contracts::ArtifactRef) -> Result<Value, PipelineContractError> {

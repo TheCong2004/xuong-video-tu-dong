@@ -79,11 +79,7 @@ pub struct PublisherError {
 
 impl PublisherError {
   pub fn new(code: PublisherErrorCode, message: impl Into<String>, retryable: bool) -> Self {
-    Self {
-      code,
-      message: message.into(),
-      retryable,
-    }
+    Self { code, message: message.into(), retryable }
   }
 
   pub fn auth_required(message: impl Into<String>) -> Self {

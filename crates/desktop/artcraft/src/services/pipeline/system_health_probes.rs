@@ -40,10 +40,7 @@ pub fn is_publishing_worker_alive(max_age_seconds: i64) -> bool {
 
 /// Helper to evaluate if a browser worker is runtime-ready and supports a specific capability.
 pub fn worker_runtime_supports(worker: &BrowserWorkerInfo, capability: &str) -> bool {
-  worker.state == "READY"
-    && worker.extension_ready
-    && worker.protocol_version == Some(1)
-    && worker.capabilities.iter().any(|c| c == capability)
+  worker.state == "READY" && worker.extension_ready && worker.protocol_version == Some(1) && worker.capabilities.iter().any(|c| c == capability)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,33 +87,15 @@ pub struct SystemHealthProbes;
 
 impl SystemHealthProbes {
   /// Probes local storage health for a specific Page by performing a real filesystem write/delete test.
-  pub async fn probe_page_storage(
-    db: &TaskDbConnection,
-    page_id: &str,
-  ) -> StorageHealthReport {
+  pub async fn probe_page_storage(db: &TaskDbConnection, page_id: &str) -> StorageHealthReport {
     let page = match get_content_page_by_id(GetContentPageByIdArgs { db, id: page_id }).await {
       Ok(Some(p)) => p,
       _ => {
-        return StorageHealthReport {
-          page_id: page_id.to_string(),
-          target_path: "".to_string(),
-          exists: false,
-          writable: false,
-          free_space_bytes: None,
-          last_save_success: false,
-          error_message: Some(format!("Page '{}' not found in database", page_id)),
-        };
-      }
+        return StorageHealthReport { page_id: page_id.to_string(), target_path: "".to_string(), exists: false, writable: false, free_space_bytes: None, last_save_success: false, error_message: Some(format!("Page '{}' not found in database", page_id)) };
+      },
     };
 
-    let target_dir = if !page.output_root.trim().is_empty() {
-      page.output_root
-    } else {
-      std::env::var("USERPROFILE")
-        .or_else(|_| std::env::var("HOME"))
-        .map(|h| format!("{}/Videos/Floword/{}", h, page.name))
-        .unwrap_or_else(|_| format!("./output/{}", page.name))
-    };
+    let target_dir = if !page.output_root.trim().is_empty() { page.output_root } else { std::env::var("USERPROFILE").or_else(|_| std::env::var("HOME")).map(|h| format!("{}/Videos/Floword/{}", h, page.name)).unwrap_or_else(|_| format!("./output/{}", page.name)) };
 
     let path = Path::new(&target_dir);
     let exists = path.exists();
@@ -143,39 +122,22 @@ impl SystemHealthProbes {
           } else {
             writable = true;
           }
-        }
+        },
         Err(e) => {
           writable = false;
           error_msg = Some(format!("Directory is not writable: {e}"));
-        }
+        },
       }
     }
 
     // Check last save status from SQLite DB
-    let last_save_success = sqlx::query_scalar::<_, i64>(
-      "SELECT COUNT(*) FROM pipeline_jobs WHERE page_id = $1 AND (business_status IN ('LOCAL_SAVED', 'READY_TO_POST', 'DONE') OR status IN ('DONE', 'COMPLETED', 'READY_TO_POST'))",
-    )
-    .bind(page_id)
-    .fetch_one(db.get_pool())
-    .await
-    .unwrap_or(0) > 0;
+    let last_save_success = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM pipeline_jobs WHERE page_id = $1 AND (business_status IN ('LOCAL_SAVED', 'READY_TO_POST', 'DONE') OR status IN ('DONE', 'COMPLETED', 'READY_TO_POST'))").bind(page_id).fetch_one(db.get_pool()).await.unwrap_or(0) > 0;
 
-    StorageHealthReport {
-      page_id: page_id.to_string(),
-      target_path: target_dir,
-      exists,
-      writable,
-      free_space_bytes: None,
-      last_save_success,
-      error_message: error_msg,
-    }
+    StorageHealthReport { page_id: page_id.to_string(), target_path: target_dir, exists, writable, free_space_bytes: None, last_save_success, error_message: error_msg }
   }
 
   /// Probes system readiness across all real subsystems with measured latencies and real Donut query.
-  pub async fn probe_system_readiness(
-    db: &TaskDbConnection,
-    artifact_dir: PathBuf,
-  ) -> SystemReadinessReport {
+  pub async fn probe_system_readiness(db: &TaskDbConnection, artifact_dir: PathBuf) -> SystemReadinessReport {
     let mut details = Vec::new();
 
     // 1. Probe SQLite DB with real latency
@@ -183,23 +145,13 @@ impl SystemHealthProbes {
     let sqlite_ready = match sqlx::query("SELECT 1").execute(db.get_pool()).await {
       Ok(_) => {
         let latency = t0.elapsed().as_millis() as u64;
-        details.push(ProbeDetail {
-          service: "SQLite DB".to_string(),
-          ready: true,
-          message: format!("Authoritative database connected ({latency}ms)"),
-          latency_ms: Some(latency),
-        });
+        details.push(ProbeDetail { service: "SQLite DB".to_string(), ready: true, message: format!("Authoritative database connected ({latency}ms)"), latency_ms: Some(latency) });
         true
-      }
+      },
       Err(e) => {
-        details.push(ProbeDetail {
-          service: "SQLite DB".to_string(),
-          ready: false,
-          message: format!("SQLite error: {e}"),
-          latency_ms: None,
-        });
+        details.push(ProbeDetail { service: "SQLite DB".to_string(), ready: false, message: format!("SQLite error: {e}"), latency_ms: None });
         false
-      }
+      },
     };
 
     // 2. Probe canonical pipeline artifact storage with a unique probe file
@@ -207,36 +159,15 @@ impl SystemHealthProbes {
 
     // 3. Real Scheduler Heartbeat
     let floword_scheduler_ready = is_scheduler_alive(10);
-    details.push(ProbeDetail {
-      service: "Floword Scheduler".to_string(),
-      ready: floword_scheduler_ready,
-      message: if floword_scheduler_ready {
-        "Pipeline scheduler active & heartbeating".to_string()
-      } else {
-        "Pipeline scheduler not running or heartbeat expired".to_string()
-      },
-      latency_ms: None,
-    });
+    details.push(ProbeDetail { service: "Floword Scheduler".to_string(), ready: floword_scheduler_ready, message: if floword_scheduler_ready { "Pipeline scheduler active & heartbeating".to_string() } else { "Pipeline scheduler not running or heartbeat expired".to_string() }, latency_ms: None });
 
     // 4. Real Publishing Worker Heartbeat
     let publishing_worker_ready = is_publishing_worker_alive(10);
-    details.push(ProbeDetail {
-      service: "Publishing Worker".to_string(),
-      ready: publishing_worker_ready,
-      message: if publishing_worker_ready {
-        "Publishing worker thread active & polling".to_string()
-      } else {
-        "Publishing worker thread not running or heartbeat expired".to_string()
-      },
-      latency_ms: None,
-    });
+    details.push(ProbeDetail { service: "Publishing Worker".to_string(), ready: publishing_worker_ready, message: if publishing_worker_ready { "Publishing worker thread active & polling".to_string() } else { "Publishing worker thread not running or heartbeat expired".to_string() }, latency_ms: None });
 
     // 5. Real Donut Runtime Query via canonical base URL
     let donut_base_url = crate::services::pipeline::clients::browser_runtime_client::get_donut_browser_api_base_url();
-    let client = reqwest::Client::builder()
-      .timeout(std::time::Duration::from_millis(1000))
-      .build()
-      .unwrap_or_default();
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_millis(1000)).build().unwrap_or_default();
 
     let t_donut = std::time::Instant::now();
     let donut_url = format!("{donut_base_url}/v1/workers");
@@ -262,9 +193,7 @@ impl SystemHealthProbes {
           Ok(list) => {
             donut_ready = true;
             // workers_online_count = workers whose state is not "OFFLINE"
-            workers_online_count = list.workers.iter()
-              .filter(|w| w.state != "OFFLINE")
-              .count();
+            workers_online_count = list.workers.iter().filter(|w| w.state != "OFFLINE").count();
 
             for w in &list.workers {
               let state_ready = w.state == "READY";
@@ -274,12 +203,7 @@ impl SystemHealthProbes {
               // grok_logged_in, AND advertise at least one required Grok capability.
               let grok_caps = ["grok.image.edit", "grok.image.expand_9_16", "grok.video.generate"];
               let has_grok_cap = caps.iter().any(|c| grok_caps.contains(&c.as_str()));
-              if state_ready
-                && w.extension_ready
-                && w.protocol_version == Some(1)
-                && w.grok_logged_in == Some(true)
-                && has_grok_cap
-              {
+              if state_ready && w.extension_ready && w.protocol_version == Some(1) && w.grok_logged_in == Some(true) && has_grok_cap {
                 grok_profile_ready = true;
               }
 
@@ -301,79 +225,34 @@ impl SystemHealthProbes {
               youtube_profile_ready = false;
             }
 
-            details.push(ProbeDetail {
-              service: "Donut Worker Bridge".to_string(),
-              ready: true,
-              message: format!(
-                "Donut runtime reachable at {donut_base_url} ({workers_online_count}/{} workers online, grok_ready={grok_profile_ready}, {latency}ms)",
-                list.total
-              ),
-              latency_ms: Some(latency),
-            });
-          }
+            details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: true, message: format!("Donut runtime reachable at {donut_base_url} ({workers_online_count}/{} workers online, grok_ready={grok_profile_ready}, {latency}ms)", list.total), latency_ms: Some(latency) });
+          },
           Err(e) => {
             // HTTP reachable but payload failed to deserialize — Donut is NOT ready to be used
             error!("[SystemHealth] Donut /v1/workers response parse failed: {e}");
             donut_ready = false;
-            details.push(ProbeDetail {
-              service: "Donut Worker Bridge".to_string(),
-              ready: false,
-              message: format!("Donut reachable at {donut_base_url} but worker payload could not be parsed: {e} ({latency}ms)"),
-              latency_ms: Some(latency),
-            });
-          }
+            details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: false, message: format!("Donut reachable at {donut_base_url} but worker payload could not be parsed: {e} ({latency}ms)"), latency_ms: Some(latency) });
+          },
         }
-      }
+      },
       Ok(resp) => {
-        details.push(ProbeDetail {
-          service: "Donut Worker Bridge".to_string(),
-          ready: false,
-          message: format!("Donut returned HTTP {}", resp.status()),
-          latency_ms: None,
-        });
-      }
+        details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: false, message: format!("Donut returned HTTP {}", resp.status()), latency_ms: None });
+      },
       Err(e) => {
-        details.push(ProbeDetail {
-          service: "Donut Worker Bridge".to_string(),
-          ready: false,
-          message: format!("Donut offline ({donut_base_url}): {e}"),
-          latency_ms: None,
-        });
-      }
+        details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: false, message: format!("Donut offline ({donut_base_url}): {e}"), latency_ms: None });
+      },
     }
 
     // Explicit readiness scopes:
     // Core generation requires DB, storage, scheduler, Donut, and Grok profile
-    let core_generation_ready = sqlite_ready
-      && artifact_storage_ready
-      && floword_scheduler_ready
-      && donut_ready
-      && grok_profile_ready;
+    let core_generation_ready = sqlite_ready && artifact_storage_ready && floword_scheduler_ready && donut_ready && grok_profile_ready;
 
     let publishing_orchestrator_ready = publishing_worker_ready;
 
     // Overall system readiness requires both core pipeline and publishing orchestrator
     let overall_ready = core_generation_ready && publishing_orchestrator_ready;
 
-    SystemReadinessReport {
-      overall_ready,
-      core_generation_ready,
-      publishing_orchestrator_ready,
-      sqlite_ready,
-      artifact_storage_ready,
-      floword_scheduler_ready,
-      publishing_worker_ready,
-      donut_ready,
-      workers_online_count,
-      grok_profile_ready,
-      facebook_capability_available,
-      facebook_profile_ready,
-      tiktok_capability_available,
-      tiktok_profile_ready,
-      youtube_capability_available,
-      youtube_profile_ready,
-      details,
-    }
+    SystemReadinessReport { overall_ready, core_generation_ready, publishing_orchestrator_ready, sqlite_ready, artifact_storage_ready, floword_scheduler_ready, publishing_worker_ready, donut_ready, workers_online_count, grok_profile_ready, facebook_capability_available, facebook_profile_ready, tiktok_capability_available, tiktok_profile_ready, youtube_capability_available, youtube_profile_ready, details }
   }
 }
 
@@ -382,12 +261,7 @@ impl SystemHealthProbes {
 fn probe_artifact_dir(artifact_dir: &PathBuf, details: &mut Vec<ProbeDetail>) -> bool {
   // Ensure directory exists
   if let Err(e) = std::fs::create_dir_all(artifact_dir) {
-    details.push(ProbeDetail {
-      service: "Artifact Storage".to_string(),
-      ready: false,
-      message: format!("Cannot create artifact directory at {:?}: {e}", artifact_dir),
-      latency_ms: None,
-    });
+    details.push(ProbeDetail { service: "Artifact Storage".to_string(), ready: false, message: format!("Cannot create artifact directory at {:?}: {e}", artifact_dir), latency_ms: None });
     return false;
   }
 
@@ -400,32 +274,17 @@ fn probe_artifact_dir(artifact_dir: &PathBuf, details: &mut Vec<ProbeDetail>) ->
       // Require cleanup success
       if let Err(e) = std::fs::remove_file(&test_file) {
         warn!("[SystemHealth] Probe file could not be removed at {:?}: {e}", test_file);
-        details.push(ProbeDetail {
-          service: "Artifact Storage".to_string(),
-          ready: false,
-          message: format!("Probe file could not be removed at {:?}: {e}", test_file),
-          latency_ms: None,
-        });
+        details.push(ProbeDetail { service: "Artifact Storage".to_string(), ready: false, message: format!("Probe file could not be removed at {:?}: {e}", test_file), latency_ms: None });
         false
       } else {
-        details.push(ProbeDetail {
-          service: "Artifact Storage".to_string(),
-          ready: true,
-          message: format!("Storage writable and verified at {:?}", artifact_dir),
-          latency_ms: None,
-        });
+        details.push(ProbeDetail { service: "Artifact Storage".to_string(), ready: true, message: format!("Storage writable and verified at {:?}", artifact_dir), latency_ms: None });
         true
       }
-    }
+    },
     Err(e) => {
-      details.push(ProbeDetail {
-        service: "Artifact Storage".to_string(),
-        ready: false,
-        message: format!("Artifact storage directory not writable at {:?}: {e}", artifact_dir),
-        latency_ms: None,
-      });
+      details.push(ProbeDetail { service: "Artifact Storage".to_string(), ready: false, message: format!("Artifact storage directory not writable at {:?}: {e}", artifact_dir), latency_ms: None });
       false
-    }
+    },
   }
 }
 
@@ -444,11 +303,7 @@ mod tests {
     let donut_ready = false;
     let grok_profile_ready = false;
 
-    let core_generation_ready = sqlite_ready
-      && artifact_storage_ready
-      && floword_scheduler_ready
-      && donut_ready
-      && grok_profile_ready;
+    let core_generation_ready = sqlite_ready && artifact_storage_ready && floword_scheduler_ready && donut_ready && grok_profile_ready;
     let publishing_orchestrator_ready = publishing_worker_ready;
     let overall_ready = core_generation_ready && publishing_orchestrator_ready;
 
@@ -466,11 +321,7 @@ mod tests {
     let donut_ready = true;
     let grok_profile_ready = true;
 
-    let core_generation_ready = sqlite_ready
-      && artifact_storage_ready
-      && floword_scheduler_ready
-      && donut_ready
-      && grok_profile_ready;
+    let core_generation_ready = sqlite_ready && artifact_storage_ready && floword_scheduler_ready && donut_ready && grok_profile_ready;
     let publishing_orchestrator_ready = publishing_worker_ready;
     let overall_ready = core_generation_ready && publishing_orchestrator_ready;
 
@@ -489,11 +340,7 @@ mod tests {
     let donut_ready = true;
     let grok_profile_ready = true;
 
-    let core_generation_ready = sqlite_ready
-      && artifact_storage_ready
-      && floword_scheduler_ready
-      && donut_ready
-      && grok_profile_ready;
+    let core_generation_ready = sqlite_ready && artifact_storage_ready && floword_scheduler_ready && donut_ready && grok_profile_ready;
     let publishing_orchestrator_ready = publishing_worker_ready;
     let overall_ready = core_generation_ready && publishing_orchestrator_ready;
 
@@ -593,13 +440,7 @@ mod tests {
     assert_eq!(online_count, 1, "Expected 1 online worker");
 
     let grok_caps = ["grok.image.edit", "grok.image.expand_9_16", "grok.video.generate"];
-    let grok_ready = workers.iter().any(|w| {
-      w.state == "READY"
-        && w.extension_ready
-        && w.protocol_version == Some(1)
-        && w.grok_logged_in == Some(true)
-        && w.capabilities.iter().any(|c| grok_caps.contains(&c.as_str()))
-    });
+    let grok_ready = workers.iter().any(|w| w.state == "READY" && w.extension_ready && w.protocol_version == Some(1) && w.grok_logged_in == Some(true) && w.capabilities.iter().any(|c| grok_caps.contains(&c.as_str())));
     assert!(grok_ready, "Expected grok_profile_ready=true");
 
     let fb_cap = workers.iter().any(|w| worker_runtime_supports(w, "social.facebook.publish"));

@@ -147,23 +147,9 @@ impl BulkImportService {
       let title = get_val(col_title);
       let caption = get_val(col_caption);
 
-      let hashtags = get_val(col_hashtags)
-        .map(|s| {
-          s.split(&[',', ' ', ';'][..])
-            .map(|t| t.trim().to_string())
-            .filter(|t| !t.is_empty())
-            .collect()
-        })
-        .unwrap_or_default();
+      let hashtags = get_val(col_hashtags).map(|s| s.split(&[',', ' ', ';'][..]).map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect()).unwrap_or_default();
 
-      let platforms = get_val(col_platforms)
-        .map(|s| {
-          s.split(&[',', ';', '|'][..])
-            .map(|t| t.trim().to_lowercase())
-            .filter(|t| !t.is_empty())
-            .collect()
-        })
-        .unwrap_or_default();
+      let platforms = get_val(col_platforms).map(|s| s.split(&[',', ';', '|'][..]).map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect()).unwrap_or_default();
 
       let post_mode = get_val(col_post_mode);
       let post_time = get_val(col_post_time);
@@ -190,16 +176,8 @@ impl BulkImportService {
   }
 
   /// Validates a batch of BulkImportRows against real SQLite Pages and schema rules.
-  pub async fn validate_rows(
-    db: &TaskDbConnection,
-    rows: Vec<BulkImportRow>,
-  ) -> BulkValidationSummary {
-    let page_list = list_content_pages(ListContentPagesArgs {
-      db,
-      include_archived: false,
-    })
-    .await
-    .unwrap_or_else(|_| sqlite_tasks::queries::content_pages::list_content_pages::ContentPageList { pages: Vec::new() });
+  pub async fn validate_rows(db: &TaskDbConnection, rows: Vec<BulkImportRow>) -> BulkValidationSummary {
+    let page_list = list_content_pages(ListContentPagesArgs { db, include_archived: false }).await.unwrap_or_else(|_| sqlite_tasks::queries::content_pages::list_content_pages::ContentPageList { pages: Vec::new() });
 
     let valid_page_ids: HashSet<String> = page_list.pages.iter().map(|p| p.id.to_string()).collect();
 
@@ -211,19 +189,9 @@ impl BulkImportService {
 
       // 1. Validate Page ID
       if row.page_id.trim().is_empty() {
-        row_errors.push(BulkValidationError {
-          row_index: row.row_index,
-          field: "page_id".to_string(),
-          code: "REQUIRED_FIELD".to_string(),
-          message: "Page ID không được để trống".to_string(),
-        });
+        row_errors.push(BulkValidationError { row_index: row.row_index, field: "page_id".to_string(), code: "REQUIRED_FIELD".to_string(), message: "Page ID không được để trống".to_string() });
       } else if !valid_page_ids.contains(&row.page_id) {
-        row_errors.push(BulkValidationError {
-          row_index: row.row_index,
-          field: "page_id".to_string(),
-          code: "PAGE_NOT_FOUND".to_string(),
-          message: format!("Page ID '{}' không tồn tại trong hệ thống", row.page_id),
-        });
+        row_errors.push(BulkValidationError { row_index: row.row_index, field: "page_id".to_string(), code: "PAGE_NOT_FOUND".to_string(), message: format!("Page ID '{}' không tồn tại trong hệ thống", row.page_id) });
       }
 
       // 2. Validate Prompts or Source
@@ -232,24 +200,14 @@ impl BulkImportService {
       let has_source_image = row.source_image.as_deref().map(|s| !s.trim().is_empty()).unwrap_or(false);
 
       if !has_image_prompt && !has_video_prompt && !has_source_image {
-        row_errors.push(BulkValidationError {
-          row_index: row.row_index,
-          field: "prompt".to_string(),
-          code: "MISSING_INPUT".to_string(),
-          message: "Phải cung cấp ít nhất Image Prompt, Video Prompt hoặc Source Image".to_string(),
-        });
+        row_errors.push(BulkValidationError { row_index: row.row_index, field: "prompt".to_string(), code: "MISSING_INPUT".to_string(), message: "Phải cung cấp ít nhất Image Prompt, Video Prompt hoặc Source Image".to_string() });
       }
 
       // 3. Validate Platforms
       for p in &row.platforms {
         let p_clean = p.to_lowercase();
         if p_clean != "facebook" && p_clean != "tiktok" && p_clean != "youtube" {
-          row_errors.push(BulkValidationError {
-            row_index: row.row_index,
-            field: "platforms".to_string(),
-            code: "INVALID_PLATFORM".to_string(),
-            message: format!("Platform '{}' không được hỗ trợ (chỉ hỗ trợ facebook, tiktok, youtube)", p),
-          });
+          row_errors.push(BulkValidationError { row_index: row.row_index, field: "platforms".to_string(), code: "INVALID_PLATFORM".to_string(), message: format!("Platform '{}' không được hỗ trợ (chỉ hỗ trợ facebook, tiktok, youtube)", p) });
         }
       }
 
@@ -257,12 +215,7 @@ impl BulkImportService {
       if let Some(ref mode) = row.post_mode {
         let mode_clean = mode.to_lowercase();
         if mode_clean != "auto" && mode_clean != "review" {
-          row_errors.push(BulkValidationError {
-            row_index: row.row_index,
-            field: "post_mode".to_string(),
-            code: "INVALID_POST_MODE".to_string(),
-            message: format!("Post mode '{}' không hợp lệ (chỉ chấp nhận 'auto' hoặc 'review')", mode),
-          });
+          row_errors.push(BulkValidationError { row_index: row.row_index, field: "post_mode".to_string(), code: "INVALID_POST_MODE".to_string(), message: format!("Post mode '{}' không hợp lệ (chỉ chấp nhận 'auto' hoặc 'review')", mode) });
         }
       }
 
@@ -277,20 +230,11 @@ impl BulkImportService {
     let invalid_count = errors.iter().map(|e| e.row_index).collect::<HashSet<_>>().len();
     let total_rows = valid_count + invalid_count;
 
-    BulkValidationSummary {
-      total_rows,
-      valid_count,
-      invalid_count,
-      valid_rows,
-      errors,
-    }
+    BulkValidationSummary { total_rows, valid_count, invalid_count, valid_rows, errors }
   }
 
   /// Commits valid rows into `pipeline_jobs` table in chunked transactions.
-  pub async fn commit_import(
-    db: &TaskDbConnection,
-    rows: Vec<BulkImportRow>,
-  ) -> Result<BulkCommitResponse, String> {
+  pub async fn commit_import(db: &TaskDbConnection, rows: Vec<BulkImportRow>) -> Result<BulkCommitResponse, String> {
     let batch_id = format!("batch_{}", uuid::Uuid::new_v4().simple());
     info!("[BulkImport] Committing batch_id={} with {} valid rows", batch_id, rows.len());
 
@@ -303,12 +247,7 @@ impl BulkImportService {
     for chunk in rows.chunks(25) {
       for row in chunk {
         if !page_snapshots.contains_key(&row.page_id) {
-          if let Ok(Some(page)) = sqlite_tasks::queries::content_pages::get_content_page_by_id::get_content_page_by_id(
-            sqlite_tasks::queries::content_pages::get_content_page_by_id::GetContentPageByIdArgs {
-              db,
-              id: &row.page_id,
-            }
-          ).await {
+          if let Ok(Some(page)) = sqlite_tasks::queries::content_pages::get_content_page_by_id::get_content_page_by_id(sqlite_tasks::queries::content_pages::get_content_page_by_id::GetContentPageByIdArgs { db, id: &row.page_id }).await {
             let snap = crate::services::pipeline::floword_job_page_config::FlowordJobPageSnapshot::from_content_page(&page);
             if let Ok(snap_str) = serde_json::to_string(&snap) {
               page_snapshots.insert(row.page_id.clone(), snap_str);
@@ -337,15 +276,7 @@ impl BulkImportService {
 
         let payload_str = payload.to_string();
 
-        let args = CreatePipelineJobArgs {
-          db,
-          status: TaskStatus::Pending,
-          current_stage: PipelineStage::Queued,
-          maybe_page_id: Some(&row.page_id),
-          maybe_input_payload: Some(&payload_str),
-          maybe_page_snapshot: maybe_snap_str,
-          maybe_business_status: Some("QUEUED"),
-        };
+        let args = CreatePipelineJobArgs { db, status: TaskStatus::Pending, current_stage: PipelineStage::Queued, maybe_page_id: Some(&row.page_id), maybe_input_payload: Some(&payload_str), maybe_page_snapshot: maybe_snap_str, maybe_business_status: Some("QUEUED") };
 
         match create_pipeline_job(args).await {
           Ok(pipeline_job_id) => {
@@ -354,38 +285,21 @@ impl BulkImportService {
               "batch_id": batch_id,
               "row_index": row.row_index,
               "page_id": row.page_id
-            }).to_string();
+            })
+            .to_string();
 
-            let _ = insert_pipeline_job_event(
-              InsertPipelineJobEventArgs {
-                db,
-                id: None,
-                job_id: &job_id_str,
-                sequence: 1,
-                stage_id: Some("INGEST_SOURCE_IMAGE"),
-                business_status: Some("QUEUED"),
-                event_type: "JOB_ENQUEUED_BULK",
-                level: "INFO",
-                message: "Job được khởi tạo từ Bulk Import",
-                error_code: None,
-                metadata_json: Some(&meta),
-              },
-            ).await;
+            let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db, id: None, job_id: &job_id_str, sequence: 1, stage_id: Some("INGEST_SOURCE_IMAGE"), business_status: Some("QUEUED"), event_type: "JOB_ENQUEUED_BULK", level: "INFO", message: "Job được khởi tạo từ Bulk Import", error_code: None, metadata_json: Some(&meta) }).await;
 
             created_job_ids.push(job_id_str);
-          }
+          },
           Err(err) => {
             error!("[BulkImport] Failed to insert job for row {}: {err}", row.row_index);
-          }
+          },
         }
       }
     }
 
-    Ok(BulkCommitResponse {
-      batch_id,
-      total_created: created_job_ids.len(),
-      created_job_ids,
-    })
+    Ok(BulkCommitResponse { batch_id, total_created: created_job_ids.len(), created_job_ids })
   }
 }
 
@@ -423,4 +337,3 @@ page_1,Hero image,Hero action,"facebook|tiktok",auto
     assert_eq!(rows[0].post_mode, Some("auto".to_string()));
   }
 }
-

@@ -1,6 +1,4 @@
-use crate::services::pipeline::clients::omniroute_client::{
-  generate_video, list_video_models, OmniRouteVideoError, OmniRouteVideoResult, StructuredScript,
-};
+use crate::services::pipeline::clients::omniroute_client::{generate_video, list_video_models, OmniRouteVideoError, OmniRouteVideoResult, StructuredScript};
 use crate::services::pipeline::artifact_store::ArtifactStore;
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{info, warn};
@@ -105,35 +103,22 @@ fn should_fallback_to_next_video_model(error: &OmniRouteVideoError, has_next: bo
 /// OmniRoute is the SINGLE AI gateway — it owns provider selection, credential
 /// resolution, model routing, fallback, and polling. Floword only sends the
 /// normalized request and receives a video URL.
-pub async fn generate_visual_assets(
-  app: &AppHandle,
-  work_dir: &Path,
-  job_id: &str,
-  plan: &ScenePlan,
-  aspect_ratio: &str,
-  cancel_flag: Arc<AtomicBool>,
-) -> Result<Vec<ArtifactRef>, VisualAssetError> {
+pub async fn generate_visual_assets(app: &AppHandle, work_dir: &Path, job_id: &str, plan: &ScenePlan, aspect_ratio: &str, cancel_flag: Arc<AtomicBool>) -> Result<Vec<ArtifactRef>, VisualAssetError> {
   // Discover video models available from OmniRoute. This must not fall back to any
   // direct provider call — if OmniRoute has no models, we report VISUAL_PROVIDER_UNAVAILABLE.
   let video_models = match list_video_models().await {
     Ok(models) if !models.is_empty() => {
       info!("OMNIROUTE_VIDEO_MODELS available={} first={}", models.len(), models[0].id);
       models
-    }
+    },
     Ok(_) => {
       warn!("NO_OMNIROUTE_VIDEO_PROVIDER OmniRoute returned no video-capable models");
-      return Err(VisualAssetError::new(
-        "VISUAL_PROVIDER_UNAVAILABLE",
-        "OmniRoute has no configured video generation provider (NO_OMNIROUTE_VIDEO_PROVIDER)",
-      ));
-    }
+      return Err(VisualAssetError::new("VISUAL_PROVIDER_UNAVAILABLE", "OmniRoute has no configured video generation provider (NO_OMNIROUTE_VIDEO_PROVIDER)"));
+    },
     Err(error) => {
       warn!("OMNIROUTE_UNAVAILABLE cannot fetch video model catalog: {error}");
-      return Err(VisualAssetError::new(
-        "VISUAL_PROVIDER_UNAVAILABLE",
-        format!("OmniRoute unavailable when fetching video models: {error}"),
-      ));
-    }
+      return Err(VisualAssetError::new("VISUAL_PROVIDER_UNAVAILABLE", format!("OmniRoute unavailable when fetching video models: {error}")));
+    },
   };
 
   let runtime = app_lib::services::resolve_ffmpeg_runtime(app).await.map_err(|error| VisualAssetError::new("VISUAL_ARTIFACT_INVALID", error.to_string()))?;
@@ -152,12 +137,7 @@ pub async fn generate_visual_assets(
     let mut last_error = None;
     for (model_index, model) in video_models.iter().enumerate() {
       let model_id = &model.id;
-      info!(
-        "OMNIROUTE_REQUEST capability=video_generation model={model_id} attempt={}/{} job_id={job_id} scene_id={}",
-        model_index + 1,
-        video_models.len(),
-        scene.scene_id
-      );
+      info!("OMNIROUTE_REQUEST capability=video_generation model={model_id} attempt={}/{} job_id={job_id} scene_id={}", model_index + 1, video_models.len(), scene.scene_id);
 
       let attempt = tokio::select! {
         result = generate_video(
@@ -178,12 +158,7 @@ pub async fn generate_visual_assets(
           break;
         },
         Err(error) => {
-          warn!(
-            "AI_REQUEST_FAILED capability=video_generation model={model_id} scene_id={} code={} detail={}",
-            scene.scene_id,
-            error.code(),
-            error.message()
-          );
+          warn!("AI_REQUEST_FAILED capability=video_generation model={model_id} scene_id={} code={} detail={}", scene.scene_id, error.code(), error.message());
           let has_next = model_index + 1 < video_models.len();
           if should_fallback_to_next_video_model(&error, has_next) {
             warn!("OMNIROUTE_VIDEO_FALLBACK failed_model={model_id} next_model={} scene_id={}", video_models[model_index + 1].id, scene.scene_id);
@@ -199,12 +174,7 @@ pub async fn generate_visual_assets(
       map_omniroute_error_to_visual(&error)
     })?;
 
-    info!(
-      "OMNIROUTE_GENERATION_COMPLETED capability=video_generation model={} provider={} scene_id={}",
-      result.model_used,
-      result.provider_used,
-      scene.scene_id
-    );
+    info!("OMNIROUTE_GENERATION_COMPLETED capability=video_generation model={} provider={} scene_id={}", result.model_used, result.provider_used, scene.scene_id);
 
     // Download the generated video from the URL provided by OmniRoute.
     let response = client.get(&result.video_url).send().await.map_err(|error| VisualAssetError::new("VISUAL_ARTIFACT_INVALID", error.to_string()))?;
@@ -318,12 +288,7 @@ mod tests {
 
   #[test]
   fn quota_and_transient_errors_fall_back_to_the_next_video_provider() {
-    for error in [
-      OmniRouteVideoError::RateLimited,
-      OmniRouteVideoError::PaymentRequired,
-      OmniRouteVideoError::ProviderTimeout,
-      OmniRouteVideoError::Unavailable("offline".into()),
-    ] {
+    for error in [OmniRouteVideoError::RateLimited, OmniRouteVideoError::PaymentRequired, OmniRouteVideoError::ProviderTimeout, OmniRouteVideoError::Unavailable("offline".into())] {
       assert!(should_fallback_to_next_video_model(&error, true));
     }
   }

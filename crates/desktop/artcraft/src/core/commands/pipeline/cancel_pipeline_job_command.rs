@@ -38,12 +38,7 @@ async fn cancel(task_database: &TaskDatabase, job_id: &str) -> AnyhowResult<bool
 
   // Flip to a terminal cancelled status. The worker skips jobs not in its
   // pending set, so this stops further stage processing.
-  let updated = update_pipeline_job_status(UpdatePipelineJobStatusArgs {
-    db: task_database.get_connection(),
-    pipeline_job_id: &pipeline_job_id,
-    status: TaskStatus::CancelledByUser,
-    maybe_business_status: Some("CANCELLED"),
-  }).await?;
+  let updated = update_pipeline_job_status(UpdatePipelineJobStatusArgs { db: task_database.get_connection(), pipeline_job_id: &pipeline_job_id, status: TaskStatus::CancelledByUser, maybe_business_status: Some("CANCELLED") }).await?;
 
   Ok(updated)
 }

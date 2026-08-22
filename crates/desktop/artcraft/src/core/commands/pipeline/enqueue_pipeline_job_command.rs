@@ -38,15 +38,7 @@ async fn enqueue(task_database: &TaskDatabase, prompt: &str) -> AnyhowResult<Str
   // Store the prompt as a structured payload so the worker can parse it.
   let input_payload = serde_json::to_string(&serde_json::json!({ "prompt": prompt }))?;
 
-  let job_id = create_pipeline_job(CreatePipelineJobArgs {
-    db: task_database.get_connection(),
-    status: TaskStatus::Pending,
-    current_stage: PipelineStage::Queued,
-    maybe_page_id: None,
-    maybe_input_payload: Some(&input_payload),
-    maybe_page_snapshot: None,
-    maybe_business_status: Some("QUEUED"),
-  }).await?;
+  let job_id = create_pipeline_job(CreatePipelineJobArgs { db: task_database.get_connection(), status: TaskStatus::Pending, current_stage: PipelineStage::Queued, maybe_page_id: None, maybe_input_payload: Some(&input_payload), maybe_page_snapshot: None, maybe_business_status: Some("QUEUED") }).await?;
 
   Ok(job_id.as_str().to_string())
 }

@@ -68,40 +68,20 @@ pub fn map_dispatch_error(err: &ProductionDispatchError, platform_label: &str) -
     PublisherError::protocol_mismatch(format!("[{platform_label}] {code}: {message}"))
   } else if code.contains("CORRELATION_MISMATCH") {
     PublisherError::correlation_mismatch(format!("[{platform_label}] {code}: {message}"))
-  } else if code.contains("AUTH") || code.contains("LOGIN") || code.contains("GROK_NOT_LOGGED_IN")
-    || message.contains("login") || message.contains("AUTH_REQUIRED")
-  {
+  } else if code.contains("AUTH") || code.contains("LOGIN") || code.contains("GROK_NOT_LOGGED_IN") || message.contains("login") || message.contains("AUTH_REQUIRED") {
     PublisherError::auth_required(format!("[{platform_label}] {code}: {message}"))
-  } else if code.contains("CAPABILITY")
-    || code.contains("METHOD_NOT_SUPPORTED") || code.contains("METHOD_UNSUPPORTED")
-    || message.contains("not supported") || message.contains("not implemented")
-  {
-    PublisherError::new(
-      PublisherErrorCode::CapabilityUnavailable,
-      format!("[{platform_label}] {code}: {message}"),
-      false,
-    )
+  } else if code.contains("CAPABILITY") || code.contains("METHOD_NOT_SUPPORTED") || code.contains("METHOD_UNSUPPORTED") || message.contains("not supported") || message.contains("not implemented") {
+    PublisherError::new(PublisherErrorCode::CapabilityUnavailable, format!("[{platform_label}] {code}: {message}"), false)
   } else if code.contains("TARGET_AMBIGUOUS") {
     PublisherError::target_ambiguous(format!("[{platform_label}] {code}: {message}"))
-  } else if code.contains("BRIDGE_TIMEOUT") || code.contains("NETWORK_TIMEOUT")
-    || message.contains("timed out after")
-  {
-    PublisherError::new(
-      PublisherErrorCode::VerifyFailed,
-      format!("[{platform_label}] {code}: {message} — outcome unknown, verification required"),
-      false,
-    )
-  } else if code.contains("PROFILE_OFFLINE") || code.contains("NO_AVAILABLE_WORKER")
-    || code.contains("INVALID_PROFILE")
-  {
+  } else if code.contains("BRIDGE_TIMEOUT") || code.contains("NETWORK_TIMEOUT") || message.contains("timed out after") {
+    PublisherError::new(PublisherErrorCode::VerifyFailed, format!("[{platform_label}] {code}: {message} — outcome unknown, verification required"), false)
+  } else if code.contains("PROFILE_OFFLINE") || code.contains("NO_AVAILABLE_WORKER") || code.contains("INVALID_PROFILE") {
     PublisherError::profile_offline(format!("[{platform_label}] {code}: {message}"))
   } else if code.contains("WORKER_BUSY") {
     PublisherError::upload_failed(format!("[{platform_label}] {code}: {message}"), true)
   } else {
-    PublisherError::upload_failed(
-      format!("[{platform_label}] {code}: {message}"),
-      retryable,
-    )
+    PublisherError::upload_failed(format!("[{platform_label}] {code}: {message}"), retryable)
   }
 }
 
@@ -110,17 +90,8 @@ pub fn map_dispatch_error(err: &ProductionDispatchError, platform_label: &str) -
 /// Returns:
 /// - `Ok(response)` with the typed struct on success.
 /// - `Err(PublisherError)` if JSON fails to parse (protocol/invalid-response error).
-pub fn parse_dispatch_body(
-  raw: serde_json::Value,
-  platform_label: &str,
-) -> Result<ProductionDispatchResponse, PublisherError> {
-  serde_json::from_value::<ProductionDispatchResponse>(raw.clone()).map_err(|e| {
-    PublisherError::new(
-      PublisherErrorCode::PlatformRejected,
-      format!("[{platform_label}] Failed to parse dispatch response (protocol violation): {e}"),
-      false,
-    )
-  })
+pub fn parse_dispatch_body(raw: serde_json::Value, platform_label: &str) -> Result<ProductionDispatchResponse, PublisherError> {
+  serde_json::from_value::<ProductionDispatchResponse>(raw.clone()).map_err(|e| PublisherError::new(PublisherErrorCode::PlatformRejected, format!("[{platform_label}] Failed to parse dispatch response (protocol violation): {e}"), false))
 }
 
 /// Full semantic validation of a parsed dispatch response against expected execution identity.
@@ -131,96 +102,61 @@ pub fn parse_dispatch_body(
 /// 3. All correlation fields exist and match ExpectedDispatchIdentity
 /// 4. Validate `ok` field
 /// 5. Return authoritative `result`
-pub fn validate_dispatch_response(
-  resp: ProductionDispatchResponse,
-  expected: &ExpectedDispatchIdentity,
-  platform_label: &str,
-) -> Result<Option<serde_json::Value>, PublisherError> {
+pub fn validate_dispatch_response(resp: ProductionDispatchResponse, expected: &ExpectedDispatchIdentity, platform_label: &str) -> Result<Option<serde_json::Value>, PublisherError> {
   // STEP 1 & 2: protocol exists and == "floword-production"
   let protocol = resp.protocol.as_deref().unwrap_or("");
   if protocol != "floword-production" {
-    return Err(PublisherError::protocol_mismatch(format!(
-      "[{platform_label}] Invalid protocol '{protocol}', expected 'floword-production'"
-    )));
+    return Err(PublisherError::protocol_mismatch(format!("[{platform_label}] Invalid protocol '{protocol}', expected 'floword-production'")));
   }
 
   // STEP 3 & 4: protocolVersion exists and == 1
   match resp.protocol_version {
-    Some(1) => {}
+    Some(1) => {},
     Some(v) => {
-      return Err(PublisherError::protocol_mismatch(format!(
-        "[{platform_label}] Unsupported protocolVersion {v}, expected 1"
-      )));
-    }
+      return Err(PublisherError::protocol_mismatch(format!("[{platform_label}] Unsupported protocolVersion {v}, expected 1")));
+    },
     None => {
-      return Err(PublisherError::protocol_mismatch(format!(
-        "[{platform_label}] Missing protocolVersion in response envelope"
-      )));
-    }
+      return Err(PublisherError::protocol_mismatch(format!("[{platform_label}] Missing protocolVersion in response envelope")));
+    },
   }
 
   // STEP 5 & 6: Correlation fields exist and match ExpectedDispatchIdentity
   let req_id = resp.request_id.as_deref().unwrap_or("");
   if req_id.is_empty() || req_id != expected.request_id {
-    return Err(PublisherError::correlation_mismatch(format!(
-      "[{platform_label}] requestId mismatch: received '{req_id}', expected '{}'",
-      expected.request_id
-    )));
+    return Err(PublisherError::correlation_mismatch(format!("[{platform_label}] requestId mismatch: received '{req_id}', expected '{}'", expected.request_id)));
   }
 
   let job_id = resp.job_id.as_deref().unwrap_or("");
   if job_id.is_empty() || job_id != expected.job_id {
-    return Err(PublisherError::correlation_mismatch(format!(
-      "[{platform_label}] jobId mismatch: received '{job_id}', expected '{}'",
-      expected.job_id
-    )));
+    return Err(PublisherError::correlation_mismatch(format!("[{platform_label}] jobId mismatch: received '{job_id}', expected '{}'", expected.job_id)));
   }
 
   let step_id = resp.step_id.as_deref().unwrap_or("");
   if step_id.is_empty() || step_id != expected.step_id {
-    return Err(PublisherError::correlation_mismatch(format!(
-      "[{platform_label}] stepId mismatch: received '{step_id}', expected '{}'",
-      expected.step_id
-    )));
+    return Err(PublisherError::correlation_mismatch(format!("[{platform_label}] stepId mismatch: received '{step_id}', expected '{}'", expected.step_id)));
   }
 
   let attempt_id = resp.attempt_id.as_deref().unwrap_or("");
   if attempt_id.is_empty() || attempt_id != expected.attempt_id {
-    return Err(PublisherError::correlation_mismatch(format!(
-      "[{platform_label}] attemptId mismatch: received '{attempt_id}', expected '{}'",
-      expected.attempt_id
-    )));
+    return Err(PublisherError::correlation_mismatch(format!("[{platform_label}] attemptId mismatch: received '{attempt_id}', expected '{}'", expected.attempt_id)));
   }
 
   let lease_id = resp.lease_id.as_deref().unwrap_or("");
   if lease_id.is_empty() || lease_id != expected.lease_id {
-    return Err(PublisherError::correlation_mismatch(format!(
-      "[{platform_label}] leaseId mismatch: received '{lease_id}', expected '{}'",
-      expected.lease_id
-    )));
+    return Err(PublisherError::correlation_mismatch(format!("[{platform_label}] leaseId mismatch: received '{lease_id}', expected '{}'", expected.lease_id)));
   }
 
   let profile_id = resp.profile_id.as_deref().unwrap_or("");
   if profile_id.is_empty() || profile_id != expected.profile_id {
-    return Err(PublisherError::correlation_mismatch(format!(
-      "[{platform_label}] profileId mismatch: received '{profile_id}', expected '{}'",
-      expected.profile_id
-    )));
+    return Err(PublisherError::correlation_mismatch(format!("[{platform_label}] profileId mismatch: received '{profile_id}', expected '{}'", expected.profile_id)));
   }
 
   // STEP 7: Validate ok
   match resp.ok {
-    None => Err(PublisherError::new(
-      PublisherErrorCode::PlatformRejected,
-      format!("[{platform_label}] Extension response missing 'ok' field (protocol violation)"),
-      false,
-    )),
+    None => Err(PublisherError::new(PublisherErrorCode::PlatformRejected, format!("[{platform_label}] Extension response missing 'ok' field (protocol violation)"), false)),
     Some(false) => match resp.error {
       Some(err) => Err(map_dispatch_error(&err, platform_label)),
-      None => Err(PublisherError::upload_failed(
-        format!("[{platform_label}] Extension returned ok=false with no error details"),
-        false,
-      )),
+      None => Err(PublisherError::upload_failed(format!("[{platform_label}] Extension returned ok=false with no error details"), false)),
     },
     // STEP 8: Return authoritative result
     Some(true) => Ok(resp.result),
@@ -233,14 +169,7 @@ mod tests {
   use serde_json::json;
 
   fn valid_expected_identity() -> ExpectedDispatchIdentity {
-    ExpectedDispatchIdentity {
-      request_id: "req_1".to_string(),
-      job_id: "job_1".to_string(),
-      step_id: "step_1".to_string(),
-      attempt_id: "attempt_1".to_string(),
-      lease_id: "lease_1".to_string(),
-      profile_id: "profile_1".to_string(),
-    }
+    ExpectedDispatchIdentity { request_id: "req_1".to_string(), job_id: "job_1".to_string(), step_id: "step_1".to_string(), attempt_id: "attempt_1".to_string(), lease_id: "lease_1".to_string(), profile_id: "profile_1".to_string() }
   }
 
   /// 11.1 Protocol validation — valid identity
@@ -484,14 +413,7 @@ mod tests {
       "result": { "postId": "123" }
     });
 
-    let expected_attempt_2 = ExpectedDispatchIdentity {
-      request_id: "req_002".to_string(),
-      job_id: "JOB_A".to_string(),
-      step_id: "publish_facebook_pub1".to_string(),
-      attempt_id: "attempt_2".to_string(),
-      lease_id: "LEASE_NEW".to_string(),
-      profile_id: "PROFILE_A".to_string(),
-    };
+    let expected_attempt_2 = ExpectedDispatchIdentity { request_id: "req_002".to_string(), job_id: "JOB_A".to_string(), step_id: "publish_facebook_pub1".to_string(), attempt_id: "attempt_2".to_string(), lease_id: "LEASE_NEW".to_string(), profile_id: "PROFILE_A".to_string() };
 
     let parsed = parse_dispatch_body(raw, "Facebook").expect("Should parse");
     let err = validate_dispatch_response(parsed, &expected_attempt_2, "Facebook").unwrap_err();

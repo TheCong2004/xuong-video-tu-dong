@@ -1,8 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{
-  acquire_worker, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest,
-  HeartbeatLeaseRequest, HeartbeatLeaseResponse,
-};
+use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
 use reqwest::Client;
@@ -51,10 +48,7 @@ struct LeaseGuard {
 
 impl LeaseGuard {
   fn new(lease_id: String) -> Self {
-    Self {
-      lease_id,
-      released: false,
-    }
+    Self { lease_id, released: false }
   }
 
   /// Primary explicit async cleanup.
@@ -169,28 +163,20 @@ pub fn detect_image_mime(bytes: &[u8]) -> Result<(&'static str, &'static str), S
 }
 
 /// Primary orchestrator entry point for executing a Grok image edit step.
-pub async fn execute_grok_image_edit_stage(
-  input: GrokImageEditInput,
-  attempt_id: &str,
-  cancel_flag: Option<&Arc<AtomicBool>>,
-) -> Result<GrokImageEditOutput, String> {
+pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id: &str, cancel_flag: Option<&Arc<AtomicBool>>) -> Result<GrokImageEditOutput, String> {
   let job_id = input.job_id.clone();
   let step_id = "GENERATING_IMAGE";
   let request_id = format!("REQ_{}", Uuid::new_v4().simple());
   let prompt_hash = compute_sha256(input.prompt.as_bytes());
 
-  info!(
-    "[GrokImageEdit] Starting execution: job_id={} attempt_id={} source_art={}",
-    job_id, attempt_id, input.source_image_artifact.artifact_id
-  );
+  info!("[GrokImageEdit] Starting execution: job_id={} attempt_id={} source_art={}", job_id, attempt_id, input.source_image_artifact.artifact_id);
 
   // Fail-closed canonical workflow root validation
   let workflow_root_buf = input.workflow_root.clone();
   if workflow_root_buf.as_os_str().is_empty() {
     return Err("WORKFLOW_ROOT_REQUIRED: Canonical workflow artifact root path is required".to_string());
   }
-  std::fs::create_dir_all(&workflow_root_buf)
-    .map_err(|e| format!("WORKFLOW_ROOT_INVALID: Cannot create canonical workflow artifact root {:?}: {e}", workflow_root_buf))?;
+  std::fs::create_dir_all(&workflow_root_buf).map_err(|e| format!("WORKFLOW_ROOT_INVALID: Cannot create canonical workflow artifact root {:?}: {e}", workflow_root_buf))?;
 
   // Read source artifact bytes and validate MIME BEFORE acquiring worker lease
   let source_path = input.source_image_artifact.location.clone();
@@ -198,8 +184,7 @@ pub async fn execute_grok_image_edit_stage(
     if bytes.is_empty() {
       return Err("SOURCE_ARTIFACT_INVALID: Source file is 0 bytes".to_string());
     }
-    let (mime, _ext) = detect_image_mime(&bytes)
-      .map_err(|e| format!("SOURCE_ARTIFACT_INVALID_MIME: {e}"))?;
+    let (mime, _ext) = detect_image_mime(&bytes).map_err(|e| format!("SOURCE_ARTIFACT_INVALID_MIME: {e}"))?;
     use base64::Engine;
     let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
     let hash = compute_sha256(&bytes);
@@ -210,26 +195,14 @@ pub async fn execute_grok_image_edit_stage(
   };
 
   // 1. Acquire exclusive worker lease
-  let lease = acquire_worker(AcquireWorkerRequest {
-    pool_id: None,
-    profile_id: input.browser_profile_id.clone(),
-    capability: "grok.image.edit".to_string(),
-    job_id: job_id.clone(),
-    step_id: step_id.to_string(),
-    attempt_id: attempt_id.to_string(),
-    ttl_seconds: Some(120),
-  })
-  .await
-  .map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
+  let lease = acquire_worker(AcquireWorkerRequest { pool_id: None, profile_id: input.browser_profile_id.clone(), capability: "grok.image.edit".to_string(), job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), ttl_seconds: Some(120) }).await.map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
 
   let lease_id = lease.lease_id.clone();
+  let worker_id = lease.worker_id.clone();
   let profile_id = lease.profile_id.clone();
   let mut lease_guard = LeaseGuard::new(lease_id.clone());
 
-  info!(
-    "[GrokImageEdit] Acquired worker lease: lease_id={} profile_id={}",
-    lease_id, profile_id
-  );
+  info!("[GrokImageEdit] Acquired worker lease: lease_id={} worker_id={} profile_id={}", lease_id, worker_id, profile_id);
 
   // 2. Start background heartbeat loop (every 30s)
   let heartbeat_running = Arc::new(AtomicBool::new(true));
@@ -246,19 +219,10 @@ pub async fn execute_grok_image_edit_stage(
       if !hb_running_clone.load(Ordering::Relaxed) {
         break;
       }
-      let req = HeartbeatLeaseRequest {
-        job_id: hb_job_id.clone(),
-        attempt_id: hb_attempt_id.clone(),
-        ttl_seconds: Some(60),
-      };
+      let req = HeartbeatLeaseRequest { job_id: hb_job_id.clone(), attempt_id: hb_attempt_id.clone(), ttl_seconds: Some(60) };
       if let Err(err) = heartbeat_lease(&hb_lease_id, req).await {
         warn!("[GrokImageEdit] Heartbeat failed for lease {hb_lease_id}: {err}");
-        if err.contains("LEASE_NOT_FOUND")
-          || err.contains("Lease not found")
-          || err.contains("LEASE_NOT_ACTIVE")
-          || err.contains("Lease is not active")
-          || err.contains("CORRELATION_MISMATCH")
-        {
+        if err.contains("LEASE_NOT_FOUND") || err.contains("Lease not found") || err.contains("LEASE_NOT_ACTIVE") || err.contains("Lease is not active") || err.contains("CORRELATION_MISMATCH") {
           error!("[GrokImageEdit] Authoritative lease ownership loss detected for {hb_lease_id}: {err}");
           hb_lost_clone.store(true, Ordering::Relaxed);
           break;
@@ -269,45 +233,41 @@ pub async fn execute_grok_image_edit_stage(
 
   // 3. Execution block
   let exec_result: Result<(ArtifactRef, String, String, usize), String> = async {
-    let req_payload = ExtensionProductionRequest {
-      protocol: "floword-production",
-      protocol_version: 1,
-      request_id: request_id.clone(),
-      job_id: job_id.clone(),
-      step_id: step_id.to_string(),
-      attempt_id: attempt_id.to_string(),
-      lease_id: lease_id.clone(),
-      profile_id: profile_id.clone(),
-      page_id: Some(input.page_id.clone()),
-      method: "grok.image.edit",
-      params: ExtensionImageEditParams {
-        source_artifact: ExtensionSourceArtifact {
-          artifact_id: input.source_image_artifact.artifact_id.clone(),
-          path: source_path,
-          data_url,
-          mime_type: source_mime,
-        },
-        prompt: input.prompt.clone(),
-        timeout_ms: input.timeout_ms.unwrap_or(180000),
-      },
-      created_at: chrono::Utc::now().to_rfc3339(),
-    };
+    let req_payload = ExtensionProductionRequest { protocol: "floword-production", protocol_version: 1, request_id: request_id.clone(), job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), lease_id: lease_id.clone(), profile_id: profile_id.clone(), page_id: Some(input.page_id.clone()), method: "grok.image.edit", params: ExtensionImageEditParams { source_artifact: ExtensionSourceArtifact { artifact_id: input.source_image_artifact.artifact_id.clone(), path: source_path, data_url, mime_type: source_mime }, prompt: input.prompt.clone(), timeout_ms: input.timeout_ms.unwrap_or(180000) }, created_at: chrono::Utc::now().to_rfc3339() };
 
-    info!(
-      "[GrokImageEdit] Dispatching request {request_id} to worker {profile_id} (attempt {attempt_id}, lease {lease_id})"
-    );
+    info!("[GrokImageEdit] Dispatching request {request_id} to worker {worker_id} (profile {profile_id}, attempt {attempt_id}, lease {lease_id})");
 
-    let client = Client::builder()
-      .timeout(Duration::from_millis(input.timeout_ms.unwrap_or(180000) + 10000))
-      .build()
-      .map_err(|e| format!("Failed to create client: {e}"))?;
+    let client = Client::builder().timeout(Duration::from_millis(input.timeout_ms.unwrap_or(180000) + 10000)).build().map_err(|e| format!("Failed to create client: {e}"))?;
 
     // Forward to extension bridge endpoint
     let bridge_base = get_extension_bridge_base_url();
-    let bridge_url = format!("{bridge_base}/v1/workers/{profile_id}/dispatch");
+    let bridge_url = format!("{bridge_base}/v1/workers/{worker_id}/dispatch");
 
     let (resp_res, was_cancelled) = tokio::select! {
-      res = client.post(&bridge_url).json(&req_payload).send() => {
+      res = async {
+        // Donut can briefly reset the local HTTP connection while its browser
+        // profile/extension is reconnecting. Reuse the same request_id on
+        // retries so the bridge can treat the request idempotently.
+        const MAX_DISPATCH_ATTEMPTS: usize = 3;
+        let mut last_error = None;
+
+        for attempt in 1..=MAX_DISPATCH_ATTEMPTS {
+          match client.post(&bridge_url).json(&req_payload).send().await {
+            Ok(response) => return Ok(response),
+            Err(error) => {
+              warn!(
+                "[GrokImageEdit] Bridge dispatch transport error (attempt {attempt}/{MAX_DISPATCH_ATTEMPTS}) url={bridge_url}: {error}"
+              );
+              last_error = Some(error);
+              if attempt < MAX_DISPATCH_ATTEMPTS {
+                tokio::time::sleep(Duration::from_millis(500 * attempt as u64)).await;
+              }
+            }
+          }
+        }
+
+        Err(last_error.expect("dispatch must have one transport error"))
+      } => {
         (Some(res), false)
       }
       _ = async {
@@ -324,7 +284,7 @@ pub async fn execute_grok_image_edit_stage(
     };
 
     if was_cancelled {
-      info!("[GrokImageEdit] Job cancelled in-flight! Dispatching cancel request to worker {profile_id}");
+      info!("[GrokImageEdit] Job cancelled in-flight! Dispatching cancel request to worker {worker_id}");
       let cancel_payload = serde_json::json!({
         "protocol": "floword-production",
         "protocolVersion": 1,
@@ -345,7 +305,7 @@ pub async fn execute_grok_image_edit_stage(
       return Err("CANCELLED".to_string());
     }
 
-    let resp = resp_res.unwrap().map_err(|e| format!("Bridge dispatch failed: {e}"))?;
+    let resp = resp_res.unwrap().map_err(|e| format!("Bridge dispatch failed after 3 attempts ({bridge_url}): {e}"))?;
 
     if !resp.status().is_success() {
       let status = resp.status();
@@ -353,17 +313,10 @@ pub async fn execute_grok_image_edit_stage(
       return Err(format!("Bridge error ({status}): {body}"));
     }
 
-    let prod_result: ExtensionProductionResult = resp
-      .json()
-      .await
-      .map_err(|e| format!("Failed to parse production result: {e}"))?;
+    let prod_result: ExtensionProductionResult = resp.json().await.map_err(|e| format!("Failed to parse production result: {e}"))?;
 
     if !prod_result.ok {
-      let err = prod_result.error.unwrap_or(ExtensionError {
-        code: "UNKNOWN_ERROR".to_string(),
-        message: "Extension reported error without details".to_string(),
-        retryable: Some(true),
-      });
+      let err = prod_result.error.unwrap_or(ExtensionError { code: "UNKNOWN_ERROR".to_string(), message: "Extension reported error without details".to_string(), retryable: Some(true) });
       return Err(format!("{}: {}", err.code, err.message));
     }
 
@@ -384,22 +337,12 @@ pub async fn execute_grok_image_edit_stage(
         return Err("ARTIFACT_INVALID: Malformed data URL".to_string());
       }
       use base64::Engine;
-      base64::engine::general_purpose::STANDARD
-        .decode(parts[1])
-        .map_err(|e| format!("ARTIFACT_INVALID: Base64 decode error: {e}"))?
+      base64::engine::general_purpose::STANDARD.decode(parts[1]).map_err(|e| format!("ARTIFACT_INVALID: Base64 decode error: {e}"))?
     } else {
       // Download remote CDN URL
-      let dl_resp = client
-        .get(&media.locator)
-        .send()
-        .await
-        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?;
+      let dl_resp = client.get(&media.locator).send().await.map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?;
 
-      dl_resp
-        .bytes()
-        .await
-        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?
-        .to_vec()
+      dl_resp.bytes().await.map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?.to_vec()
     };
 
     if raw_bytes.is_empty() {
@@ -414,8 +357,7 @@ pub async fn execute_grok_image_edit_stage(
     // Save physical file directly into workflow artifact root
     let _ = std::fs::create_dir_all(&workflow_root_buf);
     let file_path = workflow_root_buf.join(format!("{file_stem}.{ext}"));
-    std::fs::write(&file_path, &raw_bytes)
-      .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
+    std::fs::write(&file_path, &raw_bytes).map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
 
     // Canonical ArtifactStore registration as GeneratedImage
     let stored = ArtifactStore::register_typed_artifact(
@@ -435,28 +377,18 @@ pub async fn execute_grok_image_edit_stage(
     )
     .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
 
-    let art = stored
-      .to_artifact_ref(StageId::StoryScript)
-      .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
+    let art = stored.to_artifact_ref(StageId::StoryScript).map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
 
     // P0-5: TERMINAL HEARTBEAT OWNERSHIP BARRIER (FAIL-CLOSED)
     // Authoritative check right before declaring stage success
-    let final_hb = heartbeat_lease(
-      &lease_id,
-      HeartbeatLeaseRequest {
-        job_id: job_id.clone(),
-        attempt_id: attempt_id.to_string(),
-        ttl_seconds: Some(60),
-      },
-    )
-    .await;
+    let final_hb = heartbeat_lease(&lease_id, HeartbeatLeaseRequest { job_id: job_id.clone(), attempt_id: attempt_id.to_string(), ttl_seconds: Some(60) }).await;
 
     let hb_valid = match final_hb {
       Ok(res) => res.status == "Active",
       Err(err) => {
         error!("[GrokImageEdit] Terminal heartbeat failed for lease {lease_id}: {err}");
         false
-      }
+      },
     };
 
     if !hb_valid || heartbeat_lost.load(Ordering::Relaxed) {
@@ -474,27 +406,13 @@ pub async fn execute_grok_image_edit_stage(
 
   match exec_result {
     Ok((generated_artifact, generated_sha256, mime_type, size_bytes)) => {
-      info!(
-        "[GrokImageEdit] Success! Artifact materialized: path={} mime={} size={} sha256={}",
-        generated_artifact.location, mime_type, size_bytes, generated_sha256
-      );
-      Ok(GrokImageEditOutput {
-        generated_artifact,
-        job_id,
-        attempt_id: attempt_id.to_string(),
-        lease_id,
-        profile_id,
-        source_sha256,
-        generated_sha256,
-        prompt_hash,
-        mime_type,
-        size_bytes,
-      })
-    }
+      info!("[GrokImageEdit] Success! Artifact materialized: path={} mime={} size={} sha256={}", generated_artifact.location, mime_type, size_bytes, generated_sha256);
+      Ok(GrokImageEditOutput { generated_artifact, job_id, attempt_id: attempt_id.to_string(), lease_id, profile_id, source_sha256, generated_sha256, prompt_hash, mime_type, size_bytes })
+    },
     Err(err) => {
       error!("[GrokImageEdit] Execution failed: {err}");
       Err(err)
-    }
+    },
   }
 }
 
@@ -542,25 +460,7 @@ mod tests {
 
   #[test]
   fn test_case_a_normal_success_record_structure() {
-    let output = GrokImageEditOutput {
-      generated_artifact: ArtifactRef {
-        artifact_id: "ART_GEN_001".to_string(),
-        kind: ArtifactKind::GeneratedImage,
-        produced_by_stage: StageId::StoryScript,
-        location: "D:/temp/ART_GEN_001.png".to_string(),
-        mime_type: Some("image/png".to_string()),
-        metadata: serde_json::json!({}),
-      },
-      job_id: "JOB_000001".to_string(),
-      attempt_id: "ATTEMPT_001".to_string(),
-      lease_id: "LEASE_000077".to_string(),
-      profile_id: "PROFILE_GROK_03".to_string(),
-      source_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
-      generated_sha256: "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb".to_string(),
-      prompt_hash: "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce".to_string(),
-      mime_type: "image/png".to_string(),
-      size_bytes: 1048576,
-    };
+    let output = GrokImageEditOutput { generated_artifact: ArtifactRef { artifact_id: "ART_GEN_001".to_string(), kind: ArtifactKind::GeneratedImage, produced_by_stage: StageId::StoryScript, location: "D:/temp/ART_GEN_001.png".to_string(), mime_type: Some("image/png".to_string()), metadata: serde_json::json!({}) }, job_id: "JOB_000001".to_string(), attempt_id: "ATTEMPT_001".to_string(), lease_id: "LEASE_000077".to_string(), profile_id: "PROFILE_GROK_03".to_string(), source_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(), generated_sha256: "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb".to_string(), prompt_hash: "4e07408562bedb8b60ce05c1decfe3ad16b72230967de01f640b7e4729b49fce".to_string(), mime_type: "image/png".to_string(), size_bytes: 1048576 };
 
     assert_eq!(output.job_id, "JOB_000001");
     assert_eq!(output.attempt_id, "ATTEMPT_001");
@@ -590,11 +490,7 @@ mod tests {
 
   #[test]
   fn test_e2_final_heartbeat_lease_not_active_fails() {
-    let hb_res: Result<HeartbeatLeaseResponse, String> = Ok(HeartbeatLeaseResponse {
-      lease_id: "L1".to_string(),
-      status: "Released".to_string(),
-      expires_at: "".to_string(),
-    });
+    let hb_res: Result<HeartbeatLeaseResponse, String> = Ok(HeartbeatLeaseResponse { lease_id: "L1".to_string(), status: "Released".to_string(), expires_at: "".to_string() });
     let outcome = match hb_res {
       Ok(r) if r.status == "Active" => Ok(()),
       _ => Err("LEASE_LOST: Terminal ownership check failed".to_string()),
@@ -672,29 +568,7 @@ mod tests {
   // TEST GROUP F — JSON Contract Alignment Tests
   #[test]
   fn test_f1_production_request_serializes_to_exact_camel_case() {
-    let req = ExtensionProductionRequest {
-      protocol: "floword-production",
-      protocol_version: 1,
-      request_id: "REQ_123".to_string(),
-      job_id: "JOB_456".to_string(),
-      step_id: "GENERATING_IMAGE".to_string(),
-      attempt_id: "1".to_string(),
-      lease_id: "LEASE_789".to_string(),
-      profile_id: "PROFILE_01".to_string(),
-      page_id: Some("PAGE_99".to_string()),
-      method: "grok.image.edit",
-      params: ExtensionImageEditParams {
-        source_artifact: ExtensionSourceArtifact {
-          artifact_id: "ART_001".to_string(),
-          path: "/tmp/img.png".to_string(),
-          data_url: Some("data:image/png;base64,...".to_string()),
-          mime_type: "image/png".to_string(),
-        },
-        prompt: "Fix lighting".to_string(),
-        timeout_ms: 120000,
-      },
-      created_at: "2026-08-17T22:30:00Z".to_string(),
-    };
+    let req = ExtensionProductionRequest { protocol: "floword-production", protocol_version: 1, request_id: "REQ_123".to_string(), job_id: "JOB_456".to_string(), step_id: "GENERATING_IMAGE".to_string(), attempt_id: "1".to_string(), lease_id: "LEASE_789".to_string(), profile_id: "PROFILE_01".to_string(), page_id: Some("PAGE_99".to_string()), method: "grok.image.edit", params: ExtensionImageEditParams { source_artifact: ExtensionSourceArtifact { artifact_id: "ART_001".to_string(), path: "/tmp/img.png".to_string(), data_url: Some("data:image/png;base64,...".to_string()), mime_type: "image/png".to_string() }, prompt: "Fix lighting".to_string(), timeout_ms: 120000 }, created_at: "2026-08-17T22:30:00Z".to_string() };
 
     let json_val = serde_json::to_value(&req).expect("Serialization failed");
 
@@ -789,7 +663,8 @@ mod tests {
         "mime_type": "image/png",
         "service": "grok"
       }),
-    ).expect("ArtifactStore registration must succeed");
+    )
+    .expect("ArtifactStore registration must succeed");
 
     assert_eq!(stored.artifact_type, "generated_image");
     assert_eq!(stored.producer, "grok");
@@ -805,22 +680,7 @@ mod tests {
 
   #[tokio::test]
   async fn test_f4_empty_workflow_root_rejected_fail_closed() {
-    let input = GrokImageEditInput {
-      job_id: "JOB_FAIL_001".to_string(),
-      page_id: "PAGE_01".to_string(),
-      browser_profile_id: None,
-      source_image_artifact: ArtifactRef {
-        artifact_id: "ART_SRC".to_string(),
-        kind: ArtifactKind::Story,
-        produced_by_stage: StageId::StoryScript,
-        location: "/tmp/non_existent.png".to_string(),
-        mime_type: Some("image/png".to_string()),
-        metadata: serde_json::json!({}),
-      },
-      prompt: "test".to_string(),
-      timeout_ms: Some(1000),
-      workflow_root: std::path::PathBuf::from(""),
-    };
+    let input = GrokImageEditInput { job_id: "JOB_FAIL_001".to_string(), page_id: "PAGE_01".to_string(), browser_profile_id: None, source_image_artifact: ArtifactRef { artifact_id: "ART_SRC".to_string(), kind: ArtifactKind::Story, produced_by_stage: StageId::StoryScript, location: "/tmp/non_existent.png".to_string(), mime_type: Some("image/png".to_string()), metadata: serde_json::json!({}) }, prompt: "test".to_string(), timeout_ms: Some(1000), workflow_root: std::path::PathBuf::from("") };
 
     let outcome = execute_grok_image_edit_stage(input, "1", None).await;
     assert!(outcome.is_err());

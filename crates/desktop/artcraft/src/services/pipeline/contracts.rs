@@ -338,14 +338,7 @@ impl ContentSource {
   }
 
   /// Deterministically resolve auto mode based on provided inputs
-  pub fn resolve(
-    declared: Option<&str>,
-    local_file: Option<&str>,
-    source_url: Option<&str>,
-    story_url: Option<&str>,
-    research_enabled: bool,
-    research_query: Option<&str>,
-  ) -> Self {
+  pub fn resolve(declared: Option<&str>, local_file: Option<&str>, source_url: Option<&str>, story_url: Option<&str>, research_enabled: bool, research_query: Option<&str>) -> Self {
     let mode = Self::parse_or_default(declared);
     if mode != Self::Auto {
       return mode;
@@ -376,19 +369,7 @@ impl ContentSource {
 
 pub fn is_direct_video_or_media_url(url: &str) -> bool {
   let lower = url.to_ascii_lowercase();
-  lower.contains("youtube.com")
-    || lower.contains("youtu.be")
-    || lower.contains("tiktok.com")
-    || lower.contains("douyin.com")
-    || lower.contains("bilibili.com")
-    || lower.contains("kuaishou.com")
-    || lower.contains("instagram.com/reel")
-    || lower.contains("instagram.com/p/")
-    || lower.ends_with(".mp4")
-    || lower.ends_with(".mov")
-    || lower.ends_with(".webm")
-    || lower.ends_with(".mkv")
-    || lower.ends_with(".m3u8")
+  lower.contains("youtube.com") || lower.contains("youtu.be") || lower.contains("tiktok.com") || lower.contains("douyin.com") || lower.contains("bilibili.com") || lower.contains("kuaishou.com") || lower.contains("instagram.com/reel") || lower.contains("instagram.com/p/") || lower.ends_with(".mp4") || lower.ends_with(".mov") || lower.ends_with(".webm") || lower.ends_with(".mkv") || lower.ends_with(".m3u8")
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

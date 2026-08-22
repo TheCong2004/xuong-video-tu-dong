@@ -52,7 +52,11 @@ pub async fn health_check() -> Result<(), String> {
   match client.get(&url).send().await {
     Ok(res) => {
       let status = res.status();
-      if status.is_success() { Ok(()) } else { Err(format!("CAPCUT_UNAVAILABLE: HTTP status {}", status.as_u16())) }
+      if status.is_success() {
+        Ok(())
+      } else {
+        Err(format!("CAPCUT_UNAVAILABLE: HTTP status {}", status.as_u16()))
+      }
     },
     Err(err) => Err(format!("CAPCUT_UNAVAILABLE: Connection failed to {url}: {err}")),
   }
@@ -144,10 +148,13 @@ pub async fn add_videos(client: &Client, draft_url: &str, asset_url: &str, segme
 }
 
 pub async fn add_video_assets(client: &Client, draft_url: &str, asset_urls: &HashMap<String, String>, segments: &[MediaPlacement]) -> AnyhowResult<()> {
-  let videos = segments.iter().map(|segment| {
-    let asset_url = asset_urls.get(&segment.artifact_id).ok_or_else(|| anyhow::anyhow!("CAPCUT_MEDIA_REFERENCE_INVALID: no transport URL for {}", segment.artifact_id))?;
-    Ok(json!({ "video_url": asset_url, "start": segment.source_start_us, "end": segment.source_start_us + segment.duration_us, "duration": segment.duration_us, "volume": 0.0 }))
-  }).collect::<AnyhowResult<Vec<_>>>()?;
+  let videos = segments
+    .iter()
+    .map(|segment| {
+      let asset_url = asset_urls.get(&segment.artifact_id).ok_or_else(|| anyhow::anyhow!("CAPCUT_MEDIA_REFERENCE_INVALID: no transport URL for {}", segment.artifact_id))?;
+      Ok(json!({ "video_url": asset_url, "start": segment.source_start_us, "end": segment.source_start_us + segment.duration_us, "duration": segment.duration_us, "volume": 0.0 }))
+    })
+    .collect::<AnyhowResult<Vec<_>>>()?;
   let scene_timelines = segments.iter().map(|segment| json!({ "start": segment.start_us, "end": segment.start_us + segment.duration_us })).collect::<Vec<_>>();
   let body = json!({ "draft_url": draft_url, "video_infos": serde_json::to_string(&videos)?, "scene_timelines": scene_timelines });
   post(client, "/add_videos", &body).await.map_err(|error| anyhow::anyhow!("VIDEO_ADD_FAILED: {error}"))?;
@@ -374,7 +381,11 @@ fn classify_http_error(path: &str, status: u16, text: &str) -> anyhow::Error {
       return anyhow::anyhow!("{code}: {message}");
     }
   }
-  if path == "/local/tracks" && status == 404 { anyhow::anyhow!("CAPCUT_DRAFT_NOT_FOUND: CapCut Mate could not find the created draft for /local/tracks: {text}") } else { anyhow::anyhow!("CAPCUT_UNAVAILABLE: CapCut Mate HTTP error {status} for {path}: {text}") }
+  if path == "/local/tracks" && status == 404 {
+    anyhow::anyhow!("CAPCUT_DRAFT_NOT_FOUND: CapCut Mate could not find the created draft for /local/tracks: {text}")
+  } else {
+    anyhow::anyhow!("CAPCUT_UNAVAILABLE: CapCut Mate HTTP error {status} for {path}: {text}")
+  }
 }
 
 async fn post(client: &Client, path: &str, body: &Value) -> AnyhowResult<Value> {

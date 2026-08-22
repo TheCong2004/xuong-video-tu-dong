@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { X, Folder, Layers, Check, Trash2, Monitor, Share2, Plus, Clock } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Folder, Layers, Check, Trash2, Monitor, Share2, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import {
   ContentPage,
   CreateContentPageRequest,
   UpdateContentPageRequest,
-  BrowserWorkerInfo,
-  listBrowserWorkers,
+  DonutProfileEnriched,
+  listDonutProfilesEnriched,
   ContentPagePublishTarget,
   listContentPagePublishTargets,
   upsertContentPagePublishTarget,
@@ -39,7 +39,8 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
   const [defaultVideoPrompt, setDefaultVideoPrompt] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [workers, setWorkers] = useState<BrowserWorkerInfo[]>([]);
+  const [profiles, setProfiles] = useState<DonutProfileEnriched[]>([]);
+  const [loadingProfiles, setLoadingProfiles] = useState(false);
 
   // Platform Publish Targets State
   const [fbEnabled, setFbEnabled] = useState(true);
@@ -60,13 +61,19 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
   const [ytMode, setYtMode] = useState<'auto' | 'review'>('review');
   const [ytSlots, setYtSlots] = useState('08:30, 10:00, 17:00, 22:00');
 
+  const loadProfiles = useCallback(() => {
+    setLoadingProfiles(true);
+    listDonutProfilesEnriched()
+      .then(setProfiles)
+      .catch(() => setProfiles([]))
+      .finally(() => setLoadingProfiles(false));
+  }, []);
+
   useEffect(() => {
     if (isOpen) {
-      listBrowserWorkers()
-        .then(setWorkers)
-        .catch(() => setWorkers([]));
+      loadProfiles();
     }
-  }, [isOpen]);
+  }, [isOpen, loadProfiles]);
 
   useEffect(() => {
     if (pageToEdit && isOpen) {
@@ -296,6 +303,16 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
     }
   };
 
+  // Helper to render a profile option label with status indicator
+  const profileOptionLabel = (p: DonutProfileEnriched): string => {
+    const statusDot = p.is_running
+      ? (p.worker_state === 'READY' ? '● READY' : `● ${p.worker_state || 'Running'}`)
+      : '○ Stopped';
+    const grokBadge = p.grok_logged_in ? ' · Grok✓' : '';
+    const extBadge = p.extension_ready ? ' · Ext✓' : '';
+    return `${p.name}  [${statusDot}${grokBadge}${extBadge}]`;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
       <div className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl border border-white/[0.1] bg-[#12161f] shadow-2xl overflow-hidden">
@@ -304,12 +321,23 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
             <Layers className="h-5 w-5 text-indigo-400" />
             {pageToEdit ? 'Edit Content Page & Publish Targets' : 'Create New Content Page'}
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-zinc-400 hover:bg-white/[0.05] hover:text-white transition"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={loadProfiles}
+              disabled={loadingProfiles}
+              title="Refresh Donut profiles"
+              className="rounded-lg p-1.5 text-zinc-400 hover:bg-white/[0.05] hover:text-blue-400 transition"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${loadingProfiles ? 'animate-spin text-blue-400' : ''}`} />
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1 text-zinc-400 hover:bg-white/[0.05] hover:text-white transition"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-5 overflow-y-auto flex-1 text-xs">
@@ -356,6 +384,52 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
             </div>
           </div>
 
+          {/* PRODUCTION BROWSER PROFILE (Tier 1 — for Grok image/video generation) */}
+          <div className="border border-indigo-500/20 rounded-xl p-4 bg-indigo-500/[0.04] space-y-3">
+            <div className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Monitor className="h-4 w-4" />
+              Production Browser Profile
+              <span className="text-[10px] font-normal text-zinc-500 normal-case">— Used for Grok Image / 9:16 / Video</span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] text-zinc-400 mb-1">Donut Profile</label>
+              <select
+                value={browserProfileId}
+                onChange={(e) => setBrowserProfileId(e.target.value)}
+                className="w-full px-2.5 py-2 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="">-- Chưa gán Production Profile --</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {profileOptionLabel(p)}
+                  </option>
+                ))}
+              </select>
+              {profiles.length === 0 && !loadingProfiles && (
+                <p className="mt-1 text-[10px] text-amber-400">
+                  ⚠ Không tìm thấy Donut Profile. Hãy đảm bảo Donut đang chạy và nhấn Refresh.
+                </p>
+              )}
+            </div>
+
+            {/* Show selected profile runtime status */}
+            {browserProfileId && (() => {
+              const sel = profiles.find((p) => p.id === browserProfileId);
+              if (!sel) return null;
+              return (
+                <div className="flex items-center gap-3 text-[11px] flex-wrap">
+                  <span className={sel.is_running ? 'text-emerald-400 font-semibold' : 'text-zinc-500'}>
+                    {sel.is_running ? `● ${sel.worker_state || 'Running'}` : '○ Stopped'}
+                  </span>
+                  {sel.extension_ready && <span className="text-blue-400">Ext ✓</span>}
+                  {sel.grok_logged_in && <span className="text-purple-400">Grok ✓</span>}
+                  <span className="text-zinc-600 font-mono">{sel.id}</span>
+                </div>
+              );
+            })()}
+          </div>
+
           {/* PUBLISH TARGETS CONFIGURATION */}
           <div className="border border-white/[0.08] rounded-xl p-4 bg-white/[0.02] space-y-4">
             <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -397,16 +471,16 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] text-zinc-500 block mb-0.5">Browser Profile</span>
+                  <span className="text-[10px] text-zinc-500 block mb-0.5">Browser Profile (Facebook)</span>
                   <select
                     value={fbProfile}
                     onChange={(e) => setFbProfile(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
                   >
-                    <option value="">-- Chưa gán Profile --</option>
-                    {workers.map((w) => (
-                      <option key={w.worker_id} value={w.profile_id || w.worker_id}>
-                        {w.profile_name || w.profile_id || w.worker_id}
+                    <option value="">-- Inherit Production Profile --</option>
+                    {profiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {profileOptionLabel(p)}
                       </option>
                     ))}
                   </select>
@@ -448,16 +522,16 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] text-zinc-500 block mb-0.5">Browser Profile</span>
+                  <span className="text-[10px] text-zinc-500 block mb-0.5">Browser Profile (TikTok)</span>
                   <select
                     value={ttProfile}
                     onChange={(e) => setTtProfile(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
                   >
-                    <option value="">-- Chưa gán Profile --</option>
-                    {workers.map((w) => (
-                      <option key={w.worker_id} value={w.profile_id || w.worker_id}>
-                        {w.profile_name || w.profile_id || w.worker_id}
+                    <option value="">-- Inherit Production Profile --</option>
+                    {profiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {profileOptionLabel(p)}
                       </option>
                     ))}
                   </select>
@@ -499,16 +573,16 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                   />
                 </div>
                 <div>
-                  <span className="text-[10px] text-zinc-500 block mb-0.5">Browser Profile</span>
+                  <span className="text-[10px] text-zinc-500 block mb-0.5">Browser Profile (YouTube)</span>
                   <select
                     value={ytProfile}
                     onChange={(e) => setYtProfile(e.target.value)}
                     className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
                   >
-                    <option value="">-- Chưa gán Profile --</option>
-                    {workers.map((w) => (
-                      <option key={w.worker_id} value={w.profile_id || w.worker_id}>
-                        {w.profile_name || w.profile_id || w.worker_id}
+                    <option value="">-- Inherit Production Profile --</option>
+                    {profiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {profileOptionLabel(p)}
                       </option>
                     ))}
                   </select>

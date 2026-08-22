@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import toast from 'react-hot-toast';
 import {
   listPipelineJobsPaginated,
   listContentPages,
@@ -11,7 +12,7 @@ import {
 import {
   Search, RefreshCw, Layers, ChevronLeft, ChevronRight, Eye, Play,
   AlertTriangle, CheckCircle2, Clock, RotateCcw, XCircle, FileText,
-  Video, ExternalLink, Hash, Activity, Film, Filter
+  Video, ExternalLink, Hash, Activity, Film, Filter, Copy
 } from 'lucide-react';
 
 interface PaginatedJobItem {
@@ -411,9 +412,22 @@ export const JobsView: React.FC = () => {
                 <span className="font-mono text-slate-200">{inspectingJob.maybe_page_id || 'None'}</span>
               </div>
               {inspectingJob.maybe_on_failure_message && (
-                <div className="p-2 rounded bg-rose-500/10 border border-rose-500/20 text-rose-300">
-                  <div className="font-bold text-[10px] uppercase">Failure Details</div>
-                  <div className="mt-0.5">{inspectingJob.maybe_on_failure_message}</div>
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300">
+                  <div className="flex items-center justify-between font-bold text-[10px] uppercase tracking-wider mb-1">
+                    <span>Chi Tiết Lỗi (Failure Details)</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(inspectingJob.maybe_on_failure_message || '');
+                        toast.success('Đã sao chép chi tiết lỗi!');
+                      }}
+                      className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 transition text-[10px] font-sans font-medium"
+                    >
+                      <Copy className="h-3 w-3" />
+                      <span>Sao chép</span>
+                    </button>
+                  </div>
+                  <div className="mt-0.5 font-mono text-[11px] break-all select-text">{inspectingJob.maybe_on_failure_message}</div>
                 </div>
               )}
             </div>

@@ -20,7 +20,7 @@ fn get_all_worldlabs_cookies(webview: &WebviewWindow) -> AnyhowResult<Vec<Cookie
   //let www_cookies = webview.cookies_for_url(WWW_COOKIE_URL.clone())?;
   let root_cookies = webview.cookies_for_url(ROOT_COOKIE_URL.clone())?;
 
-  let mut all_cookies = root_cookies;
+  let all_cookies = root_cookies;
   //let mut cookie_names = HashSet::new();
 
   //for cookie in root_cookies.iter() {

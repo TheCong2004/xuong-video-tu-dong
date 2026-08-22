@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "floword-integrations-lock",
+  "version": "1.0.0",
+  "floword": {
+    "repository": "https://github.com/TheCong2004/xuong-video-tu-dong",
+    "baselineCommit": "6c7141928a5b1cc751c7fadff5468647dd3243d3",
+    "branch": "main"
+  },
+  "donut": {
+    "repository": "https://github.com/TheCong2004/dieu-phoi-trinh-duyet",
+    "importedFrom": "ad23586966c1d97a538f9a40d60f772da2d2575a",
+    "branch": "main",
+    "integratedPath": "runtimes/donut"
+  },
+  "extension": {
+    "repository": "https://github.com/TheCong2004/extensionpromax",
+    "importedFrom": "417164a784db6a010710dce6b1aa20350bb54db6",
+    "branch": "dev",
+    "integratedPath": "extensions/extensionpromax"
+  }
+}

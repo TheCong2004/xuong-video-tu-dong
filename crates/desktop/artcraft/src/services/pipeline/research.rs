@@ -86,13 +86,7 @@ pub fn prepare_research(context: &mut PipelineContext, finished_at: &str) -> Res
   }
   research_state_mut(context)?.input_artifact_ids = ingest_ids.clone();
 
-  Ok(ResearchPreparation::Ready(ResearchInput {
-    platform: context.research_platform.clone().unwrap_or_default(),
-    query: context.research_query.clone().unwrap_or_default(),
-    mode: context.research_mode.clone().unwrap_or_else(|| "search".to_string()),
-    artifact_ids: ingest_ids,
-    xhs_variant: context.xhs_variant.clone(),
-  }))
+  Ok(ResearchPreparation::Ready(ResearchInput { platform: context.research_platform.clone().unwrap_or_default(), query: context.research_query.clone().unwrap_or_default(), mode: context.research_mode.clone().unwrap_or_else(|| "search".to_string()), artifact_ids: ingest_ids, xhs_variant: context.xhs_variant.clone() }))
 }
 
 pub fn research_state_mut(context: &mut PipelineContext) -> Result<&mut StageState, PipelineContractError> {
@@ -125,13 +119,7 @@ pub async fn run_mediacrawler(input: &ResearchInput, cancel_flag: Arc<AtomicBool
   let login_timeout_secs = env::var("RESEARCH_LOGIN_TIMEOUT_SECONDS").ok().and_then(|value| value.parse::<u64>().ok()).unwrap_or(180);
   let request_timeout_secs = research_http_timeout_seconds_from(login_timeout_secs, crawl_timeout_secs);
   let client = Client::builder().timeout(Duration::from_secs(request_timeout_secs)).build().map_err(|error| ResearchError::runtime("MEDIACRAWLER_UNAVAILABLE", error.to_string(), true))?;
-  let request = ResearchRequest {
-    platform: &input.platform,
-    query: &input.query,
-    mode: &input.mode,
-    input_artifact_ids: &input.artifact_ids,
-    xhs_variant: input.xhs_variant.as_deref(),
-  };
+  let request = ResearchRequest { platform: &input.platform, query: &input.query, mode: &input.mode, input_artifact_ids: &input.artifact_ids, xhs_variant: input.xhs_variant.as_deref() };
 
   let response = tokio::select! {
     response = client.post(&url).json(&request).send() => response,
@@ -196,28 +184,7 @@ mod tests {
   use std::fs;
 
   fn context(research_enabled: bool, artifacts: Vec<ArtifactRef>) -> PipelineContext {
-    PipelineContext {
-      job_id: "job-research".to_string(),
-      project_id: None,
-      workflow_mode: "source_based".to_string(),
-      content_source: Some(ContentSource::LocalMedia.as_str().to_string()),
-      prompt: "xu huong video ngan".to_string(),
-      model_id: None,
-      voice_id: None,
-      language: "vi".to_string(),
-      target_duration_seconds: 30,
-      output_mode: "draft_only".to_string(),
-      source_url: None,
-      local_file: Some("fixture.mp4".to_string()),
-      story_url: None,
-      research_enabled,
-      research_platform: Some("xhs".to_string()),
-      research_query: Some("xu huong video ngan".to_string()),
-      research_mode: Some("search".to_string()),
-      xhs_variant: None,
-      artifact_refs: artifacts,
-      stage_states: PipelineContext::initial_stage_states(),
-    }
+    PipelineContext { job_id: "job-research".to_string(), project_id: None, workflow_mode: "source_based".to_string(), content_source: Some(ContentSource::LocalMedia.as_str().to_string()), prompt: "xu huong video ngan".to_string(), model_id: None, voice_id: None, language: "vi".to_string(), target_duration_seconds: 30, output_mode: "draft_only".to_string(), source_url: None, local_file: Some("fixture.mp4".to_string()), story_url: None, research_enabled, research_platform: Some("xhs".to_string()), research_query: Some("xu huong video ngan".to_string()), research_mode: Some("search".to_string()), xhs_variant: None, artifact_refs: artifacts, stage_states: PipelineContext::initial_stage_states() }
   }
 
   #[test]
@@ -273,28 +240,7 @@ mod tests {
     let work_dir = temp.path().join("job-e2e-research");
     fs::create_dir_all(&work_dir).unwrap();
 
-    let mut ctx = PipelineContext {
-      job_id: "job-e2e-research".to_string(),
-      project_id: None,
-      workflow_mode: "original".to_string(),
-      content_source: Some(ContentSource::TrendResearch.as_str().to_string()),
-      prompt: "AI video editing".to_string(),
-      model_id: None,
-      voice_id: None,
-      language: "vi".to_string(),
-      target_duration_seconds: 30,
-      output_mode: "draft_only".to_string(),
-      source_url: None,
-      local_file: None,
-      story_url: None,
-      research_enabled: true,
-      research_platform: Some("xhs".to_string()),
-      research_query: Some("AI video editing".to_string()),
-      research_mode: Some("search".to_string()),
-      xhs_variant: None,
-      artifact_refs: Vec::new(),
-      stage_states: PipelineContext::initial_stage_states(),
-    };
+    let mut ctx = PipelineContext { job_id: "job-e2e-research".to_string(), project_id: None, workflow_mode: "original".to_string(), content_source: Some(ContentSource::TrendResearch.as_str().to_string()), prompt: "AI video editing".to_string(), model_id: None, voice_id: None, language: "vi".to_string(), target_duration_seconds: 30, output_mode: "draft_only".to_string(), source_url: None, local_file: None, story_url: None, research_enabled: true, research_platform: Some("xhs".to_string()), research_query: Some("AI video editing".to_string()), research_mode: Some("search".to_string()), xhs_variant: None, artifact_refs: Vec::new(), stage_states: PipelineContext::initial_stage_states() };
 
     // 1. Prepare research stage: should be Ready without source inputs
     let prep = prepare_research(&mut ctx, "2026-08-10T18:00:00Z").unwrap();
@@ -329,16 +275,7 @@ mod tests {
     fs::write(&research_file, serde_json::to_string_pretty(&sample_payload).unwrap()).unwrap();
 
     // 3. Register artifact in canonical ArtifactStore
-    let stored = ArtifactStore::register_typed_artifact(
-      &work_dir,
-      &ctx.job_id,
-      StageId::Research,
-      "mediacrawler",
-      ArtifactKind::Research,
-      &research_file,
-      canonical_metadata(&input),
-    )
-    .expect("ArtifactStore must register valid research artifact");
+    let stored = ArtifactStore::register_typed_artifact(&work_dir, &ctx.job_id, StageId::Research, "mediacrawler", ArtifactKind::Research, &research_file, canonical_metadata(&input)).expect("ArtifactStore must register valid research artifact");
 
     assert_eq!(stored.artifact_type, "research");
     assert_eq!(stored.producer, "mediacrawler");
@@ -361,10 +298,7 @@ mod tests {
     let r = story_input.research.unwrap();
     assert_eq!(r.get("status").and_then(Value::as_str), Some("completed"));
     assert_eq!(r.get("record_count").and_then(Value::as_u64), Some(20));
-    assert_eq!(
-      r.get("enrichment").and_then(|e| e.get("status")).and_then(Value::as_str),
-      Some("partial")
-    );
+    assert_eq!(r.get("enrichment").and_then(|e| e.get("status")).and_then(Value::as_str), Some("partial"));
   }
 
   #[test]

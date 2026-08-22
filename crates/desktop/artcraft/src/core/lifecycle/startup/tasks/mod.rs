@@ -10,3 +10,4 @@ pub(super) mod spawn_sora_task_polling_thread;
 pub(super) mod spawn_storyteller_threads;
 pub(super) mod load_provider_priority_state;
 pub(crate) mod spawn_omniroute_backend;
+pub(crate) mod runtime_supervisor;

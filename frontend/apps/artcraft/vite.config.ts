@@ -139,11 +139,12 @@ export default defineConfig({
   },
   plugins: [multiTargetAliasResolver(), sparkWasmDataUrlFix(), tsconfigPaths(), wasm(), topLevelAwait()],
   server: {
-    // Pin to IPv4 loopback. Left to its default, Vite on this machine bound
-    // IPv6-only ([::1]:5173 listening, nothing on 127.0.0.1:5173), so WebView2
-    // got connection-refused and rendered a black window. tauri.conf.json's
-    // devUrl is pinned to http://127.0.0.1:5173 to match this exactly.
+    // Keep the Tauri dev URL deterministic. Vite otherwise changes ports when
+    // the default is occupied, while Tauri continues loading its configured
+    // URL and renders a connection-refused page.
     host: "127.0.0.1",
+    port: 5174,
+    strictPort: true,
     proxy: {
       // OmniRoute page routes. `/home` matters: OmniRoute's `/dashboard`
       // server-redirects to `/home`, and without a proxy entry that landing

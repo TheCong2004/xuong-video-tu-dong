@@ -96,6 +96,14 @@ scraps/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
+# Tauri Binaries & Temporary Junctions
+bin/
+**/bin/
+runtimes/
+extensions/
+/resources/
+**/resources/
+!be-youwee/resources/.gitkeep
 *.swo
 *.swp
 *~

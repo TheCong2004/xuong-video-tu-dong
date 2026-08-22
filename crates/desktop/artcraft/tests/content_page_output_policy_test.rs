@@ -1,6 +1,4 @@
-use artcraft_app_lib::services::pipeline::output_policy::{
-  current_local_date_string, sanitize_page_name, OutputPathResolver,
-};
+use artcraft_app_lib::services::pipeline::output_policy::{current_local_date_string, sanitize_page_name, OutputPathResolver};
 use sqlite_tasks::connection::TaskDbConnection;
 use sqlite_tasks::queries::content_pages::archive_content_page::{archive_content_page, ArchiveContentPageArgs};
 use sqlite_tasks::queries::content_pages::create_content_page::{create_content_page, CreateContentPageArgs};
@@ -86,25 +84,7 @@ async fn test_content_page_crud_in_sqlite() {
   let db = TaskDbConnection::connect_and_migrate(&db_path).await.unwrap();
 
   // 1. Create Page with default prompt fields
-  let page = create_content_page(CreateContentPageArgs {
-    db: &db,
-    id: None,
-    name: "Hollywood Review",
-    slug: None,
-    output_root: "D:\\Outputs",
-    target_platform: Some("tiktok"),
-    default_model_id: Some("gpt-4o"),
-    default_workflow_id: None,
-    default_language: Some("vi"),
-    default_tone: Some("professional"),
-    default_aspect_ratio: Some("9:16"),
-    browser_profile_id: None,
-    default_image_prompt: Some("Default Hollywood image prompt"),
-    default_expand_9_16_prompt: Some("Default Hollywood expand 9:16 prompt"),
-    default_video_prompt: Some("Default Hollywood video prompt"),
-  })
-  .await
-  .unwrap();
+  let page = create_content_page(CreateContentPageArgs { db: &db, id: None, name: "Hollywood Review", slug: None, output_root: "D:\\Outputs", target_platform: Some("tiktok"), default_model_id: Some("gpt-4o"), default_workflow_id: None, default_language: Some("vi"), default_tone: Some("professional"), default_aspect_ratio: Some("9:16"), browser_profile_id: None, default_image_prompt: Some("Default Hollywood image prompt"), default_expand_9_16_prompt: Some("Default Hollywood expand 9:16 prompt"), default_video_prompt: Some("Default Hollywood video prompt") }).await.unwrap();
 
   assert_eq!(page.name, "Hollywood Review");
   assert_eq!(page.slug, "hollywood-review");
@@ -115,38 +95,14 @@ async fn test_content_page_crud_in_sqlite() {
   assert_eq!(page.is_archived, false);
 
   // 2. Read Page by ID
-  let fetched = get_content_page_by_id(GetContentPageByIdArgs {
-    db: &db,
-    id: &page.id,
-  })
-  .await
-  .unwrap()
-  .expect("Page should exist");
+  let fetched = get_content_page_by_id(GetContentPageByIdArgs { db: &db, id: &page.id }).await.unwrap().expect("Page should exist");
 
   assert_eq!(fetched.id, page.id);
   assert_eq!(fetched.name, "Hollywood Review");
   assert_eq!(fetched.default_image_prompt.as_deref(), Some("Default Hollywood image prompt"));
 
   // 3. Update Page
-  let updated = update_content_page(UpdateContentPageArgs {
-    db: &db,
-    id: &page.id,
-    name: "Hollywood Review Official",
-    slug: Some("hollywood-review-official"),
-    output_root: "E:\\NewOutputs",
-    target_platform: Some("reels"),
-    default_model_id: Some("claude-3-5-sonnet"),
-    default_workflow_id: None,
-    default_language: Some("en"),
-    default_tone: Some("viral"),
-    default_aspect_ratio: Some("16:9"),
-    browser_profile_id: None,
-    default_image_prompt: Some("Updated Hollywood image prompt"),
-    default_expand_9_16_prompt: Some("Updated Hollywood expand prompt"),
-    default_video_prompt: Some("Updated Hollywood video prompt"),
-  })
-  .await
-  .unwrap();
+  let updated = update_content_page(UpdateContentPageArgs { db: &db, id: &page.id, name: "Hollywood Review Official", slug: Some("hollywood-review-official"), output_root: "E:\\NewOutputs", target_platform: Some("reels"), default_model_id: Some("claude-3-5-sonnet"), default_workflow_id: None, default_language: Some("en"), default_tone: Some("viral"), default_aspect_ratio: Some("16:9"), browser_profile_id: None, default_image_prompt: Some("Updated Hollywood image prompt"), default_expand_9_16_prompt: Some("Updated Hollywood expand prompt"), default_video_prompt: Some("Updated Hollywood video prompt") }).await.unwrap();
 
   assert_eq!(updated.name, "Hollywood Review Official");
   assert_eq!(updated.slug, "hollywood-review-official");
@@ -155,42 +111,21 @@ async fn test_content_page_crud_in_sqlite() {
   assert_eq!(updated.default_image_prompt.as_deref(), Some("Updated Hollywood image prompt"));
 
   // 4. List Active Pages
-  let list = list_content_pages(ListContentPagesArgs {
-    db: &db,
-    include_archived: false,
-  })
-  .await
-  .unwrap();
+  let list = list_content_pages(ListContentPagesArgs { db: &db, include_archived: false }).await.unwrap();
 
   assert_eq!(list.pages.len(), 1);
   assert_eq!(list.pages[0].id, page.id);
 
   // 5. Archive Page
-  let archived_res = archive_content_page(ArchiveContentPageArgs {
-    db: &db,
-    id: &page.id,
-    is_archived: true,
-  })
-  .await
-  .unwrap();
+  let archived_res = archive_content_page(ArchiveContentPageArgs { db: &db, id: &page.id, is_archived: true }).await.unwrap();
   assert!(archived_res);
 
   // 6. List Active Pages (should now be 0)
-  let active_list = list_content_pages(ListContentPagesArgs {
-    db: &db,
-    include_archived: false,
-  })
-  .await
-  .unwrap();
+  let active_list = list_content_pages(ListContentPagesArgs { db: &db, include_archived: false }).await.unwrap();
   assert_eq!(active_list.pages.len(), 0);
 
   // 7. List All including Archived (should be 1)
-  let all_list = list_content_pages(ListContentPagesArgs {
-    db: &db,
-    include_archived: true,
-  })
-  .await
-  .unwrap();
+  let all_list = list_content_pages(ListContentPagesArgs { db: &db, include_archived: true }).await.unwrap();
   assert_eq!(all_list.pages.len(), 1);
   assert_eq!(all_list.pages[0].is_archived, true);
 }
@@ -202,25 +137,7 @@ async fn test_grok_pipeline_prompt_resolution_rules() {
   let db = TaskDbConnection::connect_and_migrate(&db_path).await.unwrap();
 
   // Seed ContentPage with defaults
-  let page = create_content_page(CreateContentPageArgs {
-    db: &db,
-    id: Some("PAGE_PROMPTS_01"),
-    name: "Movie Magic",
-    slug: Some("movie-magic"),
-    output_root: "D:\\Outputs",
-    target_platform: Some("tiktok"),
-    default_model_id: None,
-    default_workflow_id: None,
-    default_language: Some("vi"),
-    default_tone: None,
-    default_aspect_ratio: Some("9:16"),
-    browser_profile_id: None,
-    default_image_prompt: Some("Page Default Image Prompt"),
-    default_expand_9_16_prompt: Some("Page Default 9:16 Prompt"),
-    default_video_prompt: Some("Page Default Video Prompt"),
-  })
-  .await
-  .unwrap();
+  let page = create_content_page(CreateContentPageArgs { db: &db, id: Some("PAGE_PROMPTS_01"), name: "Movie Magic", slug: Some("movie-magic"), output_root: "D:\\Outputs", target_platform: Some("tiktok"), default_model_id: None, default_workflow_id: None, default_language: Some("vi"), default_tone: None, default_aspect_ratio: Some("9:16"), browser_profile_id: None, default_image_prompt: Some("Page Default Image Prompt"), default_expand_9_16_prompt: Some("Page Default 9:16 Prompt"), default_video_prompt: Some("Page Default Video Prompt") }).await.unwrap();
 
   // Helper matching run_job_pipeline resolution logic
   fn resolve_image_prompt<'a>(job_prompt: Option<&'a str>, raw_prompt: &'a str, page: &'a sqlite_tasks::queries::content_pages::content_page::ContentPage) -> Result<&'a str, &'static str> {
@@ -237,14 +154,12 @@ async fn test_grok_pipeline_prompt_resolution_rules() {
 
   fn resolve_expand_prompt<'a>(job_expand: Option<&'a str>, page: &'a sqlite_tasks::queries::content_pages::content_page::ContentPage) -> &'a str {
     const FALLBACK: &str = "Expand image to 9:16 vertical ratio preserving subject and composition";
-    job_expand.filter(|s| !s.trim().is_empty())
-      .unwrap_or_else(|| page.default_expand_9_16_prompt.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(FALLBACK))
+    job_expand.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| page.default_expand_9_16_prompt.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(FALLBACK))
   }
 
   fn resolve_video_prompt<'a>(job_video: Option<&'a str>, page: &'a sqlite_tasks::queries::content_pages::content_page::ContentPage) -> &'a str {
     const FALLBACK: &str = "Generate cinematic dynamic video animation preserving character and action";
-    job_video.filter(|s| !s.trim().is_empty())
-      .unwrap_or_else(|| page.default_video_prompt.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(FALLBACK))
+    job_video.filter(|s| !s.trim().is_empty()).unwrap_or_else(|| page.default_video_prompt.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(FALLBACK))
   }
 
   // CASE 1: Job image prompt present, Page default present -> Job prompt wins
@@ -256,25 +171,7 @@ async fn test_grok_pipeline_prompt_resolution_rules() {
   assert_eq!(res_c2.unwrap(), "Page Default Image Prompt");
 
   // CASE 3: Both missing -> IMAGE_PROMPT_REQUIRED
-  let empty_page = sqlite_tasks::queries::content_pages::content_page::ContentPage {
-    id: "PAGE_EMPTY".to_string(),
-    name: "Empty".to_string(),
-    slug: "empty".to_string(),
-    output_root: "D:\\".to_string(),
-    target_platform: None,
-    default_model_id: None,
-    default_workflow_id: None,
-    default_language: None,
-    default_tone: None,
-    default_aspect_ratio: None,
-    browser_profile_id: None,
-    default_image_prompt: None,
-    default_expand_9_16_prompt: None,
-    default_video_prompt: None,
-    is_archived: false,
-    created_at: 0,
-    updated_at: 0,
-  };
+  let empty_page = sqlite_tasks::queries::content_pages::content_page::ContentPage { id: "PAGE_EMPTY".to_string(), name: "Empty".to_string(), slug: "empty".to_string(), output_root: "D:\\".to_string(), target_platform: None, default_model_id: None, default_workflow_id: None, default_language: None, default_tone: None, default_aspect_ratio: None, browser_profile_id: None, default_image_prompt: None, default_expand_9_16_prompt: None, default_video_prompt: None, is_archived: false, created_at: 0, updated_at: 0 };
   let res_c3 = resolve_image_prompt(None, "", &empty_page);
   assert_eq!(res_c3.unwrap_err(), "IMAGE_PROMPT_REQUIRED");
 

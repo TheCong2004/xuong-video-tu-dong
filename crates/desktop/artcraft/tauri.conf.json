@@ -5,9 +5,9 @@
   "identifier": "ai.artcraft.app",
   "build": {
     "frontendDist": "../../../frontend/apps/artcraft/dist",
-    "devUrl": "http://127.0.0.1:5173",
-    "beforeDevCommand": "npx nx run artcraft:dev",
-    "beforeBuildCommand": "pnpm --filter artcraft build"
+    "devUrl": "http://127.0.0.1:5174",
+    "beforeDevCommand": "pnpm --dir d:/capcutpolot/artcraft/frontend --filter artcraft dev",
+    "beforeBuildCommand": "pnpm --dir d:/capcutpolot/artcraft/frontend --filter artcraft build"
   },
   "app": {
     "withGlobalTauri": true,
@@ -47,6 +47,10 @@
           "http://127.0.0.1:4750/*",
           "http://127.0.0.1:20128",
           "http://127.0.0.1:20128/*",
+          "http://127.0.0.1:10108",
+          "http://127.0.0.1:10108/*",
+          "http://localhost:10108",
+          "http://localhost:10108/*",
           "http://localhost:30000",
           "http://localhost:30000/*",
           "http://localhost:8080",
@@ -63,6 +67,8 @@
           "https://www.googletagmanager.com",
           "ipc://localhost",
           "ws://127.0.0.1:30000",
+          "ws://127.0.0.1:10108",
+          "ws://localhost:10108",
           "ws://127.0.0.1:30000/*",
           "ws://localhost:30000",
           "ws://localhost:30000/*",
@@ -138,7 +144,7 @@
     "active": true,
     "targets": "all",
     "externalBin": [
-      "../../../be-youwee/bin/youwee-yt-dlp"
+      "bin/youwee-yt-dlp"
     ],
     "icon": [
       "icons/32x32.png",
@@ -153,7 +159,8 @@
       "resources/media-crawler",
       "resources/openmontage",
       "resources/ffmpeg",
-      "resources/OmniRoute"
+      "resources/OmniRoute",
+      "resources/donut-runtime"
     ]
   }
 }

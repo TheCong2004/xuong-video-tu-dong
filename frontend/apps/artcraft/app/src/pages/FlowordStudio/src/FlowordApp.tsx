@@ -45,6 +45,8 @@ import {
   archiveContentPage,
   CreateContentPageRequest,
   UpdateContentPageRequest,
+  DonutProfileEnriched,
+  listDonutProfilesEnriched,
 } from './api/flowordClient';
 import { mergeBackendStageStates } from './services/stageStateMapping';
 
@@ -222,6 +224,15 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
   const [isPageModalOpen, setIsPageModalOpen] = useState<boolean>(false);
   const [pageToEdit, setPageToEdit] = useState<ContentPage | null>(null);
 
+  // Donut Profile Catalog State (enriched with runtime worker status)
+  const [profiles, setProfiles] = useState<DonutProfileEnriched[]>([]);
+
+  const refreshProfiles = useCallback(() => {
+    listDonutProfilesEnriched()
+      .then(setProfiles)
+      .catch(() => setProfiles([]));
+  }, []);
+
   // Readiness State
   const [readiness, setReadiness] = useState<DetailedReadinessStatus>(DEFAULT_READINESS);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -299,8 +310,9 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
   useEffect(() => {
     refreshPages();
     refreshJobs();
+    refreshProfiles();
     fetchDetailedReadiness().then(setReadiness).catch(() => {});
-  }, [refreshPages, refreshJobs]);
+  }, [refreshPages, refreshJobs, refreshProfiles]);
 
   // Polling loop for active workflow
   const startWorkflowPolling = useCallback((jobId: string) => {
@@ -592,7 +604,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
               setIsPageModalOpen(true);
             }
           }}
-          onRunWorkflow={running ? handleCancelWorkflow : () => handleExecuteWorkflow()}
+          onRunWorkflow={running ? handleCancelWorkflow : () => handleRunWorkflow(workflowInput)}
           onSaveWorkflow={() => toast.success('Đã lưu cấu hình pipeline.')}
           onConfigure={() => setConfigureOpen(true)}
         />
@@ -608,8 +620,9 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({ onOpenCapCutAutomation }
               onSelectPage={(id) => setActivePageId(id)}
               activeRun={activeWorkflowRun}
               isRunning={running}
-              onRunWorkflow={handleExecuteWorkflow}
+              onRunWorkflow={handleRunWorkflow}
               onCancelWorkflow={handleCancelWorkflow}
+              profiles={profiles}
             />
           )}
 

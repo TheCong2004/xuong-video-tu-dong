@@ -273,6 +273,61 @@ export function listBrowserWorkers(): Promise<BrowserWorkerInfo[]> {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Donut Profile Catalog -- persistent browser identities
+// ---------------------------------------------------------------------------
+
+// Persistent Donut browser profile. Mirrors Donut's ApiProfile.
+// Always available regardless of whether the browser process is running.
+export interface DonutProfileInfo {
+  id: string;
+  name: string;
+  browser: string;
+  is_running: boolean;
+  process_id?: number | null;
+  tags: string[];
+  group_id?: string | null;
+  last_launch?: number | null;
+  proxy_id?: string | null;
+  vpn_id?: string | null;
+  sync_mode: string;
+  cloud_sync_enabled: boolean;
+}
+
+// DonutProfileInfo enriched with runtime worker state after joining
+// profiles[] with workers[] on profile.id === worker.profile_id.
+export interface DonutProfileEnriched extends DonutProfileInfo {
+  worker_id?: string;
+  worker_state?: string;
+  extension_ready?: boolean;
+  grok_logged_in?: boolean;
+}
+
+// Fetch the full Donut Profile Catalog. Returns all profiles (online + offline).
+export function listDonutProfiles(): Promise<DonutProfileInfo[]> {
+  return invokeCommand<{ profiles: DonutProfileInfo[] }>('list_donut_profiles_command').then(
+    (res) => res.profiles ?? []
+  );
+}
+
+// Convenience: fetch profiles + workers in parallel, join, return enriched list.
+export async function listDonutProfilesEnriched(): Promise<DonutProfileEnriched[]> {
+  const [profiles, workers] = await Promise.all([
+    listDonutProfiles().catch((): DonutProfileInfo[] => []),
+    listBrowserWorkers().catch((): BrowserWorkerInfo[] => []),
+  ]);
+  return profiles.map((p) => {
+    const w = workers.find((wk) => wk.profile_id === p.id);
+    return {
+      ...p,
+      worker_id: w?.worker_id,
+      worker_state: w?.state,
+      extension_ready: w?.has_extension ?? false,
+      grok_logged_in: w?.grok_logged_in ?? false,
+    };
+  });
+}
+
 export function ingestFlowordSourceImage(request: IngestFlowordSourceImageRequest): Promise<IngestFlowordSourceImageResponse> {
   return invokeCommand<IngestFlowordSourceImageResponse>('ingest_floword_source_image_command', { request });
 }
@@ -1301,6 +1356,16 @@ export interface SystemReadinessReport {
 export async function checkSystemReadiness(): Promise<SystemReadinessReport> {
   const res = await invokeCommand<{ report: SystemReadinessReport }>('check_system_readiness_command', {});
   return res.report;
+}
+
+export async function openDonutBrowserGui(): Promise<boolean> {
+  try {
+    const res = await invokeCommand<{ success: boolean }>('open_donut_browser_gui_command');
+    return res?.success ?? false;
+  } catch (err) {
+    console.warn('Failed to launch Donut Browser GUI:', err);
+    return false;
+  }
 }
 
 

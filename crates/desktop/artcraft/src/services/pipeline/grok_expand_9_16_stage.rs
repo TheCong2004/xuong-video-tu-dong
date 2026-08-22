@@ -1,8 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{
-  acquire_worker, get_donut_browser_api_base_url, heartbeat_lease, release_lease,
-  AcquireWorkerRequest, HeartbeatLeaseRequest,
-};
+use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, get_donut_browser_api_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use crate::services::pipeline::grok_image_edit_stage::{compute_sha256, detect_image_mime};
 use log::{error, info, warn};
@@ -53,10 +50,7 @@ struct LeaseGuard {
 
 impl LeaseGuard {
   fn new(lease_id: String) -> Self {
-    Self {
-      lease_id,
-      released: false,
-    }
+    Self { lease_id, released: false }
   }
 
   async fn release(&mut self) {
@@ -232,27 +226,18 @@ pub fn validate_aspect_ratio(width: u32, height: u32) -> Result<f64, String> {
   let target = 9.0 / 16.0; // 0.5625
   let tolerance = 0.03; // [0.5325, 0.5925]
   if (ratio - target).abs() > tolerance {
-    return Err(format!(
-      "ASPECT_RATIO_INVALID: Image ratio {ratio:.4} ({width}x{height}) is not 9:16 vertical ratio (expected ~0.5625)"
-    ));
+    return Err(format!("ASPECT_RATIO_INVALID: Image ratio {ratio:.4} ({width}x{height}) is not 9:16 vertical ratio (expected ~0.5625)"));
   }
   Ok(ratio)
 }
 
 /// Executes single-job grok.image.expand_9_16 with 3-tier cleanup and terminal barrier.
-pub async fn execute_grok_expand_9_16(
-  input: GrokExpand916Input,
-  attempt_id: &str,
-  cancel_flag: Option<&Arc<AtomicBool>>,
-) -> Result<GrokExpand916Output, String> {
+pub async fn execute_grok_expand_9_16(input: GrokExpand916Input, attempt_id: &str, cancel_flag: Option<&Arc<AtomicBool>>) -> Result<GrokExpand916Output, String> {
   let job_id = input.job_id.clone();
   let step_id = "CONVERTING_9_16";
   let request_id = format!("REQ_{}", Uuid::new_v4().simple());
 
-  info!(
-    "[GrokExpand916] Starting 9:16 expand: job_id={} attempt_id={} input_art={}",
-    job_id, attempt_id, input.image_done_artifact.artifact_id
-  );
+  info!("[GrokExpand916] Starting 9:16 expand: job_id={} attempt_id={} input_art={}", job_id, attempt_id, input.image_done_artifact.artifact_id);
 
   // Fail-closed canonical workflow root validation
   if input.workflow_root.as_os_str().is_empty() {
@@ -261,23 +246,14 @@ pub async fn execute_grok_expand_9_16(
   let workflow_root_buf = input.workflow_root.clone();
 
   // Tier 1: Acquire exclusive lease
-  let acq_req = AcquireWorkerRequest {
-    job_id: job_id.clone(),
-    step_id: step_id.to_string(),
-    attempt_id: attempt_id.to_string(),
-    capability: "grok.image.expand_9_16".to_string(),
-    pool_id: None,
-    profile_id: input.browser_profile_id.clone(),
-    ttl_seconds: Some(180),
-  };
+  let acq_req = AcquireWorkerRequest { job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), capability: "grok.expand.9_16".to_string(), pool_id: None, profile_id: input.browser_profile_id.clone(), ttl_seconds: Some(180) };
 
-  let acq_res = acquire_worker(acq_req)
-    .await
-    .map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
+  let acq_res = acquire_worker(acq_req).await.map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
 
   let lease_id = acq_res.lease_id.clone();
+  let worker_id = acq_res.worker_id.clone();
   let profile_id = acq_res.profile_id.clone();
-  info!("[GrokExpand916] Lease acquired: {lease_id} for profile {profile_id}");
+  info!("[GrokExpand916] Lease acquired: {lease_id} for worker {worker_id} (profile {profile_id})");
 
   let mut guard = LeaseGuard::new(lease_id.clone());
 
@@ -294,11 +270,7 @@ pub async fn execute_grok_expand_9_16(
       if hb_cancel_clone.load(Ordering::Relaxed) {
         break;
       }
-      let req = HeartbeatLeaseRequest {
-        job_id: hb_job_id.clone(),
-        attempt_id: hb_attempt_id.clone(),
-        ttl_seconds: Some(180),
-      };
+      let req = HeartbeatLeaseRequest { job_id: hb_job_id.clone(), attempt_id: hb_attempt_id.clone(), ttl_seconds: Some(180) };
       if let Err(e) = heartbeat_lease(&hb_lease_id, req).await {
         warn!("[GrokExpand916] Heartbeat error for lease {hb_lease_id}: {e}");
       }
@@ -312,11 +284,8 @@ pub async fn execute_grok_expand_9_16(
       return Err(format!("Source image artifact file does not exist at {source_path}"));
     }
 
-    let source_bytes = tokio::fs::read(source_file)
-      .await
-      .map_err(|e| format!("Failed to read source image artifact file: {e}"))?;
-    let (source_mime, _) = detect_image_mime(&source_bytes)
-      .map_err(|e| format!("Invalid source image artifact: {e}"))?;
+    let source_bytes = tokio::fs::read(source_file).await.map_err(|e| format!("Failed to read source image artifact file: {e}"))?;
+    let (source_mime, _) = detect_image_mime(&source_bytes).map_err(|e| format!("Invalid source image artifact: {e}"))?;
     let source_sha256 = compute_sha256(&source_bytes);
 
     use base64::Engine;
@@ -324,37 +293,11 @@ pub async fn execute_grok_expand_9_16(
     let data_url = format!("data:{source_mime};base64,{b64_source}");
 
     let timeout_val = input.timeout_ms.unwrap_or(180000);
-    let req_payload = ExtensionProductionRequest {
-      protocol: "floword-production",
-      protocol_version: 1,
-      request_id: request_id.clone(),
-      job_id: job_id.clone(),
-      step_id: step_id.to_string(),
-      attempt_id: attempt_id.to_string(),
-      lease_id: lease_id.clone(),
-      profile_id: profile_id.clone(),
-      page_id: Some(input.page_id.clone()),
-      method: "grok.image.expand_9_16",
-      params: ExtensionExpandParams {
-        source_artifact: ExtensionSourceArtifact {
-          artifact_id: input.image_done_artifact.artifact_id.clone(),
-          path: source_path.clone(),
-          data_url: Some(data_url),
-          mime_type: source_mime.to_string(),
-        },
-        prompt: input.prompt.clone(),
-        target_aspect_ratio: "9:16",
-        timeout_ms: timeout_val,
-      },
-      created_at: chrono::Utc::now().to_rfc3339(),
-    };
+    let req_payload = ExtensionProductionRequest { protocol: "floword-production", protocol_version: 1, request_id: request_id.clone(), job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), lease_id: lease_id.clone(), profile_id: profile_id.clone(), page_id: Some(input.page_id.clone()), method: "grok.image.expand_9_16", params: ExtensionExpandParams { source_artifact: ExtensionSourceArtifact { artifact_id: input.image_done_artifact.artifact_id.clone(), path: source_path.clone(), data_url: Some(data_url), mime_type: source_mime.to_string() }, prompt: input.prompt.clone(), target_aspect_ratio: "9:16", timeout_ms: timeout_val }, created_at: chrono::Utc::now().to_rfc3339() };
 
-    let client = Client::builder()
-      .timeout(Duration::from_millis(timeout_val + 10000))
-      .build()
-      .map_err(|e| format!("Failed to create client: {e}"))?;
+    let client = Client::builder().timeout(Duration::from_millis(timeout_val + 10000)).build().map_err(|e| format!("Failed to create client: {e}"))?;
 
-    let bridge_url = format!("{}/v1/workers/{profile_id}/dispatch", get_donut_browser_api_base_url());
+    let bridge_url = format!("{}/v1/workers/{worker_id}/dispatch", get_donut_browser_api_base_url());
 
     let (resp_res, was_cancelled) = tokio::select! {
       res = client.post(&bridge_url).json(&req_payload).send() => {
@@ -403,22 +346,14 @@ pub async fn execute_grok_expand_9_16(
       return Err(format!("Bridge error ({status}): {body}"));
     }
 
-    let prod_result: ExtensionProductionResult = resp
-      .json()
-      .await
-      .map_err(|e| format!("Failed to parse production result: {e}"))?;
+    let prod_result: ExtensionProductionResult = resp.json().await.map_err(|e| format!("Failed to parse production result: {e}"))?;
 
     if !prod_result.ok {
-      let err_msg = prod_result
-        .error
-        .map(|e| format!("{}: {}", e.code, e.message))
-        .unwrap_or_else(|| "Unknown extension execution error".to_string());
+      let err_msg = prod_result.error.map(|e| format!("{}: {}", e.code, e.message)).unwrap_or_else(|| "Unknown extension execution error".to_string());
       return Err(format!("Extension error: {err_msg}"));
     }
 
-    let media = prod_result
-      .result
-      .ok_or_else(|| "ProductionResult missing result payload".to_string())?;
+    let media = prod_result.result.ok_or_else(|| "ProductionResult missing result payload".to_string())?;
 
     let raw_bytes = if media.locator.starts_with("data:") {
       let parts: Vec<&str> = media.locator.splitn(2, ',').collect();
@@ -426,28 +361,17 @@ pub async fn execute_grok_expand_9_16(
         return Err("ARTIFACT_INVALID: Malformed data URL".to_string());
       }
       use base64::Engine;
-      base64::engine::general_purpose::STANDARD
-        .decode(parts[1])
-        .map_err(|e| format!("ARTIFACT_INVALID: Base64 decode error: {e}"))?
+      base64::engine::general_purpose::STANDARD.decode(parts[1]).map_err(|e| format!("ARTIFACT_INVALID: Base64 decode error: {e}"))?
     } else {
-      let dl_resp = client
-        .get(&media.locator)
-        .send()
-        .await
-        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?;
-      dl_resp
-        .bytes()
-        .await
-        .map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?
-        .to_vec()
+      let dl_resp = client.get(&media.locator).send().await.map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?;
+      dl_resp.bytes().await.map_err(|e| format!("ARTIFACT_DOWNLOAD_FAILED: {e}"))?.to_vec()
     };
 
     if raw_bytes.is_empty() {
       return Err("ARTIFACT_INVALID: 0 byte artifact received".to_string());
     }
 
-    let (detected_mime, ext) = detect_image_mime(&raw_bytes)
-      .map_err(|e| format!("ARTIFACT_INVALID_MIME: {e}"))?;
+    let (detected_mime, ext) = detect_image_mime(&raw_bytes).map_err(|e| format!("ARTIFACT_INVALID_MIME: {e}"))?;
     let vertical_sha256 = compute_sha256(&raw_bytes);
 
     // Decode actual dimensions directly from downloaded image bytes
@@ -457,9 +381,7 @@ pub async fn execute_grok_expand_9_16(
     // Write file directly into canonical workflow directory
     let file_name = format!("{}_{}_{}.{}", job_id, step_id, attempt_id, ext);
     let file_path = workflow_root_buf.join(&file_name);
-    tokio::fs::write(&file_path, &raw_bytes)
-      .await
-      .map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: Failed to write {file_path:?}: {e}"))?;
+    tokio::fs::write(&file_path, &raw_bytes).await.map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: Failed to write {file_path:?}: {e}"))?;
 
     // Register typed artifact through canonical ArtifactStore
     let metadata = serde_json::json!({
@@ -472,42 +394,22 @@ pub async fn execute_grok_expand_9_16(
       "service": "grok"
     });
 
-    let stored = ArtifactStore::register_typed_artifact(
-      &workflow_root_buf,
-      &job_id,
-      StageId::StoryScript,
-      "grok",
-      ArtifactKind::VerticalImage,
-      &file_path,
-      metadata,
-    )
-    .map_err(|e| format!("ARTIFACT_STORE_REGISTRATION_FAILED: {e}"))?;
+    let stored = ArtifactStore::register_typed_artifact(&workflow_root_buf, &job_id, StageId::StoryScript, "grok", ArtifactKind::VerticalImage, &file_path, metadata).map_err(|e| format!("ARTIFACT_STORE_REGISTRATION_FAILED: {e}"))?;
 
-    let art_ref = stored
-      .to_artifact_ref(StageId::StoryScript)
-      .map_err(|e| format!("ARTIFACT_REF_CONVERSION_FAILED: {e}"))?;
+    let art_ref = stored.to_artifact_ref(StageId::StoryScript).map_err(|e| format!("ARTIFACT_REF_CONVERSION_FAILED: {e}"))?;
 
     // Final Heartbeat Barrier
-    let hb_final_req = HeartbeatLeaseRequest {
-      job_id: job_id.clone(),
-      attempt_id: attempt_id.to_string(),
-      ttl_seconds: Some(60),
-    };
+    let hb_final_req = HeartbeatLeaseRequest { job_id: job_id.clone(), attempt_id: attempt_id.to_string(), ttl_seconds: Some(60) };
     let hb_final = heartbeat_lease(&lease_id, hb_final_req).await;
     match hb_final {
       Ok(hb_resp) => {
         if hb_resp.status != "ACTIVE" {
-          return Err(format!(
-            "TERMINAL_OWNERSHIP_LOST: Final heartbeat status was {}, expected ACTIVE",
-            hb_resp.status
-          ));
+          return Err(format!("TERMINAL_OWNERSHIP_LOST: Final heartbeat status was {}, expected ACTIVE", hb_resp.status));
         }
-      }
+      },
       Err(e) => {
-        return Err(format!(
-          "TERMINAL_OWNERSHIP_LOST: Final heartbeat failed before stage completion: {e}"
-        ));
-      }
+        return Err(format!("TERMINAL_OWNERSHIP_LOST: Final heartbeat failed before stage completion: {e}"));
+      },
     }
 
     Ok((art_ref, vertical_sha256, width, height, ratio))
@@ -521,37 +423,17 @@ pub async fn execute_grok_expand_9_16(
   // Cleanup lease
   guard.release().await;
 
-  let source_sha256 = input
-    .image_done_artifact
-    .metadata
-    .get("sha256")
-    .and_then(|v| v.as_str())
-    .unwrap_or("")
-    .to_string();
+  let source_sha256 = input.image_done_artifact.metadata.get("sha256").and_then(|v| v.as_str()).unwrap_or("").to_string();
 
   match exec_result {
     Ok((vertical_artifact, vertical_sha256, width, height, aspect_ratio)) => {
-      info!(
-        "[GrokExpand916] Success! Vertical 9:16 artifact materialized: path={} ({width}x{height}, ratio={aspect_ratio:.4})",
-        vertical_artifact.location
-      );
-      Ok(GrokExpand916Output {
-        vertical_artifact,
-        job_id,
-        attempt_id: attempt_id.to_string(),
-        lease_id,
-        profile_id,
-        source_sha256,
-        vertical_sha256,
-        width,
-        height,
-        aspect_ratio,
-      })
-    }
+      info!("[GrokExpand916] Success! Vertical 9:16 artifact materialized: path={} ({width}x{height}, ratio={aspect_ratio:.4})", vertical_artifact.location);
+      Ok(GrokExpand916Output { vertical_artifact, job_id, attempt_id: attempt_id.to_string(), lease_id, profile_id, source_sha256, vertical_sha256, width, height, aspect_ratio })
+    },
     Err(err) => {
       error!("[GrokExpand916] Execution failed: {err}");
       Err(err)
-    }
+    },
   }
 }
 
@@ -630,22 +512,7 @@ mod tests {
 
   #[test]
   fn test_empty_workflow_root_rejected_fail_closed() {
-    let input = GrokExpand916Input {
-      job_id: "JOB_EXP_001".to_string(),
-      page_id: "PAGE_01".to_string(),
-      browser_profile_id: None,
-      image_done_artifact: ArtifactRef {
-        artifact_id: "ART_GEN".to_string(),
-        kind: ArtifactKind::GeneratedImage,
-        produced_by_stage: StageId::StoryScript,
-        location: "/non_existent.png".to_string(),
-        mime_type: Some("image/png".to_string()),
-        metadata: serde_json::json!({}),
-      },
-      prompt: "expand to 9:16".to_string(),
-      timeout_ms: Some(1000),
-      workflow_root: std::path::PathBuf::from(""),
-    };
+    let input = GrokExpand916Input { job_id: "JOB_EXP_001".to_string(), page_id: "PAGE_01".to_string(), browser_profile_id: None, image_done_artifact: ArtifactRef { artifact_id: "ART_GEN".to_string(), kind: ArtifactKind::GeneratedImage, produced_by_stage: StageId::StoryScript, location: "/non_existent.png".to_string(), mime_type: Some("image/png".to_string()), metadata: serde_json::json!({}) }, prompt: "expand to 9:16".to_string(), timeout_ms: Some(1000), workflow_root: std::path::PathBuf::from("") };
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     let outcome = rt.block_on(execute_grok_expand_9_16(input, "1", None));
