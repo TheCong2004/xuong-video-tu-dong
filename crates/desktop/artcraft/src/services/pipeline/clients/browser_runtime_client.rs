@@ -118,7 +118,13 @@ pub async fn launch_donut_profile(profile_id: &str, target_url: Option<&str>) ->
     headless: Some(false),
   };
 
-  let resp = client.post(&url).json(&req_body).send().await.map_err(|e| format!("Auto-launch profile request failed: {e}"))?;
+  let resp = client
+    .post(&url)
+    .header("X-Floword-Integration", "1")
+    .json(&req_body)
+    .send()
+    .await
+    .map_err(|e| format!("Auto-launch profile request failed: {e}"))?;
   if resp.status().is_success() {
     info!("[DonutAutoLaunch] Profile {profile_id} launched successfully");
     Ok(())
@@ -153,14 +159,6 @@ pub fn resolve_runtime_executable_candidates() -> Vec<std::path::PathBuf> {
   candidates.push(std::path::PathBuf::from("resources/donut-runtime/floword-donut-runtime.exe"));
   candidates.push(std::path::PathBuf::from("crates/desktop/artcraft/resources/donut-runtime/floword-donut-runtime.exe"));
 
-  // 4. Dev debug assertion fallbacks only
-  #[cfg(debug_assertions)]
-  {
-    candidates.push(std::path::PathBuf::from(r"D:\capcutpolot\donutbrowser\src-tauri\target\debug\floword-donut-runtime.exe"));
-    candidates.push(std::path::PathBuf::from(r"D:\capcutpolot\artcraft\resources\donut-runtime\floword-donut-runtime.exe"));
-    candidates.push(std::path::PathBuf::from(r"D:\capcutpolot\artcraft\target\debug\resources\donut-runtime\floword-donut-runtime.exe"));
-  }
-
   candidates
 }
 
@@ -185,13 +183,20 @@ pub async fn ensure_runtime_alive() {
       {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let _ = std::process::Command::new(exe)
-          .creation_flags(CREATE_NO_WINDOW)
-          .spawn();
+        let mut command = std::process::Command::new(exe);
+        command.creation_flags(CREATE_NO_WINDOW);
+        if let Some(data_dir) = resolve_shared_donut_data_dir() {
+          command.env("DONUTBROWSER_DATA_DIR", data_dir);
+        }
+        let _ = command.spawn();
       }
       #[cfg(not(windows))]
       {
-        let _ = std::process::Command::new(exe).spawn();
+        let mut command = std::process::Command::new(exe);
+        if let Some(data_dir) = resolve_shared_donut_data_dir() {
+          command.env("DONUTBROWSER_DATA_DIR", data_dir);
+        }
+        let _ = command.spawn();
       }
       break;
     }
@@ -208,6 +213,22 @@ pub async fn ensure_runtime_alive() {
       }
     }
   }
+}
+
+fn resolve_shared_donut_data_dir() -> Option<std::path::PathBuf> {
+  if let Some(path) = std::env::var_os("FLOWORD_DONUT_DATA_DIR") {
+    if !path.is_empty() {
+      return Some(path.into());
+    }
+  }
+
+  #[cfg(debug_assertions)]
+  {
+    return std::env::var_os("LOCALAPPDATA").map(|local_app_data| std::path::PathBuf::from(local_app_data).join("DonutBrowserDev"));
+  }
+
+  #[cfg(not(debug_assertions))]
+  None
 }
 
 /// Acquire an exclusive worker lease from donutbrowser runtime.
@@ -370,7 +391,12 @@ pub async fn list_donut_profiles() -> Result<ListDonutProfilesResponse, String> 
   let url = format!("{base_url}/v1/profiles");
   info!("[DonutProfiles] Fetching profile catalog: {url}");
 
-  let resp = client.get(&url).send().await.map_err(|e| format!("List profiles failed: {e}"))?;
+  let resp = client
+    .get(&url)
+    .header("X-Floword-Integration", "1")
+    .send()
+    .await
+    .map_err(|e| format!("List profiles failed: {e}"))?;
 
   if resp.status().is_success() {
     resp.json::<ListDonutProfilesResponse>().await.map_err(|e| format!("Failed to parse ListDonutProfilesResponse: {e}"))
@@ -423,4 +449,3 @@ mod tests {
     assert_eq!(resp.status, LeaseStatus::Revoked);
   }
 }
-

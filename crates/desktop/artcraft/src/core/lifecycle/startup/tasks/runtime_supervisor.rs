@@ -39,6 +39,14 @@ pub struct RuntimeSupervisorStatus {
   pub last_health_at: Option<String>,
 }
 
+#[derive(Debug)]
+struct RuntimeHealth {
+  runtime: String,
+  pid: Option<u32>,
+  protocol: Option<String>,
+  protocol_version: Option<u32>,
+}
+
 #[derive(Clone)]
 pub struct RuntimeSupervisor {
   child: Arc<Mutex<Option<Child>>>,
@@ -64,8 +72,26 @@ impl RuntimeSupervisor {
 
   pub fn start(&self, app: &AppHandle) {
     if port_open() {
-      self.set_failure(RuntimeSupervisorState::PortConflict, "127.0.0.1:10108 is already occupied; refusing to adopt or kill the process");
-      return;
+      match runtime_health() {
+        Some(health) if health.protocol.as_deref() == Some("floword-production") && health.protocol_version == Some(1) => {
+          if let Ok(mut status) = self.status.lock() {
+            status.state = RuntimeSupervisorState::Ready;
+            status.pid = health.pid;
+            status.last_error = None;
+            status.last_health_at = Some(chrono::Utc::now().to_rfc3339());
+          }
+          info!("Attached to existing Floword runtime {} (pid={:?}) on http://{HOST}:{PORT}", health.runtime, health.pid);
+          return;
+        }
+        Some(health) => {
+          self.set_failure(RuntimeSupervisorState::PortConflict, format!("127.0.0.1:{PORT} is occupied by incompatible runtime {} (protocol {:?} v{:?})", health.runtime, health.protocol, health.protocol_version));
+          return;
+        }
+        None => {
+          self.set_failure(RuntimeSupervisorState::PortConflict, "127.0.0.1:10108 is occupied by a process that does not expose a valid Floword runtime health endpoint");
+          return;
+        }
+      }
     }
 
     let Some(executable) = resolve_runtime_executable(app) else {
@@ -101,6 +127,9 @@ impl RuntimeSupervisor {
     };
     let mut command = background_command(Command::new(&executable));
     command.current_dir(&runtime_root).stdin(Stdio::null()).stdout(Stdio::from(stdout_log)).stderr(Stdio::from(log_file)).env("FLOWORD_DONUT_HOST", HOST).env("FLOWORD_DONUT_PORT", PORT.to_string()).env("FLOWORD_PARENT_PID", std::process::id().to_string()).env("FLOWORD_DONUT_RESOURCE_ROOT", &runtime_root);
+    if let Some(data_dir) = resolve_shared_donut_data_dir() {
+      command.env("DONUTBROWSER_DATA_DIR", data_dir);
+    }
 
     let child = match command.spawn() {
       Ok(child) => child,
@@ -121,11 +150,6 @@ impl RuntimeSupervisor {
     }
     info!("Started Floword Donut runtime {} (pid={pid})", executable.display());
 
-    // Also spawn Donut Browser Desktop App Window (Tauri App)
-    let _ = background_command(Command::new("cmd"))
-      .args(["/c", "cd /d D:\\capcutpolot\\donutbrowser && pnpm tauri dev"])
-      .spawn();
-
     let supervisor = self.clone();
     std::thread::spawn(move || supervisor.wait_until_ready());
   }
@@ -133,18 +157,19 @@ impl RuntimeSupervisor {
   fn wait_until_ready(&self) {
     let deadline = Instant::now() + READY_DEADLINE;
     loop {
-      if let Some(runtime) = runtime_health() {
-        if runtime == "floword-donut-runtime" || runtime == "donutbrowser" || runtime == "donut" || !runtime.is_empty() {
+      if let Some(health) = runtime_health() {
+        if health.protocol.as_deref() == Some("floword-production") && health.protocol_version == Some(1) {
           if let Ok(mut status) = self.status.lock() {
             status.state = RuntimeSupervisorState::Ready;
+            status.pid = health.pid.or(status.pid);
             status.last_health_at = Some(chrono::Utc::now().to_rfc3339());
           }
-          info!("Floword Donut runtime ({runtime}) is READY on http://{HOST}:{PORT}");
+          info!("Floword Donut runtime ({}) is READY on http://{HOST}:{PORT}", health.runtime);
 
           self.monitor_child_exit();
           return;
         }
-        self.set_failure(RuntimeSupervisorState::PortConflict, format!("127.0.0.1:{PORT} is served by {runtime}, not the Floword-owned runtime"));
+        self.set_failure(RuntimeSupervisorState::PortConflict, format!("127.0.0.1:{PORT} is served by incompatible runtime {}", health.runtime));
         self.stop_child_only();
         return;
       }
@@ -236,9 +261,6 @@ fn resolve_runtime_executable(app: &AppHandle) -> Option<PathBuf> {
   if let Some(path) = std::env::var_os("FLOWORD_DONUT_RUNTIME_EXE") {
     candidates.push(PathBuf::from(path));
   }
-  candidates.push(PathBuf::from(r"D:\capcutpolot\donutbrowser\src-tauri\target\debug\floword-donut-runtime.exe"));
-  candidates.push(PathBuf::from(r"D:\capcutpolot\artcraft\resources\donut-runtime\floword-donut-runtime.exe"));
-  candidates.push(PathBuf::from(r"D:\capcutpolot\artcraft\target\debug\resources\donut-runtime\floword-donut-runtime.exe"));
 
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
@@ -253,11 +275,30 @@ fn resolve_runtime_executable(app: &AppHandle) -> Option<PathBuf> {
   candidates.into_iter().find(|path| path.is_file())
 }
 
+/// Keep the embedded runtime on the same profile catalog as Donut Manager.
+/// Production can provide an explicit root; debug runs use the conventional
+/// DonutBrowserDev root so a debug Manager and Floword share profile UUIDs.
+fn resolve_shared_donut_data_dir() -> Option<PathBuf> {
+  if let Some(path) = std::env::var_os("FLOWORD_DONUT_DATA_DIR") {
+    if !path.is_empty() {
+      return Some(PathBuf::from(path));
+    }
+  }
+
+  #[cfg(debug_assertions)]
+  {
+    return std::env::var_os("LOCALAPPDATA").map(|local_app_data| PathBuf::from(local_app_data).join("DonutBrowserDev"));
+  }
+
+  #[cfg(not(debug_assertions))]
+  None
+}
+
 fn port_open() -> bool {
   format!("{HOST}:{PORT}").to_socket_addrs().ok().and_then(|mut addresses| addresses.next()).and_then(|address| TcpStream::connect_timeout(&address, Duration::from_millis(200)).ok()).is_some()
 }
 
-fn runtime_health() -> Option<String> {
+fn runtime_health() -> Option<RuntimeHealth> {
   let mut stream = TcpStream::connect_timeout(&format!("{HOST}:{PORT}").parse().ok()?, Duration::from_millis(300)).ok()?;
   stream.set_read_timeout(Some(Duration::from_secs(1))).ok()?;
   let request = format!("GET /v1/runtime/health HTTP/1.1\r\nHost: {HOST}:{PORT}\r\nConnection: close\r\n\r\n");
@@ -268,7 +309,13 @@ fn runtime_health() -> Option<String> {
     return None;
   }
   let body = response.split("\r\n\r\n").nth(1)?;
-  serde_json::from_str::<serde_json::Value>(body).ok()?.get("runtime")?.as_str().map(str::to_string)
+  let value = serde_json::from_str::<serde_json::Value>(body).ok()?;
+  Some(RuntimeHealth {
+    runtime: value.get("runtime")?.as_str()?.to_string(),
+    pid: value.get("pid").and_then(serde_json::Value::as_u64).map(|pid| pid as u32),
+    protocol: value.get("protocol").and_then(serde_json::Value::as_str).map(str::to_string),
+    protocol_version: value.get("protocolVersion").and_then(serde_json::Value::as_u64).map(|version| version as u32),
+  })
 }
 
 fn terminate_child_tree(child: &mut Child) {
