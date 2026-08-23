@@ -282,13 +282,8 @@ pub fn start_playwright_runtime(app: &AppHandle) {
     return;
   }
   let resource_dir = app.path().resource_dir().ok();
-  if let Some(root) = resource_dir.as_ref() {
-    if std::env::var_os("FLOWORD_ALLOW_UNVERIFIED_RUNTIME").is_none() {
-      if let Err(error) = verify_runtime_manifest(root) {
-        warn!("RUNTIME_INTEGRITY_ERROR: {error}");
-        return;
-      }
-    }
+  if !runtime_manifest_ready(app) {
+    return;
   }
   let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| resource_dir.as_ref().map(|root| root.join("playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| {
     let cwd = std::env::current_dir().ok()?;
@@ -439,12 +434,31 @@ fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
   Ok(())
 }
 
+/// Release startup is fail-closed. Debug source runs may opt in explicitly
+/// when no staged binaries exist; this flag is never honored in release.
+pub fn runtime_manifest_ready(app: &AppHandle) -> bool {
+  let Some(root) = app.path().resource_dir().ok() else {
+    return false;
+  };
+  if cfg!(debug_assertions) && std::env::var_os("FLOWORD_ALLOW_SOURCE_RUNTIME").is_some() {
+    return true;
+  }
+  match verify_runtime_manifest(&root) {
+    Ok(()) => true,
+    Err(error) => {
+      warn!("RUNTIME_INTEGRITY_ERROR: {error}");
+      false
+    },
+  }
+}
+
 fn playwright_health_ok() -> bool {
   let Ok(mut stream) = TcpStream::connect_timeout(&format!("{HOST}:{PLAYWRIGHT_PORT}").parse().unwrap(), Duration::from_millis(250)) else {
     return false;
   };
   let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
-  let _ = stream.write_all(format!("GET /health HTTP/1.1\r\nHost: {HOST}:{PLAYWRIGHT_PORT}\r\nConnection: close\r\n\r\n").as_bytes());
+  let authorization = std::env::var("FLOWORD_SIDECAR_TOKEN").map(|token| format!("Authorization: Bearer {token}\r\n")).unwrap_or_default();
+  let _ = stream.write_all(format!("GET /health HTTP/1.1\r\nHost: {HOST}:{PLAYWRIGHT_PORT}\r\n{authorization}Connection: close\r\n\r\n").as_bytes());
   let mut response = String::new();
   let _ = stream.read_to_string(&mut response);
   let Some(body) = response.split("\r\n\r\n").nth(1) else {

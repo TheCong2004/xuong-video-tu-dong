@@ -69,16 +69,17 @@ class SessionManager {
     if (!result) throw new Error('EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: health bridge returned no result');
     if (result.protocol !== 'floword-production' || result.protocolVersion !== 1 || result.result?.profileId && result.result.profileId !== id) throw new Error('PROTOCOL_MISMATCH: health response protocol/profile is invalid');
     s.lastHeartbeat = Date.now();
-    if (s.activeRequest) { s.state = 'BUSY'; return result; }
     if (!result.ok) return result;
-    const details = result.result || {};
+    const details = { ...(result.result || {}) };
+    if (s.activeRequest) { s.state = 'BUSY'; details.status = 'BUSY'; details.workerState = 'BUSY'; return { ...result, result: details }; }
     const status = String(details.status || '').toUpperCase();
     const workerState = String(details.workerState || '').toUpperCase();
     if (details.loggedIn === false || status === 'LOGIN_REQUIRED') s.state = 'LOGIN_REQUIRED';
     else if (status === 'BUSY' || status === 'LEASED' || workerState === 'BUSY' || workerState === 'LEASED') s.state = 'BUSY';
-    else if (status === 'READY' && (workerState === 'IDLE' || workerState === 'READY')) s.state = 'READY';
+    else if (status === 'READY' && workerState === 'IDLE') s.state = 'READY';
     else if (s.state !== 'RECONCILING') s.state = 'EXTENSION_READY';
-    return result;
+    if (s.state === 'RECONCILING') { details.status = 'RECONCILING'; details.workerState = 'RECONCILING'; }
+    return { ...result, result: details };
   }
   async cancelRequest(s, active, timeoutMs = 10000) {
     const worker = await this.ensureWorker(s);
@@ -87,7 +88,7 @@ class SessionManager {
     let cancelTimer;
     try {
       const result = await Promise.race([cancelPromise, new Promise((_, reject) => { cancelTimer = setTimeout(() => reject(new Error('CANCEL_TIMEOUT: cancellation acknowledgement timed out')), Math.min(Math.max(timeoutMs, 1000), 15000)); })]);
-      if (!result?.ok) throw new Error(`${result?.error?.code || 'CANCEL_FAILED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`);
+      if (!result?.ok || (Object.prototype.hasOwnProperty.call(result, 'result') && result.result?.cancelled !== true)) throw new Error(`${result?.error?.code || 'CANCEL_UNCONFIRMED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`);
       return { cancelled: true, requestId: active.requestId, acknowledgment: result };
     } finally {
       clearTimeout(cancelTimer);
@@ -122,7 +123,7 @@ class SessionManager {
           try {
             await this.cancelRequest(s, activeRequest, 10000);
             const settled = await Promise.race([dispatchPromise.then(() => true).catch(() => true), new Promise((resolve) => setTimeout(() => resolve(false), this.cancelSettleTimeoutMs))]);
-            if (!settled) { retainOwnership = true; s.state = 'RECONCILING'; throw new Error('CANCEL_UNCONFIRMED: dispatch did not settle after cancellation'); }
+            if (!settled) { retainOwnership = true; s.state = 'RECONCILING'; this.watchLateSettlement(s, requestId, dispatchPromise); throw new Error('CANCEL_UNCONFIRMED: dispatch did not settle after cancellation'); }
             s.state = 'RECONCILING';
           } catch (cancelError) {
             s.state = 'RECONCILING';
@@ -141,6 +142,15 @@ class SessionManager {
     })();
     this.activeRequests.set(requestId, { fingerprint, promise, dispatchPromise, session: s, request: activeRequest }); return promise;
   }
+  watchLateSettlement(s, requestId, dispatchPromise) {
+    dispatchPromise.then(() => this.reapLateSettlement(s, requestId, dispatchPromise), () => this.reapLateSettlement(s, requestId, dispatchPromise));
+  }
+  reapLateSettlement(s, requestId, dispatchPromise) {
+    const entry = this.activeRequests.get(requestId);
+    if (entry?.session === s && entry.dispatchPromise === dispatchPromise) this.activeRequests.delete(requestId);
+    if (s.activeRequest?.requestId === requestId) s.activeRequest = null;
+    s.state = 'RECONCILING';
+  }
   async cancel(jobId, targetRequestId) {
     const s = [...this.sessions.values()].find((x) => x.activeRequest?.jobId === jobId);
     if (!s) return { cancelled: false, jobId, requestId: targetRequestId || null, acknowledgment: { ok: false, code: 'JOB_NOT_FOUND' } };
@@ -148,13 +158,16 @@ class SessionManager {
     if (targetRequestId && active.requestId !== targetRequestId) return { cancelled: false, jobId, requestId: targetRequestId, acknowledgment: { ok: false, code: 'CORRELATION_MISMATCH' } };
     const entry = this.activeRequests.get(active.requestId);
     if (!entry || entry.session !== s || entry.request.jobId !== jobId || entry.request.profileId !== s.profileId) { s.state = 'RECONCILING'; return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } }; }
-    const result = await this.cancelRequest(s, active);
+    let result;
+    try { result = await this.cancelRequest(s, active); }
+    catch (error) { s.state = 'RECONCILING'; return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED', message: error.message } }; }
     const settled = await Promise.race([entry.dispatchPromise.then(() => true).catch(() => true), new Promise((resolve) => setTimeout(() => resolve(false), this.cancelSettleTimeoutMs))]);
     if (!settled) {
+      this.watchLateSettlement(s, active.requestId, entry.dispatchPromise);
       s.state = 'RECONCILING';
       return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } };
     }
-    if (result.requestId !== targetRequestId || result.acknowledgment?.ok !== true) { s.state = 'RECONCILING'; return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } }; }
+    if (result.requestId !== targetRequestId || result.acknowledgment?.ok !== true || result.acknowledgment?.result?.cancelled !== true) { s.state = 'RECONCILING'; return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } }; }
     return { cancelled: true, jobId, ...result };
   }
   pruneCompleted() { const now = Date.now(); for (const [id, entry] of this.completedRequests) if (entry.expiresAt <= now) this.completedRequests.delete(id); }

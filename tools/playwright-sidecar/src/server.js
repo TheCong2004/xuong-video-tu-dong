@@ -35,7 +35,10 @@ app.post('/upload', route((req) => actionRunner.upload(req.body.selector, req.bo
 app.post('/screenshot', route((req) => actionRunner.screenshot(req.body.outputPath)));
 app.post('/trace/start', route(() => actionRunner.startTrace()));
 app.post('/trace/stop', route((req) => actionRunner.stopTrace(req.body.outputPath)));
-app.post('/cancel', route((req) => sessionManager.cancel(req.body.jobId)));
+app.post('/cancel', route((req) => {
+  if (!req.body?.targetRequestId) throw new Error('INVALID_REQUEST: targetRequestId is required');
+  return sessionManager.cancel(req.body.jobId, req.body.targetRequestId);
+}));
 app.post('/disconnect', route(() => sessionManager.disconnect()));
 
 // Express' JSON parser raises a body-parser `entity.too.large` error before a

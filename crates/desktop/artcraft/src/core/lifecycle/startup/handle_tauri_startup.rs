@@ -7,7 +7,7 @@ use crate::core::lifecycle::startup::tasks::spawn_capcut_mate_backend::{health_r
 use crate::core::lifecycle::startup::tasks::spawn_discord_presence_thread::spawn_discord_presence_thread;
 use crate::core::lifecycle::startup::tasks::spawn_main_window_thread::spawn_main_window_thread;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::{health_ready as omniroute_health_ready, spawn_omniroute_backend};
-use crate::core::lifecycle::startup::tasks::runtime_supervisor::{start_playwright_runtime, start_runtime_supervisor};
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::{runtime_manifest_ready, start_playwright_runtime, start_runtime_supervisor};
 use crate::core::lifecycle::startup::tasks::spawn_sora_task_polling_thread::spawn_sora_task_polling_thread;
 use crate::core::lifecycle::startup::tasks::spawn_storyteller_threads::spawn_storyteller_threads;
 use crate::core::providers::credentials::provider_credential_loading_cache::ProviderCredentialLoadingCache;
@@ -41,8 +41,12 @@ pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_con
   // background thread so the Studio can render while runtime health is pending.
   let app_for_donut = app.clone();
   std::thread::spawn(move || {
-    start_playwright_runtime(&app_for_donut);
-    start_runtime_supervisor(&app_for_donut);
+    if runtime_manifest_ready(&app_for_donut) {
+      start_playwright_runtime(&app_for_donut);
+      start_runtime_supervisor(&app_for_donut);
+    } else {
+      warn!("Runtime manifest verification failed; Donut and Playwright runtimes were not spawned");
+    }
   });
 
   // Python backend: capcut-mate owns :30000 (the single always-on Python port).
