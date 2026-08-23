@@ -415,12 +415,25 @@ fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
   let path = root.join("runtime-manifest.sha256.json");
   let raw = std::fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
   let value: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("invalid manifest JSON: {e}"))?;
-  if value.get("generatedAt").and_then(|v| v.as_str()).is_none() || value.get("files").and_then(|v| v.as_object()).is_none() {
+  if value.get("schemaVersion").and_then(|v| v.as_u64()) != Some(1) || value.get("generatedAt").and_then(|v| v.as_str()).is_none() || value.get("files").and_then(|v| v.as_object()).is_none() {
     return Err("manifest has no generatedAt/files".to_string());
   }
   let files = value.get("files").and_then(|v| v.as_object()).unwrap();
   if files.is_empty() {
     return Err("manifest contains no files".to_string());
+  }
+  let required = value.get("requiredArtifacts").and_then(|v| v.as_array()).ok_or_else(|| "manifest has no requiredArtifacts".to_string())?;
+  for artifact in required {
+    let name = artifact.as_str().ok_or_else(|| "invalid required artifact entry".to_string())?;
+    if !files.contains_key(name) {
+      return Err(format!("required artifact missing from manifest: {name}"));
+    }
+    if name.ends_with(".gitkeep") || name.contains("placeholder") {
+      return Err(format!("placeholder artifact is not allowed: {name}"));
+    }
+  }
+  if !files.keys().any(|name| name.starts_with("playwright/") && name.to_ascii_lowercase().ends_with("/chrome.exe")) {
+    return Err("manifest has no staged Chromium executable".to_string());
   }
   for (relative, expected) in files {
     let expected = expected.as_str().ok_or_else(|| format!("invalid hash for {relative}"))?;

@@ -88,7 +88,8 @@ class SessionManager {
     let cancelTimer;
     try {
       const result = await Promise.race([cancelPromise, new Promise((_, reject) => { cancelTimer = setTimeout(() => reject(new Error('CANCEL_TIMEOUT: cancellation acknowledgement timed out')), Math.min(Math.max(timeoutMs, 1000), 15000)); })]);
-      if (!result?.ok || (Object.prototype.hasOwnProperty.call(result, 'result') && result.result?.cancelled !== true)) throw new Error(`${result?.error?.code || 'CANCEL_UNCONFIRMED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`);
+      if (result?.protocol && (result.protocol !== 'floword-production' || result.protocolVersion !== 1)) throw new Error('CANCEL_UNCONFIRMED: cancellation protocol mismatch');
+      if (result?.ok !== true || result?.result?.cancelled !== true) throw new Error(`${result?.error?.code || 'CANCEL_UNCONFIRMED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`);
       return { cancelled: true, requestId: active.requestId, acknowledgment: result };
     } finally {
       clearTimeout(cancelTimer);

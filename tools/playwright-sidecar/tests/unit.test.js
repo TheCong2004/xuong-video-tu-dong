@@ -57,7 +57,7 @@ test('dispatch timeout sends a cancel acknowledgement before releasing the profi
   sessionManager.sessions.set(session.profileId, session);
   const original = sessionManager.ensureWorker;
   const originalTimeout = sessionManager.timeoutForRequest;
-  const worker = { evaluate: async (_fn, payload) => { calls.push(payload.method); if (payload.method === 'production.task.cancel') return { ok: true, protocol: 'floword-production', protocolVersion: 1 }; return new Promise(() => {}); } };
+  const worker = { evaluate: async (_fn, payload) => { calls.push(payload.method); if (payload.method === 'production.task.cancel') return { ok: true, result: { cancelled: true }, protocol: 'floword-production', protocolVersion: 1 }; return new Promise(() => {}); } };
   sessionManager.ensureWorker = async () => worker;
   sessionManager.timeoutForRequest = () => 10;
   const originalSettle = sessionManager.cancelSettleTimeoutMs;
@@ -155,6 +155,29 @@ test('cancel acknowledgement with result.cancelled=false is not success', async 
     sessionManager.ensureWorker = original;
     sessionManager.sessions.delete(session.profileId);
     sessionManager.activeRequests.clear();
+  }
+});
+
+test('cancel acknowledgement requires a cancelled result object', async () => {
+  for (const response of [{ ok: true }, { ok: true, result: {} }, { ok: true, result: { cancelled: false } }]) {
+    const session = { profileId: `missing-result-${Math.random()}`, worker: {}, context: { serviceWorkers: () => [] }, state: 'READY', activeRequest: null };
+    sessionManager.sessions.set(session.profileId, session);
+    const original = sessionManager.ensureWorker;
+    let rejectDispatch;
+    sessionManager.ensureWorker = async () => ({ evaluate: async (_fn, payload) => payload.method === 'production.task.cancel' ? response : new Promise((_, reject) => { rejectDispatch = reject; }) });
+    try {
+      const dispatch = sessionManager.dispatch(request({ profileId: session.profileId, requestId: `missing-${Math.random()}` }));
+      await new Promise((resolve) => setImmediate(resolve));
+      const result = await sessionManager.cancel('job-unit', session.activeRequest.requestId);
+      assert.equal(result.cancelled, false);
+      assert.equal(result.acknowledgment.code, 'CANCEL_UNCONFIRMED');
+      rejectDispatch(new Error('cancelled'));
+      await assert.rejects(dispatch);
+    } finally {
+      sessionManager.ensureWorker = original;
+      sessionManager.sessions.delete(session.profileId);
+      sessionManager.activeRequests.clear();
+    }
   }
 });
 

@@ -4,6 +4,7 @@
 //   FLOWORD_NODE_RUNTIME       path to node.exe
 //   FLOWORD_CHROMIUM_DIR       Playwright Chromium directory
 //   FLOWORD_CHROMEX_EXTENSION  unpacked extension directory
+//   FLOWORD_DONUT_RUNTIME_EXE  floword-donut-runtime.exe
 
 const fs = require('node:fs');
 const path = require('node:path');
@@ -41,9 +42,16 @@ function findChrome(root) {
 const nodeRuntime = required('FLOWORD_NODE_RUNTIME');
 const chromium = required('FLOWORD_CHROMIUM_DIR');
 const extension = required('FLOWORD_CHROMEX_EXTENSION');
+const donutRuntime = required('FLOWORD_DONUT_RUNTIME_EXE');
+if (path.basename(nodeRuntime).toLowerCase() !== 'node.exe') throw new Error('FLOWORD_NODE_RUNTIME must point to node.exe');
 if (!findChrome(chromium)) throw new Error(`FLOWORD_CHROMIUM_DIR contains no chrome.exe: ${chromium}`);
+if (path.basename(donutRuntime).toLowerCase() !== 'floword-donut-runtime.exe') throw new Error('FLOWORD_DONUT_RUNTIME_EXE must point to floword-donut-runtime.exe');
+if (!fs.existsSync(path.join(extension, 'manifest.json'))) throw new Error('FLOWORD_CHROMEX_EXTENSION is missing manifest.json');
+if (!fs.existsSync(path.join(sidecar, 'node_modules', 'express', 'package.json'))) throw new Error('sidecar express dependency is missing; run npm ci');
+if (!fs.existsSync(path.join(sidecar, 'node_modules', 'playwright', 'package.json'))) throw new Error('sidecar playwright dependency is missing; run npm ci');
 
 copy(nodeRuntime, path.join(resources, 'node', path.basename(nodeRuntime)));
+copy(donutRuntime, path.join(resources, 'donut-runtime', 'floword-donut-runtime.exe'));
 copy(chromium, path.join(resources, 'playwright'));
 copy(extension, path.join(resources, 'chromex-extension'));
 copy(path.join(sidecar, 'src'), path.join(resources, 'playwright-sidecar', 'src'));
@@ -59,7 +67,20 @@ for (const file of files(resources).sort()) {
   if (relative === 'runtime-manifest.sha256.json') continue;
   manifest[relative] = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
+const requiredArtifacts = [
+  'donut-runtime/floword-donut-runtime.exe',
+  'node/node.exe',
+  'playwright-sidecar/src/server.js',
+  'playwright-sidecar/package.json',
+  'playwright-sidecar/node_modules/express/package.json',
+  'playwright-sidecar/node_modules/playwright/package.json',
+  'chromex-extension/manifest.json',
+];
+const chromeArtifact = Object.keys(manifest).find((file) => file.startsWith('playwright/') && file.toLowerCase().endsWith('/chrome.exe'));
+if (!chromeArtifact) throw new Error('staged runtime is missing playwright/**/chrome.exe');
+requiredArtifacts.push(chromeArtifact);
+for (const artifact of requiredArtifacts) if (!manifest[artifact]) throw new Error(`required production artifact missing: ${artifact}`);
 const temporaryManifest = `${manifestPath}.tmp-${process.pid}`;
-fs.writeFileSync(temporaryManifest, `${JSON.stringify({ generatedAt: new Date().toISOString(), files: manifest }, null, 2)}\n`, { flag: 'w' });
+fs.writeFileSync(temporaryManifest, `${JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sourceCommits: { donutbrowser: process.env.FLOWORD_DONUT_COMMIT || 'unknown', chromex: process.env.FLOWORD_CHROMEX_COMMIT || 'unknown', artcraft: process.env.FLOWORD_ARTCRAFT_COMMIT || 'unknown' }, requiredArtifacts, files: manifest }, null, 2)}\n`, { flag: 'w' });
 fs.renameSync(temporaryManifest, manifestPath);
 console.log(`Staged ${Object.keys(manifest).length} runtime files in ${resources}`);
