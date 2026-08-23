@@ -245,7 +245,7 @@ fn resolve_shared_donut_data_dir() -> Option<std::path::PathBuf> {
 /// Automatically boots up the target browser profile if it is currently offline/stopped.
 pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerResponse, String> {
   let base_url = get_donut_browser_api_base_url();
-  let client = Client::builder().timeout(Duration::from_secs(10)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
+  let client = Client::builder().timeout(Duration::from_secs(60)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
   let url = format!("{base_url}/v1/workers/acquire");
   info!("[BrowserRuntime] Acquiring worker: url={url} job_id={} capability={} profile_id={:?}", req.job_id, req.capability, req.profile_id);
@@ -267,42 +267,6 @@ pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerRe
 
   let status = resp.status();
   let body = resp.text().await.unwrap_or_default();
-
-  // Auto-launch only for an actually offline/disconnected profile. A
-  // capability conflict must not launch a second browser instance.
-  let is_not_ready = (status.as_u16() == 503 || status.as_u16() == 409) && (body.contains("BRIDGE_DISCONNECTED") || body.contains("OFFLINE") || body.contains("EXTENSION_UNAVAILABLE") || body.contains("NO_AVAILABLE_WORKER"));
-
-  if is_not_ready && req.profile_id.is_some() {
-    let pid = req.profile_id.as_deref().unwrap();
-    let target_url = if req.capability.starts_with("grok") {
-      "https://grok.com/imagine"
-    } else if req.capability.contains("facebook") {
-      "https://www.facebook.com"
-    } else if req.capability.contains("tiktok") {
-      "https://www.tiktok.com"
-    } else if req.capability.contains("youtube") {
-      "https://studio.youtube.com"
-    } else {
-      "https://grok.com/imagine"
-    };
-
-    info!("[BrowserRuntime] Worker not ready for profile {pid}; triggering auto-launch with {target_url}...");
-    let _ = launch_donut_profile(pid, Some(target_url)).await;
-
-    // Poll for up to 15 seconds for extension to handshake
-    for attempt in 1..=15 {
-      tokio::time::sleep(Duration::from_secs(1)).await;
-      info!("[BrowserRuntime] Polling worker ready after auto-launch (attempt {attempt}/15)...");
-      if let Ok(retry_resp) = client.post(&url).json(&req).send().await {
-        if retry_resp.status().is_success() {
-          if let Ok(res) = retry_resp.json::<AcquireWorkerResponse>().await {
-            info!("[BrowserRuntime] Worker acquired successfully after auto-launch: lease_id={}", res.lease_id);
-            return Ok(res);
-          }
-        }
-      }
-    }
-  }
 
   error!("[BrowserRuntime] Acquire failed ({status}): {body}");
   Err(format!("Acquire worker failed ({status}): {body}"))

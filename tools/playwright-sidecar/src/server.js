@@ -5,7 +5,9 @@ const actionRunner = require('./action-runner');
 const app = express();
 const PORT = Number(process.env.PLAYWRIGHT_SIDECAR_PORT || 9223);
 const token = process.env.FLOWORD_SIDECAR_TOKEN;
-app.use(express.json({ limit: '2mb' }));
+// Image payloads are base64 encoded by the Floword pipeline; keep a bounded
+// but practical limit above the common 2 MB source-image case.
+app.use(express.json({ limit: process.env.FLOWORD_SIDECAR_BODY_LIMIT || '32mb' }));
 app.use((req, res, next) => {
   if (token && req.get('authorization') !== `Bearer ${token}`) return res.status(401).json({ error: 'UNAUTHORIZED' });
   next();

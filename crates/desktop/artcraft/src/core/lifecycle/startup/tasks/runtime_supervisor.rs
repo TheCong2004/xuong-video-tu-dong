@@ -262,11 +262,13 @@ pub fn start_playwright_runtime() {
   if playwright_health_ok() { return; }
   let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| std::env::current_dir().ok().and_then(|cwd| [cwd.join("tools/playwright-sidecar/src/server.js"), cwd.join("..\\..\\..\\tools\\playwright-sidecar\\src\\server.js")].into_iter().find(|path| path.is_file())));
   let Some(sidecar) = sidecar.filter(|path| path.is_file()) else { warn!("Playwright sidecar entrypoint not found; Floword will report PLAYWRIGHT_RUNTIME_OFFLINE"); return; };
-  let mut command = background_command(Command::new("node"));
+  let node = std::env::var_os("FLOWORD_PLAYWRIGHT_NODE").map(PathBuf::from).unwrap_or_else(|| PathBuf::from("node"));
+  let mut command = background_command(Command::new(node));
   command.arg(&sidecar).current_dir(sidecar.parent().unwrap_or(Path::new("."))).env("PLAYWRIGHT_SIDECAR_PORT", PLAYWRIGHT_PORT.to_string()).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
   if std::env::var_os("FLOWORD_CHROMEX_EXTENSION_PATH").is_none() {
     if let Some(path) = std::env::current_dir().ok().and_then(|cwd| [cwd.join("..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod")].into_iter().find(|path| path.join("manifest.json").is_file())) { command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path); }
   }
+  if let Some(browsers) = std::env::var_os("FLOWORD_PLAYWRIGHT_BROWSERS_PATH") { command.env("PLAYWRIGHT_BROWSERS_PATH", browsers); }
   match command.spawn() { Ok(child) => info!("Started Floword Playwright runtime (pid={})", child.id()), Err(error) => warn!("Failed to start Playwright runtime: {error}") }
 }
 
