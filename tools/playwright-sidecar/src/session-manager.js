@@ -20,7 +20,18 @@ class SessionManager {
     return dir;
   }
   async ensureProfile(id, options = {}) {
-    if (this.sessions.has(id)) { const s = this.sessions.get(id); return this.describe(s, await this.ensureGrokPage(s, options.url)); }
+    if (this.sessions.has(id)) {
+      const s = this.sessions.get(id);
+      if ((options.cdpEndpoint && s.cdpEndpoint !== options.cdpEndpoint) ||
+        (options.browserPid && s.browserPid && s.browserPid !== options.browserPid) ||
+        (options.launchGeneration && s.launchGeneration && s.launchGeneration !== options.launchGeneration)) {
+        if (s.activeRequest) throw new Error('CDP_SESSION_STALE: browser endpoint changed while a request was active');
+        await s.browser.close().catch(() => {});
+        this.sessions.delete(id);
+      } else {
+        return this.describe(s, await this.ensureGrokPage(s, options.url));
+      }
+    }
     if (this.startFlights.has(id)) return this.startFlights.get(id);
     const flight = this.startProfile(id, options).finally(() => this.startFlights.delete(id)); this.startFlights.set(id, flight); return flight;
   }
@@ -31,13 +42,22 @@ class SessionManager {
     const browser = await chromium.connectOverCDP(cdpEndpoint, { timeout: options.timeoutMs || 15000 });
     const context = browser.contexts()[0];
     if (!context) { await browser.close().catch(() => {}); throw new Error('CDP_CONTEXT_NOT_FOUND: Donut browser exposed no browser context'); }
-    const s = { profileId: id, cdpEndpoint, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() }; this.sessions.set(id, s);
+    const s = { profileId: id, cdpEndpoint, browserPid: options.browserPid || null, launchGeneration: options.launchGeneration || null, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() }; this.sessions.set(id, s);
     try { s.worker = await this.waitForServiceWorker(context, options.timeoutMs || 15000); s.state = 'BROWSER_READY'; const page = await this.ensureGrokPage(s, options.url); await this.bindProfile(s); s.state = 'EXTENSION_READY'; return this.describe(s, page); }
     catch (e) { await browser.close().catch(() => {}); this.sessions.delete(id); throw e; }
   }
   async waitForServiceWorker(context, timeout) {
-    const found = context.serviceWorkers().find((w) => w.url().startsWith('chrome-extension://')); if (found) return found;
-    return context.waitForEvent('serviceworker', { timeout, predicate: (w) => w.url().startsWith('chrome-extension://') });
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      for (const worker of context.serviceWorkers().filter((candidate) => candidate.url().startsWith('chrome-extension://'))) {
+        try {
+          const ready = await worker.evaluate(() => Boolean(globalThis.__flowordProduction && typeof globalThis.__flowordProduction.bind === 'function' && typeof globalThis.__flowordProduction.health === 'function'));
+          if (ready) return worker;
+        } catch (_) { /* worker may be restarting */ }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    throw new Error('EXTENSION_PRODUCTION_WORKER_NOT_READY: Donut browser has no Floword production service worker');
   }
   async ensureGrokPage(s, url = 'https://grok.com/imagine') {
     let page = s.grokPage && !s.grokPage.isClosed() ? s.grokPage : null;
@@ -60,7 +80,7 @@ class SessionManager {
     return Math.min(Math.max(Math.trunc(requested), 5000), 900000);
   }
   async ensureWorker(s) {
-    const alive = s.worker && (!s.worker.isClosed || !s.worker.isClosed());
+    const alive = s.worker && !s.worker.isClosed();
     if (!alive || !s.context.serviceWorkers().includes(s.worker)) {
       s.worker = await this.waitForServiceWorker(s.context, 15000);
       await this.bindProfile(s);

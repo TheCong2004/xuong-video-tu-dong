@@ -9,6 +9,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const childProcess = require('node:child_process');
 
 const repo = path.resolve(__dirname, '..', '..', '..');
 const sidecar = path.resolve(__dirname, '..');
@@ -45,6 +46,25 @@ function findChrome(root) {
   return files(root).find((file) => path.basename(file).toLowerCase() === 'chrome.exe');
 }
 
+function stageDonutExtension(extension) {
+  const destination = path.join(resources, 'donut-runtime', 'bundled-extensions', 'chromex.zip');
+  const supplied = process.env.FLOWORD_CHROMEX_ZIP;
+  if (supplied) {
+    const zip = required('FLOWORD_CHROMEX_ZIP');
+    copy(zip, destination);
+    return destination;
+  }
+  if (process.platform !== 'win32') throw new Error('FLOWORD_CHROMEX_ZIP is required outside Windows staging');
+  fs.rmSync(destination, { force: true });
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  childProcess.execFileSync('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-Command',
+    `Compress-Archive -Path ${JSON.stringify(path.join(extension, '*'))} -DestinationPath ${JSON.stringify(destination)} -Force`,
+  ], { stdio: 'inherit' });
+  if (!fs.existsSync(destination)) throw new Error('failed to create donut-runtime/bundled-extensions/chromex.zip');
+  return destination;
+}
+
 const nodeRuntime = required('FLOWORD_NODE_RUNTIME');
 const chromium = required('FLOWORD_CHROMIUM_DIR');
 const extension = required('FLOWORD_CHROMEX_EXTENSION');
@@ -63,6 +83,7 @@ if (!fs.existsSync(path.join(sidecar, 'node_modules', 'playwright', 'package.jso
 
 copy(nodeRuntime, path.join(resources, 'node', path.basename(nodeRuntime)));
 copy(donutRuntime, path.join(resources, 'donut-runtime', 'floword-donut-runtime.exe'));
+stageDonutExtension(extension);
 copy(chromium, path.join(resources, 'playwright'));
 copy(extension, path.join(resources, 'chromex-extension'));
 copy(path.join(sidecar, 'src'), path.join(resources, 'playwright-sidecar', 'src'));
@@ -80,6 +101,7 @@ for (const file of files(resources).sort()) {
 }
 const requiredArtifacts = [
   'donut-runtime/floword-donut-runtime.exe',
+  'donut-runtime/bundled-extensions/chromex.zip',
   'node/node.exe',
   'playwright-sidecar/src/server.js',
   'playwright-sidecar/package.json',
