@@ -244,38 +244,6 @@ fn resolve_shared_donut_data_dir() -> Option<std::path::PathBuf> {
 /// Acquire an exclusive worker lease from donutbrowser runtime.
 /// Automatically boots up the target browser profile if it is currently offline/stopped.
 pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerResponse, String> {
-  if let (Ok(sidecar), Some(profile_id)) = (std::env::var("FLOWORD_PLAYWRIGHT_RUNTIME_URL"), req.profile_id.clone()) {
-    let client = Client::builder().timeout(Duration::from_secs(30)).build().map_err(|e| format!("Playwright client: {e}"))?;
-    let start_url = format!("{}/v1/profiles/{}/start", sidecar.trim_end_matches('/'), profile_id);
-    let mut body = serde_json::json!({ "url": if req.capability.starts_with("grok") { "https://grok.com/imagine" } else { "about:blank" } });
-    if let Ok(extension_path) = std::env::var("FLOWORD_CHROMEX_EXTENSION_PATH") { body["extensionPath"] = serde_json::Value::String(extension_path); }
-    client.post(&start_url).json(&body).send().await.map_err(|e| format!("Playwright runtime unavailable: {e}"))?.error_for_status().map_err(|e| format!("Playwright profile start failed: {e}"))?;
-    let status: serde_json::Value = client.get(format!("{}/v1/profiles/{}/status", sidecar.trim_end_matches('/'), profile_id)).send().await.map_err(|e| format!("Playwright health failed: {e}"))?.error_for_status().map_err(|e| format!("Playwright health failed: {e}"))?.json().await.map_err(|e| format!("Playwright health response invalid: {e}"))?;
-    let health = status.get("result").unwrap_or(&status);
-    let capabilities = health.get("capabilities").cloned().unwrap_or_else(|| serde_json::json!([]));
-    let logged_in = health.get("loggedIn").and_then(|v| v.as_bool()).or_else(|| health.get("result").and_then(|v| v.get("loggedIn")).and_then(|v| v.as_bool()));
-    let worker_id = format!("playwright-profile:{profile_id}");
-    let registration = serde_json::json!({
-      "worker_id": worker_id,
-      "profile_id": profile_id,
-      "pool_id": req.pool_id,
-      "state": if logged_in == Some(false) { "LOGIN_REQUIRED" } else { "READY" },
-      "capabilities": capabilities,
-      "extension_ready": true,
-      "extension_version": health.get("extensionVersion").and_then(|v| v.as_str()),
-      "protocol_version": health.get("protocolVersion").and_then(|v| v.as_u64()),
-      "grok_logged_in": logged_in,
-      "site_sessions": {}, "site_capabilities": {},
-      "current_lease_id": null, "current_job_id": null,
-      "last_heartbeat_at": chrono::Utc::now().to_rfc3339(), "last_error": null
-    });
-    client.post(format!("{}/v1/workers/register", get_donut_browser_api_base_url())).json(&registration).send().await.map_err(|e| format!("Worker registration failed: {e}"))?.error_for_status().map_err(|e| format!("Worker registration failed: {e}"))?;
-    let acquire_url = format!("{}/v1/workers/acquire", get_donut_browser_api_base_url());
-    let response = client.post(acquire_url).json(&req).send().await.map_err(|e| format!("BrowserRuntime unavailable: {e}"))?;
-    if response.status().is_success() { return response.json().await.map_err(|e| format!("Failed to parse AcquireWorkerResponse: {e}")); }
-    let status = response.status(); let body = response.text().await.unwrap_or_default();
-    return Err(format!("Acquire worker failed ({status}): {body}"));
-  }
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_secs(10)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 

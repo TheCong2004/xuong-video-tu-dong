@@ -13,6 +13,12 @@ test('persistent Chromium loads MV3 worker and reuses profile', async () => {
   assert.match(first.serviceWorkerUrl, /^chrome-extension:\/\//);
   const health = await sessionManager.health('fixture-profile');
   assert.equal(health.profileId, 'fixture-profile');
+  const request = { protocol: 'floword-production', protocolVersion: 1, requestId: 'req-1', jobId: 'job-1', stepId: 'image', attemptId: 'attempt-1', leaseId: 'lease-1', profileId: 'fixture-profile', method: 'grok.image.edit', params: {}, createdAt: new Date().toISOString() };
+  const dispatched = await sessionManager.dispatch(request);
+  assert.equal(dispatched.requestId, request.requestId);
+  assert.deepEqual(await sessionManager.dispatch(request), dispatched);
+  const cancelled = await sessionManager.cancel('missing-job');
+  assert.equal(cancelled.cancelled, false);
   const second = await sessionManager.ensureProfile('fixture-profile', { extensionPath: fixture });
   assert.equal(second.serviceWorkerUrl, first.serviceWorkerUrl);
   await sessionManager.stop('fixture-profile');

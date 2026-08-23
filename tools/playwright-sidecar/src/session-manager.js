@@ -1,9 +1,12 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+
+function canonical(value) { if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`; if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`; return JSON.stringify(value); }
 
 class SessionManager {
-  constructor() { this.sessions = new Map(); this.startFlights = new Map(); this.activeRequests = new Map(); this.completedRequests = new Map(); this.completedTtlMs = 30 * 60 * 1000; }
+  constructor() { this.sessions = new Map(); this.startFlights = new Map(); this.activeRequests = new Map(); this.completedRequests = new Map(); this.completedTtlMs = 30 * 60 * 1000; this.maxCompletedRequests = 500; }
   profileDir(id) {
     if (!id || !/^[a-z0-9][a-z0-9-]{0,127}$/i.test(id)) throw new Error('INVALID_PROFILE: profileId is required');
     const root = path.resolve(process.env.FLOWORD_PLAYWRIGHT_PROFILE_ROOT || path.join(process.env.LOCALAPPDATA || process.cwd(), 'Floword', 'playwright-profiles'));
@@ -34,23 +37,27 @@ class SessionManager {
   async ensureGrokPage(s, url = 'https://grok.com/imagine') {
     let page = s.grokPage && !s.grokPage.isClosed() ? s.grokPage : null;
     if (!page && s.managedGrokTabId) page = s.context.pages().find((p) => p.url() === s.managedGrokTabId);
-    if (!page) page = s.context.pages().find((p) => /^https:\/\/(www\.)?grok\.com\//i.test(p.url()));
+    if (!page) {
+      const grokPages = s.context.pages().filter((candidate) => /^https:\/\/(www\.)?grok\.com\//i.test(candidate.url()));
+      if (grokPages.length > 1) throw new Error('AMBIGUOUS_GROK_TAB: multiple Grok tabs exist without a managed mapping');
+      page = grokPages[0];
+    }
     if (!page) page = await s.context.newPage(); if (!/^https:\/\/(www\.)?grok\.com\//i.test(page.url())) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.bringToFront().catch(() => {}); await page.waitForLoadState('domcontentloaded').catch(() => {});
     s.grokPage = page; s.managedGrokTabId = page.url(); s.lastHeartbeat = Date.now(); return page;
   }
-  async bindProfile(s) { const result = await s.worker.evaluate((profileId) => globalThis.__flowordProduction?.bind(profileId), s.profileId); if (!result?.ok) throw new Error(`${result?.error?.code || 'EXTENSION_NOT_READY'}: ${result?.error?.message || 'Profile binding failed'}`); }
+  async bindProfile(s) { let last; for (let attempt = 0; attempt < 30; attempt += 1) { try { const result = await s.worker.evaluate((profileId) => globalThis.__flowordProduction?.bind(profileId), s.profileId); if (result?.ok) return result; last = result?.error || { code: 'CONTENT_SCRIPT_NOT_READY', message: 'Content script has not acknowledged binding' }; if (last.code === 'INVALID_PROFILE') break; } catch (error) { last = { code: 'CONTENT_SCRIPT_NOT_READY', message: error.message }; } await new Promise((resolve) => setTimeout(resolve, 300)); } throw new Error(`${last?.code || 'CONTENT_SCRIPT_BIND_TIMEOUT'}: ${last?.message || 'Profile binding timed out'}`); }
   describe(s, page) { return { profileId: s.profileId, userDataDir: s.userDataDir, extensionId: s.worker?.url().match(/^chrome-extension:\/\/([^/]+)/)?.[1] || null, serviceWorkerUrl: s.worker?.url() || null, grokUrl: page?.url() || null, browserOpen: true, state: s.state, activeRequest: s.activeRequest }; }
   async health(id) { const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); const result = await s.worker.evaluate((profileId) => globalThis.__flowordProduction?.health(profileId), id); if (!result) throw new Error('EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: health bridge returned no result'); s.lastHeartbeat = Date.now(); s.state = result.ok ? (result.result?.status === 'LOGIN_REQUIRED' ? 'LOGIN_REQUIRED' : 'READY') : s.state; return result; }
   async dispatch(request) {
     const { profileId, requestId, jobId } = request; if (!profileId || !requestId || !jobId) throw new Error('INVALID_REQUEST: profileId, requestId and jobId are required');
-    this.pruneCompleted(); const fingerprint = JSON.stringify(request);
+    this.pruneCompleted(); const fingerprint = crypto.createHash('sha256').update(canonical({ requestId, jobId, stepId: request.stepId, attemptId: request.attemptId, leaseId: request.leaseId, profileId, method: request.method, params: request.params })).digest('hex');
     const active = this.activeRequests.get(requestId); if (active) { if (active.fingerprint !== fingerprint) throw new Error('CORRELATION_CONFLICT: requestId was reused with different payload'); return active.promise; }
     const completed = this.completedRequests.get(requestId); if (completed) { if (completed.fingerprint !== fingerprint) throw new Error('CORRELATION_CONFLICT: requestId was reused with different payload'); return completed.result; }
     const s = this.sessions.get(profileId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
     if (s.activeRequest && s.activeRequest.jobId !== jobId) throw new Error('JOB_ALREADY_RUNNING: profile has an active job');
     s.activeRequest = { ...request }; s.state = 'BUSY';
-    const promise = s.worker.evaluate((payload) => globalThis.__flowordProduction?.dispatch(payload), request).then((result) => { this.completedRequests.set(requestId, { fingerprint, result, expiresAt: Date.now() + this.completedTtlMs }); return result; }).finally(() => { if (s.activeRequest?.requestId === requestId) { s.activeRequest = null; s.state = 'READY'; } this.activeRequests.delete(requestId); });
+    const promise = s.worker.evaluate((payload) => globalThis.__flowordProduction?.dispatch(payload), request).then((result) => { if (!result || typeof result !== 'object') throw new Error('INVALID_EXTENSION_RESPONSE: dispatch returned no object'); if (result.protocol !== 'floword-production' || result.requestId !== request.requestId || result.jobId !== request.jobId || result.stepId !== request.stepId || result.attemptId !== request.attemptId || result.leaseId !== request.leaseId || result.profileId !== request.profileId) throw new Error('CORRELATION_MISMATCH: extension response did not echo request identity'); this.completedRequests.set(requestId, { fingerprint, result, expiresAt: Date.now() + this.completedTtlMs }); while (this.completedRequests.size > this.maxCompletedRequests) this.completedRequests.delete(this.completedRequests.keys().next().value); return result; }).finally(() => { if (s.activeRequest?.requestId === requestId) { s.activeRequest = null; s.state = 'READY'; } this.activeRequests.delete(requestId); });
     this.activeRequests.set(requestId, { fingerprint, promise, session: s }); return promise;
   }
   async cancel(jobId) { const s = [...this.sessions.values()].find((x) => x.activeRequest?.jobId === jobId); if (!s) return { cancelled: false, jobId }; const active = s.activeRequest; const cancelRequest = { protocol: 'floword-production', protocolVersion: 1, requestId: `CANCEL_${crypto.randomUUID()}`, jobId: active.jobId, stepId: active.stepId, attemptId: active.attemptId, leaseId: active.leaseId, profileId: active.profileId, method: 'production.task.cancel', params: { targetRequestId: active.requestId }, createdAt: new Date().toISOString() }; const result = await s.worker.evaluate((payload) => globalThis.__flowordProduction?.cancel(payload), cancelRequest); if (!result?.ok) throw new Error(`${result?.error?.code || 'CANCEL_FAILED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`); return { cancelled: true, jobId, requestId: active.requestId, acknowledgment: result }; }
