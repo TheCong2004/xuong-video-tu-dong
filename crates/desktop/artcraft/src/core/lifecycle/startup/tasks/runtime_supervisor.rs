@@ -257,7 +257,7 @@ pub fn start_runtime_supervisor(app: &AppHandle) {
 /// Starts the dev Playwright owner before Donut. Packaged builds may provide
 /// an explicit FLOWORD_PLAYWRIGHT_SIDECAR entrypoint; no duplicate is spawned
 /// when an authenticated Floword runtime already owns port 9223.
-pub fn start_playwright_runtime() {
+pub fn start_playwright_runtime(app: &AppHandle) {
   if let Some(slot) = PLAYWRIGHT_CHILD.get() {
     if let Ok(mut guard) = slot.lock() {
       if let Some(child) = guard.as_mut() {
@@ -280,7 +280,8 @@ pub fn start_playwright_runtime() {
     warn!("PORT_CONFLICT: 127.0.0.1:{PLAYWRIGHT_PORT} is occupied by an incompatible process");
     return;
   }
-  let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| {
+  let resource_dir = app.path().resource_dir().ok();
+  let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| resource_dir.as_ref().map(|root| root.join("playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| {
     let cwd = std::env::current_dir().ok()?;
     [cwd.join("tools/playwright-sidecar/src/server.js"), cwd.join("resources/playwright-sidecar/server.js"), cwd.join("..\\..\\..\\tools\\playwright-sidecar\\src\\server.js")].into_iter().find(|path| path.is_file())
   });
@@ -288,7 +289,7 @@ pub fn start_playwright_runtime() {
     warn!("Playwright sidecar entrypoint not found; Floword will report PLAYWRIGHT_RUNTIME_OFFLINE");
     return;
   };
-  let node = resolve_playwright_node();
+  let node = resolve_playwright_node(app);
   let log_dir = std::env::var_os("FLOWORD_LOG_DIR").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("Floword"));
   if let Err(error) = std::fs::create_dir_all(&log_dir) {
     warn!("failed to create Playwright log directory: {error}");
@@ -310,6 +311,16 @@ pub fn start_playwright_runtime() {
   };
   let mut command = background_command(Command::new(node));
   command.arg(&sidecar).current_dir(sidecar.parent().unwrap_or(Path::new("."))).env("PLAYWRIGHT_SIDECAR_PORT", PLAYWRIGHT_PORT.to_string()).env("FLOWORD_PARENT_PID", std::process::id().to_string()).stdin(Stdio::null()).stdout(Stdio::from(stdout)).stderr(Stdio::from(stderr));
+  if let Some(root) = resource_dir.as_ref() {
+    if root.join("playwright").is_dir() {
+      command.env("PLAYWRIGHT_BROWSERS_PATH", root.join("playwright"));
+    }
+  }
+  if std::env::var_os("FLOWORD_CHROMEX_EXTENSION_PATH").is_none() {
+    if let Some(path) = resource_dir.as_ref().map(|root| root.join("chromex-extension")).filter(|path| path.join("manifest.json").is_file()) {
+      command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path);
+    }
+  }
   if std::env::var_os("FLOWORD_CHROMEX_EXTENSION_PATH").is_none() {
     if let Some(path) = std::env::current_dir().ok().and_then(|cwd| [cwd.join("resources/chromex-extension"), cwd.join("..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod")].into_iter().find(|path| path.join("manifest.json").is_file())) {
       command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path);
@@ -331,15 +342,27 @@ pub fn start_playwright_runtime() {
     *guard = Some(child);
   }
   info!("Started Floword Playwright runtime (pid={pid})");
-  std::thread::spawn(move || {
-    let result = slot.lock().ok().and_then(|mut guard| guard.as_mut().map(Child::wait));
-    if let Some(result) = result {
-      warn!("Playwright sidecar exited (pid={pid}): {result:?}");
-    }
-    if let Some(slot) = PLAYWRIGHT_CHILD.get() {
-      if let Ok(mut guard) = slot.lock() {
-        guard.take();
-      }
+  std::thread::spawn(move || loop {
+    // Never hold the global child mutex while waiting. Shutdown must be able
+    // to acquire it and terminate the process tree immediately.
+    let result = slot.lock().ok().and_then(|mut guard| guard.as_mut().map(Child::try_wait));
+    match result {
+      Some(Ok(Some(status))) => {
+        warn!("Playwright sidecar exited (pid={pid}): {status}");
+        if let Ok(mut guard) = slot.lock() {
+          guard.take();
+        }
+        break;
+      },
+      Some(Ok(None)) => std::thread::sleep(Duration::from_millis(250)),
+      Some(Err(error)) => {
+        warn!("Playwright sidecar monitor failed (pid={pid}): {error}");
+        if let Ok(mut guard) = slot.lock() {
+          guard.take();
+        }
+        break;
+      },
+      None => break,
     }
   });
 }
@@ -354,9 +377,16 @@ pub fn stop_playwright_runtime() {
   }
 }
 
-fn resolve_playwright_node() -> PathBuf {
+fn resolve_playwright_node(app: &AppHandle) -> PathBuf {
   if let Some(path) = std::env::var_os("FLOWORD_PLAYWRIGHT_NODE") {
     return PathBuf::from(path);
+  }
+  if let Ok(resources) = app.path().resource_dir() {
+    for candidate in [resources.join("node/node.exe"), resources.join("node.exe")] {
+      if candidate.is_file() {
+        return candidate;
+      }
+    }
   }
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {

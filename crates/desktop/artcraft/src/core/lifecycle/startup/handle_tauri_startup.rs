@@ -40,7 +40,10 @@ pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_con
   // Floword owns the headless Donut runtime. It is intentionally started in a
   // background thread so the Studio can render while runtime health is pending.
   let app_for_donut = app.clone();
-  std::thread::spawn(move || { start_playwright_runtime(); start_runtime_supervisor(&app_for_donut); });
+  std::thread::spawn(move || {
+    start_playwright_runtime(&app_for_donut);
+    start_runtime_supervisor(&app_for_donut);
+  });
 
   // Python backend: capcut-mate owns :30000 (the single always-on Python port).
   // (artcraft-server.exe / spawn_unified_backend removed — it fought capcut-mate

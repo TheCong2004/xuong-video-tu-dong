@@ -48,7 +48,7 @@ use crate::core::lifecycle::startup::setup_main_window::setup_main_window;
 use crate::core::lifecycle::startup::tasks::spawn_auxiliary_backends::AuxiliaryBackendProcesses;
 use crate::core::lifecycle::startup::tasks::spawn_capcut_mate_backend::CapcutMateProcess;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::OmniRouteProcess;
-use crate::core::lifecycle::startup::tasks::runtime_supervisor::{get_donut_runtime_status, RuntimeSupervisor};
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::{get_donut_runtime_status, stop_playwright_runtime, RuntimeSupervisor};
 use crate::core::state::app_env_configs::app_env_configs::AppEnvConfigs;
 use crate::core::state::app_preferences::app_preferences_manager::load_app_preferences_or_default;
 use crate::core::state::artcraft_platform_info::ArtcraftPlatformInfo;
@@ -513,6 +513,7 @@ pub fn run() {
       if let Some(supervisor) = app.try_state::<RuntimeSupervisor>() {
         supervisor.stop();
       }
+      stop_playwright_runtime();
     }
   });
 }

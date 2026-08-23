@@ -34,21 +34,29 @@ function files(root, current = root) {
   });
 }
 
+function findChrome(root) {
+  return files(root).find((file) => path.basename(file).toLowerCase() === 'chrome.exe');
+}
+
 const nodeRuntime = required('FLOWORD_NODE_RUNTIME');
 const chromium = required('FLOWORD_CHROMIUM_DIR');
 const extension = required('FLOWORD_CHROMEX_EXTENSION');
+if (!findChrome(chromium)) throw new Error(`FLOWORD_CHROMIUM_DIR contains no chrome.exe: ${chromium}`);
 
 copy(nodeRuntime, path.join(resources, 'node', path.basename(nodeRuntime)));
-copy(chromium, path.join(resources, 'playwright', 'chromium'));
+copy(chromium, path.join(resources, 'playwright'));
 copy(extension, path.join(resources, 'chromex-extension'));
 copy(path.join(sidecar, 'src'), path.join(resources, 'playwright-sidecar', 'src'));
 copy(path.join(sidecar, 'package.json'), path.join(resources, 'playwright-sidecar', 'package.json'));
 copy(path.join(sidecar, 'package-lock.json'), path.join(resources, 'playwright-sidecar', 'package-lock.json'));
 copy(path.join(sidecar, 'node_modules'), path.join(resources, 'playwright-sidecar', 'node_modules'));
 
+const manifestPath = path.join(resources, 'runtime-manifest.sha256.json');
+fs.rmSync(manifestPath, { force: true });
 const manifest = {};
 for (const file of files(resources).sort()) {
   const relative = path.relative(resources, file).replaceAll(path.sep, '/');
+  if (relative === 'runtime-manifest.sha256.json') continue;
   manifest[relative] = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
 fs.writeFileSync(path.join(resources, 'runtime-manifest.sha256.json'), `${JSON.stringify({ generatedAt: new Date().toISOString(), files: manifest }, null, 2)}\n`);
