@@ -19,7 +19,7 @@ pub fn extract_midjourney_webview_cookies(webview: &WebviewWindow) -> AnyhowResu
   Ok(cookie_store)
 }
 
-fn get_all_midjourney_cookies(webview: &WebviewWindow) -> AnyhowResult<Vec<Cookie>> {
+fn get_all_midjourney_cookies(webview: &WebviewWindow) -> AnyhowResult<Vec<Cookie<'_>>> {
   // NB: WWW domain contains the auth/session cookies.
   // Root domain contains some other cookies, such as Cloudflare.
   let www_cookies = webview.cookies_for_url(WWW_COOKIE_URL.clone())?;

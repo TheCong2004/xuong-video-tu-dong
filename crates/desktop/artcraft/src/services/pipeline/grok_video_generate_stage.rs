@@ -1,5 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_donut_browser_api_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, LeaseStatus};
+use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_donut_browser_api_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, LeaseStatus, GROK_VIDEO_GENERATE_CAPABILITY};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use crate::services::pipeline::grok_image_edit_stage::{compute_sha256, detect_image_mime};
 use log::{error, info, warn};
@@ -168,7 +168,7 @@ pub async fn execute_grok_video_generate(input: GrokVideoGenerateInput, attempt_
   let workflow_root_buf = input.workflow_root.clone();
 
   // Tier 1: Acquire exclusive lease
-  let acq_req = AcquireWorkerRequest { job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), capability: "grok.video.generate".to_string(), pool_id: None, profile_id: input.browser_profile_id.clone(), ttl_seconds: Some(300) };
+  let acq_req = AcquireWorkerRequest { job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), capability: GROK_VIDEO_GENERATE_CAPABILITY.to_string(), pool_id: None, profile_id: input.browser_profile_id.clone(), ttl_seconds: Some(300) };
 
   let acq_res = acquire_worker(acq_req).await.map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
 

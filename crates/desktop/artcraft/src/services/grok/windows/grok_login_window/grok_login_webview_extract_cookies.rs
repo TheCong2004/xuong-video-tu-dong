@@ -21,7 +21,7 @@ pub fn grok_login_webview_extract_cookies(webview: &WebviewWindow) -> AnyhowResu
   Ok(cookie_store)
 }
 
-fn get_all_grok_cookies(webview: &WebviewWindow) -> AnyhowResult<Vec<Cookie>> {
+fn get_all_grok_cookies(webview: &WebviewWindow) -> AnyhowResult<Vec<Cookie<'_>>> {
   //let www_cookies = webview.cookies_for_url(WWW_COOKIE_URL.clone())?;
   let root_cookies = webview.cookies_for_url(ROOT_COOKIE_URL.clone())?;
 

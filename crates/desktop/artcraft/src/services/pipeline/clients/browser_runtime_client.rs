@@ -5,6 +5,10 @@ use std::time::Duration;
 
 const DEFAULT_DONUT_BROWSER_API_URL: &str = "http://127.0.0.1:10108";
 
+pub const GROK_IMAGE_EDIT_CAPABILITY: &str = "grok.image.edit";
+pub const GROK_IMAGE_EXPAND_9_16_CAPABILITY: &str = "grok.image.expand_9_16";
+pub const GROK_VIDEO_GENERATE_CAPABILITY: &str = "grok.video.generate";
+
 pub fn get_donut_browser_api_base_url() -> String {
   std::env::var("DONUT_BROWSER_API_URL").or_else(|_| std::env::var("BROWSER_RUNTIME_URL")).unwrap_or_else(|_| DEFAULT_DONUT_BROWSER_API_URL.to_string()).trim_end_matches('/').to_string()
 }
@@ -110,21 +114,16 @@ pub async fn launch_donut_profile(profile_id: &str, target_url: Option<&str>) ->
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_secs(15)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
+  // `/run` is also the navigation boundary for an existing profile. Do not
+  // return early when it is already running: a blank tab still needs to be
+  // navigated to the target site so the extension can report capabilities.
+
   let url = format!("{base_url}/v1/profiles/{profile_id}/run");
   info!("[DonutAutoLaunch] Auto-launching profile: {profile_id} (target_url={:?})", target_url);
 
-  let req_body = RunProfileRequest {
-    url: target_url.map(|u| u.to_string()),
-    headless: Some(false),
-  };
+  let req_body = RunProfileRequest { url: target_url.map(|u| u.to_string()), headless: Some(false) };
 
-  let resp = client
-    .post(&url)
-    .header("X-Floword-Integration", "1")
-    .json(&req_body)
-    .send()
-    .await
-    .map_err(|e| format!("Auto-launch profile request failed: {e}"))?;
+  let resp = client.post(&url).header("X-Floword-Integration", "1").json(&req_body).send().await.map_err(|e| format!("Auto-launch profile request failed: {e}"))?;
   if resp.status().is_success() {
     info!("[DonutAutoLaunch] Profile {profile_id} launched successfully");
     Ok(())
@@ -224,7 +223,18 @@ fn resolve_shared_donut_data_dir() -> Option<std::path::PathBuf> {
 
   #[cfg(debug_assertions)]
   {
-    return std::env::var_os("LOCALAPPDATA").map(|local_app_data| std::path::PathBuf::from(local_app_data).join("DonutBrowserDev"));
+    // `cargo tauri dev` runs the Donut Manager against the Dev catalog. Keep
+    // the Floword client on that same catalog; otherwise the runtime can see
+    // a different profile registry than the GUI (e.g. `aa` instead of `6fb…`).
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+      let local = std::path::PathBuf::from(local_app_data);
+      let dev = local.join("DonutBrowserDev");
+      if dev.join("profiles").is_dir() {
+        return Some(dev);
+      }
+      return Some(local.join("DonutBrowser"));
+    }
+    return None;
   }
 
   #[cfg(not(debug_assertions))]
@@ -246,7 +256,7 @@ pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerRe
     Err(_) => {
       ensure_runtime_alive().await;
       client.post(&url).json(&req).send().await.map_err(|e| format!("BrowserRuntime unavailable: {e}"))?
-    }
+    },
   };
 
   if resp.status().is_success() {
@@ -258,8 +268,9 @@ pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerRe
   let status = resp.status();
   let body = resp.text().await.unwrap_or_default();
 
-  // Auto-launch handling: If worker is offline or capability is unavailable and profile_id is specified
-  let is_not_ready = status.as_u16() == 409 || status.as_u16() == 501 || status.as_u16() == 503 || body.contains("CAPABILITY_UNAVAILABLE") || body.contains("NO_AVAILABLE_WORKER") || body.contains("BRIDGE_DISCONNECTED") || body.contains("OFFLINE");
+  // Auto-launch only for an actually offline/disconnected profile. A
+  // capability conflict must not launch a second browser instance.
+  let is_not_ready = (status.as_u16() == 503 || status.as_u16() == 409) && (body.contains("BRIDGE_DISCONNECTED") || body.contains("OFFLINE") || body.contains("EXTENSION_UNAVAILABLE") || body.contains("NO_AVAILABLE_WORKER"));
 
   if is_not_ready && req.profile_id.is_some() {
     let pid = req.profile_id.as_deref().unwrap();
@@ -391,12 +402,7 @@ pub async fn list_donut_profiles() -> Result<ListDonutProfilesResponse, String> 
   let url = format!("{base_url}/v1/profiles");
   info!("[DonutProfiles] Fetching profile catalog: {url}");
 
-  let resp = client
-    .get(&url)
-    .header("X-Floword-Integration", "1")
-    .send()
-    .await
-    .map_err(|e| format!("List profiles failed: {e}"))?;
+  let resp = client.get(&url).header("X-Floword-Integration", "1").send().await.map_err(|e| format!("List profiles failed: {e}"))?;
 
   if resp.status().is_success() {
     resp.json::<ListDonutProfilesResponse>().await.map_err(|e| format!("Failed to parse ListDonutProfilesResponse: {e}"))

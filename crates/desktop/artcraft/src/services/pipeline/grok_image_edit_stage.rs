@@ -1,5 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse, LeaseStatus};
+use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse, LeaseStatus, GROK_IMAGE_EDIT_CAPABILITY};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
 use reqwest::Client;
@@ -195,7 +195,7 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
   };
 
   // 1. Acquire exclusive worker lease
-  let lease = acquire_worker(AcquireWorkerRequest { pool_id: None, profile_id: input.browser_profile_id.clone(), capability: "grok.image.edit".to_string(), job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), ttl_seconds: Some(120) }).await.map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
+  let lease = acquire_worker(AcquireWorkerRequest { pool_id: None, profile_id: input.browser_profile_id.clone(), capability: GROK_IMAGE_EDIT_CAPABILITY.to_string(), job_id: job_id.clone(), step_id: step_id.to_string(), attempt_id: attempt_id.to_string(), ttl_seconds: Some(120) }).await.map_err(|e| format!("Failed to acquire worker lease: {e}"))?;
 
   let lease_id = lease.lease_id.clone();
   let worker_id = lease.worker_id.clone();

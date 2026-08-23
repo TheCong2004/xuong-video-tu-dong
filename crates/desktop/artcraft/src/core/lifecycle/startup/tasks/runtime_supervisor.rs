@@ -82,15 +82,15 @@ impl RuntimeSupervisor {
           }
           info!("Attached to existing Floword runtime {} (pid={:?}) on http://{HOST}:{PORT}", health.runtime, health.pid);
           return;
-        }
+        },
         Some(health) => {
           self.set_failure(RuntimeSupervisorState::PortConflict, format!("127.0.0.1:{PORT} is occupied by incompatible runtime {} (protocol {:?} v{:?})", health.runtime, health.protocol, health.protocol_version));
           return;
-        }
+        },
         None => {
           self.set_failure(RuntimeSupervisorState::PortConflict, "127.0.0.1:10108 is occupied by a process that does not expose a valid Floword runtime health endpoint");
           return;
-        }
+        },
       }
     }
 
@@ -276,8 +276,8 @@ fn resolve_runtime_executable(app: &AppHandle) -> Option<PathBuf> {
 }
 
 /// Keep the embedded runtime on the same profile catalog as Donut Manager.
-/// Production can provide an explicit root; debug runs use the conventional
-/// DonutBrowserDev root so a debug Manager and Floword share profile UUIDs.
+/// Production can provide an explicit root; debug runs prefer the packaged
+/// Manager's `DonutBrowser` catalog and fall back to `DonutBrowserDev`.
 fn resolve_shared_donut_data_dir() -> Option<PathBuf> {
   if let Some(path) = std::env::var_os("FLOWORD_DONUT_DATA_DIR") {
     if !path.is_empty() {
@@ -287,7 +287,15 @@ fn resolve_shared_donut_data_dir() -> Option<PathBuf> {
 
   #[cfg(debug_assertions)]
   {
-    return std::env::var_os("LOCALAPPDATA").map(|local_app_data| PathBuf::from(local_app_data).join("DonutBrowserDev"));
+    if let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") {
+      let local = PathBuf::from(local_app_data);
+      let dev = local.join("DonutBrowserDev");
+      if dev.join("profiles").is_dir() {
+        return Some(dev);
+      }
+      return Some(local.join("DonutBrowser"));
+    }
+    return None;
   }
 
   #[cfg(not(debug_assertions))]
@@ -310,12 +318,7 @@ fn runtime_health() -> Option<RuntimeHealth> {
   }
   let body = response.split("\r\n\r\n").nth(1)?;
   let value = serde_json::from_str::<serde_json::Value>(body).ok()?;
-  Some(RuntimeHealth {
-    runtime: value.get("runtime")?.as_str()?.to_string(),
-    pid: value.get("pid").and_then(serde_json::Value::as_u64).map(|pid| pid as u32),
-    protocol: value.get("protocol").and_then(serde_json::Value::as_str).map(str::to_string),
-    protocol_version: value.get("protocolVersion").and_then(serde_json::Value::as_u64).map(|version| version as u32),
-  })
+  Some(RuntimeHealth { runtime: value.get("runtime")?.as_str()?.to_string(), pid: value.get("pid").and_then(serde_json::Value::as_u64).map(|pid| pid as u32), protocol: value.get("protocol").and_then(serde_json::Value::as_str).map(str::to_string), protocol_version: value.get("protocolVersion").and_then(serde_json::Value::as_u64).map(|version| version as u32) })
 }
 
 fn terminate_child_tree(child: &mut Child) {

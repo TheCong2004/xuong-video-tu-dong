@@ -16,7 +16,7 @@ pub fn extract_sora_webview_cookies(webview: &WebviewWindow) -> AnyhowResult<Str
   Ok(cookie_string)
 }
 
-fn get_all_chatgpt_cookies(webview: &WebviewWindow) -> AnyhowResult<Vec<Cookie>> {
+fn get_all_chatgpt_cookies(webview: &WebviewWindow) -> AnyhowResult<Vec<Cookie<'_>>> {
   let cookies = webview.cookies_for_url(CHAT_GPT_ROOT_COOKIE_URL.clone())?;
   Ok(cookies)
 }

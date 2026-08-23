@@ -148,6 +148,19 @@ fn resolve_omniroute_dir(app: &AppHandle) -> Option<PathBuf> {
 
   let mut candidates: Vec<PathBuf> = Vec::new();
 
+  // In a debug checkout the packaged resource directory may contain the
+  // standalone `server.js` wrapper without its `.build/next` output. Prefer
+  // the source tree in that case so we can run the dev wrapper instead of
+  // repeatedly spawning a process that immediately exits with “production
+  // build not found”. The child is still created through `background_command`
+  // and therefore never opens a console window on Windows.
+  #[cfg(debug_assertions)]
+  {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    push_if(&mut candidates, manifest.join("../../../frontend/apps/artcraft/app/src/pages/OmniRoute"));
+    push_if(&mut candidates, manifest.join("../../../../frontend/apps/artcraft/app/src/pages/OmniRoute"));
+  }
+
   // Bundled with installed / portable app
   if let Some(dir) = exe_dir() {
     push_if(&mut candidates, dir.join("OmniRoute"));

@@ -1088,10 +1088,35 @@ impl SerializeMarker for OpenDonutBrowserGuiResponse {}
 pub async fn open_donut_browser_gui_command() -> ResponseOrError<OpenDonutBrowserGuiResponse, FlowordErrorDetails> {
   info!("[Floword] Opening Donut Browser Desktop App");
 
-  // Launch Donut Browser Desktop App Window (Tauri Desktop App)
-  let _ = std::process::Command::new("cmd")
-    .args(["/c", "cd /d D:\\capcutpolot\\donutbrowser && pnpm tauri dev"])
-    .spawn();
+  // Launch the packaged Donut Manager UI only. Never invoke Cargo, pnpm, or a
+  // source-tree dev watcher from a production Floword process.
+  let mut candidates = Vec::new();
+  if let Some(path) = std::env::var_os("DONUT_BROWSER_GUI_EXE") {
+    candidates.push(std::path::PathBuf::from(path));
+  }
+  if let Ok(current_exe) = std::env::current_exe() {
+    if let Some(dir) = current_exe.parent() {
+      candidates.push(dir.join("donutbrowser.exe"));
+      candidates.push(dir.join("resources").join("donutbrowser.exe"));
+      // ArtCraft's Tauri bundle preserves the resource directory, so the
+      // Donut Manager executable is nested under resources/donut-runtime.
+      candidates.push(dir.join("resources").join("donut-runtime").join("donutbrowser.exe"));
+    }
+  }
+  // Development builds run from target/{debug,release}, while the checked-in
+  // artifact lives beside this crate. Keep this fallback source-tree based so
+  // the button also works when ArtCraft itself is launched from Cargo.
+  if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
+    candidates.push(std::path::PathBuf::from(manifest_dir).join("resources").join("donut-runtime").join("donutbrowser.exe"));
+  }
+  let Some(exe) = candidates.into_iter().find(|path| path.is_file()) else {
+    warn!("[Floword] Packaged Donut Manager UI was not found; runtime remains available without opening a dev watcher");
+    return Ok(OpenDonutBrowserGuiResponse { success: false }.into());
+  };
+  if let Err(error) = std::process::Command::new(&exe).spawn() {
+    warn!("[Floword] Failed to launch Donut Manager UI {}: {error}", exe.display());
+    return Ok(OpenDonutBrowserGuiResponse { success: false }.into());
+  }
 
   Ok(OpenDonutBrowserGuiResponse { success: true }.into())
 }
