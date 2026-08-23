@@ -69,3 +69,18 @@ test('dispatch timeout sends a cancel acknowledgement before releasing the profi
     sessionManager.activeRequests.clear();
   }
 });
+
+test('cancel is fail-closed for missing or mismatched active requests', async () => {
+  const missing = await sessionManager.cancel('missing-job', 'req-missing');
+  assert.equal(missing.cancelled, false);
+  assert.equal(missing.acknowledgment.ok, false);
+  const session = { profileId: 'cancel-session', activeRequest: { jobId: 'job-1', requestId: 'req-1' } };
+  sessionManager.sessions.set(session.profileId, session);
+  try {
+    const mismatch = await sessionManager.cancel('job-1', 'req-other');
+    assert.equal(mismatch.cancelled, false);
+    assert.equal(mismatch.acknowledgment.code, 'CORRELATION_MISMATCH');
+  } finally {
+    sessionManager.sessions.delete(session.profileId);
+  }
+});

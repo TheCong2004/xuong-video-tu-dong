@@ -59,6 +59,10 @@ impl LeaseGuard {
       let _ = release_lease(&self.lease_id).await;
     }
   }
+
+  fn abandon_to_reaper_without_release(&mut self) {
+    self.released = true;
+  }
 }
 
 impl Drop for LeaseGuard {
@@ -319,10 +323,20 @@ pub async fn execute_grok_expand_9_16(input: GrokExpand916Input, attempt_id: &st
     if was_cancelled {
       info!("[FLOWORD][CANCEL] Job cancelled in-flight! Dispatching cancel request to worker {worker_id}");
       let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", get_donut_browser_api_base_url(), worker_id, job_id);
-      let cancel_response = client.post(cancel_url).json(&serde_json::json!({"stepId": step_id, "attemptId": attempt_id, "leaseId": lease_id, "profileId": profile_id, "targetRequestId": request_id})).send().await.map_err(|e| format!("Cancel request failed: {e}"))?;
-      let cancel_body: serde_json::Value = cancel_response.json().await.unwrap_or_default();
-      if !cancel_body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-        return Err(format!("CANCEL_UNCONFIRMED: {cancel_body}"));
+      let cancel_result = match client.post(cancel_url).json(&serde_json::json!({"stepId": step_id, "attemptId": attempt_id, "leaseId": lease_id, "profileId": profile_id, "targetRequestId": request_id})).send().await {
+        Ok(response) => response.json::<serde_json::Value>().await.map_err(|error| error.to_string()),
+        Err(error) => Err(error.to_string()),
+      };
+      match cancel_result {
+        Ok(body) if body.get("ok").and_then(|v| v.as_bool()) == Some(true) => {},
+        Ok(body) => {
+          guard.abandon_to_reaper_without_release();
+          return Err(format!("CANCEL_UNCONFIRMED: {body}"));
+        },
+        Err(error) => {
+          guard.abandon_to_reaper_without_release();
+          return Err(format!("CANCEL_UNCONFIRMED: {error}"));
+        },
       }
       guard.release().await;
       return Err("CANCELLED".to_string());

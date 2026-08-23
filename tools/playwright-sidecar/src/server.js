@@ -23,7 +23,7 @@ app.get('/v1/profiles/:profileId/pages', route((req) => sessionManager.getPages(
 app.post('/v1/profiles/:profileId/dispatch', route((req) => sessionManager.dispatch({ ...(req.body || {}), profileId: req.params.profileId })));
 app.post('/v1/profiles/:profileId/trace/start', route((req) => sessionManager.startTrace(req.params.profileId)));
 app.post('/v1/profiles/:profileId/trace/stop', route((req) => sessionManager.stopTrace(req.params.profileId, req.body?.outputPath)));
-app.post('/v1/jobs/:jobId/cancel', route((req) => sessionManager.cancel(req.params.jobId)));
+app.post('/v1/jobs/:jobId/cancel', route((req) => sessionManager.cancel(req.params.jobId, req.body?.targetRequestId)));
 
 // Backward-compatible endpoints used by the existing developer tooling.
 app.post('/connect', route((req) => sessionManager.ensureProfile(req.body.profileId, req.body)));

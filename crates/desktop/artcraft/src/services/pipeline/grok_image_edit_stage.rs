@@ -1,5 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse, LeaseStatus, GROK_IMAGE_EDIT_CAPABILITY};
+use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_donut_browser_api_base_url, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse, LeaseStatus, GROK_IMAGE_EDIT_CAPABILITY};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
 use reqwest::Client;
@@ -57,6 +57,12 @@ impl LeaseGuard {
       self.released = true;
       let _ = release_lease(&self.lease_id).await;
     }
+  }
+
+  /// Keep the authoritative lease for the runtime reaper when cancellation
+  /// was not confirmed. Dropping this guard must not release a still-running job.
+  fn abandon_to_reaper_without_release(&mut self) {
+    self.released = true;
   }
 }
 
@@ -285,12 +291,29 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
 
     if was_cancelled {
       info!("[GrokImageEdit] Job cancelled in-flight! Dispatching cancel request to worker {worker_id}");
-      let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", bridge_base, worker_id, job_id);
-      let cancel_response = client.post(cancel_url).json(&serde_json::json!({"stepId": step_id, "attemptId": attempt_id, "leaseId": lease_id, "profileId": profile_id, "targetRequestId": request_id})).send().await.map_err(|e| format!("Cancel request failed: {e}"))?;
-      let cancel_body: serde_json::Value = cancel_response.json().await.unwrap_or_default();
-      if !cancel_body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
-        return Err(format!("CANCEL_UNCONFIRMED: {cancel_body}"));
-      }
+      let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", get_donut_browser_api_base_url(), worker_id, job_id);
+      let cancel_result = match client.post(cancel_url).json(&serde_json::json!({"stepId": step_id, "attemptId": attempt_id, "leaseId": lease_id, "profileId": profile_id, "targetRequestId": request_id})).send().await {
+        Ok(response) => response.json::<serde_json::Value>().await.map_err(|error| error.to_string()),
+        Err(error) => Err(error.to_string()),
+      };
+      let cancel_body = match cancel_result {
+        Ok(body) if body.get("ok").and_then(|v| v.as_bool()) == Some(true) => body,
+        Ok(body) => {
+          heartbeat_running.store(false, Ordering::Relaxed);
+          heartbeat_task.abort();
+          lease_guard.abandon_to_reaper_without_release();
+          return Err(format!("CANCEL_UNCONFIRMED: {body}"));
+        },
+        Err(error) => {
+          heartbeat_running.store(false, Ordering::Relaxed);
+          heartbeat_task.abort();
+          lease_guard.abandon_to_reaper_without_release();
+          return Err(format!("CANCEL_UNCONFIRMED: {error}"));
+        },
+      };
+      let _ = cancel_body;
+      heartbeat_running.store(false, Ordering::Relaxed);
+      heartbeat_task.abort();
       lease_guard.release().await;
       return Err("CANCELLED".to_string());
     }

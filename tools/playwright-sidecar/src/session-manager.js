@@ -120,7 +120,22 @@ class SessionManager {
     })();
     this.activeRequests.set(requestId, { fingerprint, promise, session: s }); return promise;
   }
-  async cancel(jobId) { const s = [...this.sessions.values()].find((x) => x.activeRequest?.jobId === jobId); if (!s) return { cancelled: false, jobId }; const active = s.activeRequest; const result = await this.cancelRequest(s, active); return { cancelled: true, jobId, ...result }; }
+  async cancel(jobId, targetRequestId) {
+    const s = [...this.sessions.values()].find((x) => x.activeRequest?.jobId === jobId);
+    if (!s) return { cancelled: false, jobId, requestId: targetRequestId || null, acknowledgment: { ok: false, code: 'JOB_NOT_FOUND' } };
+    const active = s.activeRequest;
+    if (targetRequestId && active.requestId !== targetRequestId) return { cancelled: false, jobId, requestId: targetRequestId, acknowledgment: { ok: false, code: 'CORRELATION_MISMATCH' } };
+    const result = await this.cancelRequest(s, active);
+    const settled = await Promise.race([
+      active.promise.then(() => true).catch(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 15000)),
+    ]);
+    if (!settled) {
+      s.state = 'RECONCILING';
+      return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } };
+    }
+    return { cancelled: true, jobId, ...result };
+  }
   pruneCompleted() { const now = Date.now(); for (const [id, entry] of this.completedRequests) if (entry.expiresAt <= now) this.completedRequests.delete(id); }
   async stop(id) { const s = this.sessions.get(id); if (!s) return { stopped: false, profileId: id }; await s.context.close(); this.sessions.delete(id); return { stopped: true, profileId: id }; }
   async getPages(id) { const s = this.sessions.get(id); if (!s) return []; return Promise.all(s.context.pages().map(async (p, index) => ({ index, url: p.url(), title: await p.title().catch(() => ''), managed: p === s.grokPage }))); }
