@@ -38,6 +38,23 @@ app.post('/trace/stop', route((req) => actionRunner.stopTrace(req.body.outputPat
 app.post('/cancel', route((req) => sessionManager.cancel(req.body.jobId)));
 app.post('/disconnect', route(() => sessionManager.disconnect()));
 
+// Express' JSON parser raises a body-parser `entity.too.large` error before a
+// route is entered. Keep that failure machine-readable so ArtCraft can reject
+// the request without parsing an HTML error page.
+app.use((err, _req, res, next) => {
+  if (err?.type === 'entity.too.large' || err?.status === 413) {
+    return res.status(413).json({
+      error: {
+        code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request payload exceeds the configured sidecar limit',
+        details: {},
+        retryable: false,
+      },
+    });
+  }
+  return next(err);
+});
+
 const server = app.listen(PORT, '127.0.0.1', () => console.log(`Floword Playwright runtime listening on 127.0.0.1:${PORT}`));
 const shutdown = async () => { await sessionManager.disconnect(); server.close(() => process.exit(0)); };
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);
