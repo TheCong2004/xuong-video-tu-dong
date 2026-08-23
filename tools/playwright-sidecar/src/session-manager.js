@@ -84,12 +84,25 @@ class SessionManager {
   async cancelRequest(s, active, timeoutMs = 10000) {
     const worker = await this.ensureWorker(s);
     const cancelRequest = { protocol: 'floword-production', protocolVersion: 1, requestId: `CANCEL_${crypto.randomUUID()}`, jobId: active.jobId, stepId: active.stepId, attemptId: active.attemptId, leaseId: active.leaseId, profileId: active.profileId, method: 'production.task.cancel', params: { targetRequestId: active.requestId }, createdAt: new Date().toISOString() };
+    const cancelRequestId = cancelRequest.requestId;
     const cancelPromise = worker.evaluate((payload) => globalThis.__flowordProduction?.cancel(payload), cancelRequest);
     let cancelTimer;
     try {
       const result = await Promise.race([cancelPromise, new Promise((_, reject) => { cancelTimer = setTimeout(() => reject(new Error('CANCEL_TIMEOUT: cancellation acknowledgement timed out')), Math.min(Math.max(timeoutMs, 1000), 15000)); })]);
-      if (result?.protocol && (result.protocol !== 'floword-production' || result.protocolVersion !== 1)) throw new Error('CANCEL_UNCONFIRMED: cancellation protocol mismatch');
-      if (result?.ok !== true || result?.result?.cancelled !== true) throw new Error(`${result?.error?.code || 'CANCEL_UNCONFIRMED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`);
+      const valid = result?.protocol === 'floword-production' &&
+        result?.protocolVersion === 1 &&
+        result?.ok === true &&
+        result?.result?.cancelled === true &&
+        result?.requestId === cancelRequestId &&
+        result?.jobId === active.jobId &&
+        result?.stepId === active.stepId &&
+        result?.attemptId === active.attemptId &&
+        result?.leaseId === active.leaseId &&
+        result?.profileId === active.profileId;
+      if (!valid) {
+        const correlationMismatch = result && (result.requestId !== cancelRequestId || result.jobId !== active.jobId || result.stepId !== active.stepId || result.attemptId !== active.attemptId || result.leaseId !== active.leaseId || result.profileId !== active.profileId);
+        throw new Error(`${correlationMismatch ? 'CORRELATION_MISMATCH' : 'CANCEL_UNCONFIRMED'}: cancellation acknowledgement is incomplete or invalid`);
+      }
       return { cancelled: true, requestId: active.requestId, acknowledgment: result };
     } finally {
       clearTimeout(cancelTimer);

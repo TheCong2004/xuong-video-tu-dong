@@ -30,6 +30,10 @@ function request(overrides = {}) {
   return { protocol: 'floword-production', protocolVersion: 1, requestId: 'req-unit', jobId: 'job-unit', stepId: 'image', attemptId: 'attempt-1', leaseId: 'lease-1', profileId: 'unit-session', method: 'grok.image.edit', params: {}, ...overrides };
 }
 
+function cancelAck(payload, overrides = {}) {
+  return { protocol: 'floword-production', protocolVersion: 1, ok: true, requestId: payload.requestId, jobId: payload.jobId, stepId: payload.stepId, attemptId: payload.attemptId, leaseId: payload.leaseId, profileId: payload.profileId, result: { cancelled: true }, ...overrides };
+}
+
 test('ensureWorker failure does not poison the next dispatch', async () => {
   const session = { profileId: 'unit-session', worker: {}, context: { serviceWorkers: () => [] }, state: 'READY', activeRequest: null };
   sessionManager.sessions.set(session.profileId, session);
@@ -38,7 +42,7 @@ test('ensureWorker failure does not poison the next dispatch', async () => {
   await assert.rejects(sessionManager.dispatch(request()), /CONTENT_SCRIPT_NOT_READY/);
   assert.equal(session.activeRequest, null);
   assert.equal(sessionManager.activeRequests.size, 0);
-  const worker = { evaluate: async (_fn, payload) => ({ protocol: 'floword-production', protocolVersion: 1, ok: true, requestId: payload.requestId, jobId: payload.jobId, stepId: payload.stepId, attemptId: payload.attemptId, leaseId: payload.leaseId, profileId: payload.profileId }) };
+  const worker = { evaluate: async (_fn, payload) => payload.method === 'production.task.cancel' ? cancelAck(payload) : ({ protocol: 'floword-production', protocolVersion: 1, ok: true, requestId: payload.requestId, jobId: payload.jobId, stepId: payload.stepId, attemptId: payload.attemptId, leaseId: payload.leaseId, profileId: payload.profileId }) };
   sessionManager.ensureWorker = async () => worker;
   try {
     const result = await sessionManager.dispatch(request());
@@ -57,7 +61,7 @@ test('dispatch timeout sends a cancel acknowledgement before releasing the profi
   sessionManager.sessions.set(session.profileId, session);
   const original = sessionManager.ensureWorker;
   const originalTimeout = sessionManager.timeoutForRequest;
-  const worker = { evaluate: async (_fn, payload) => { calls.push(payload.method); if (payload.method === 'production.task.cancel') return { ok: true, result: { cancelled: true }, protocol: 'floword-production', protocolVersion: 1 }; return new Promise(() => {}); } };
+  const worker = { evaluate: async (_fn, payload) => { calls.push(payload.method); if (payload.method === 'production.task.cancel') return cancelAck(payload); return new Promise(() => {}); } };
   sessionManager.ensureWorker = async () => worker;
   sessionManager.timeoutForRequest = () => 10;
   const originalSettle = sessionManager.cancelSettleTimeoutMs;
@@ -82,7 +86,7 @@ test('active cancel waits for dispatch settlement and uses the authoritative ent
   sessionManager.sessions.set(session.profileId, session);
   const original = sessionManager.ensureWorker;
   sessionManager.ensureWorker = async () => ({ evaluate: async (_fn, payload) => {
-    if (payload.method === 'production.task.cancel') { rejectDispatch(new Error('cancelled')); return { ok: true, result: { cancelled: true } }; }
+    if (payload.method === 'production.task.cancel') { rejectDispatch(new Error('cancelled')); return cancelAck(payload); }
     return new Promise((_, reject) => { rejectDispatch = reject; });
   } });
   try {
@@ -118,7 +122,7 @@ test('late dispatch settlement is reaped without returning READY', async () => {
   const originalSettle = sessionManager.cancelSettleTimeoutMs;
   sessionManager.timeoutForRequest = () => 10;
   sessionManager.cancelSettleTimeoutMs = 15;
-  sessionManager.ensureWorker = async () => ({ evaluate: async (_fn, payload) => payload.method === 'production.task.cancel' ? { ok: true, result: { cancelled: true } } : new Promise((resolve) => { resolveDispatch = resolve; }) });
+  sessionManager.ensureWorker = async () => ({ evaluate: async (_fn, payload) => payload.method === 'production.task.cancel' ? cancelAck(payload) : new Promise((resolve) => { resolveDispatch = resolve; }) });
   try {
     await assert.rejects(sessionManager.dispatch(request({ profileId: session.profileId, requestId: 'late-1' })), /CANCEL_UNCONFIRMED/);
     assert.equal(session.state, 'RECONCILING');
@@ -178,6 +182,63 @@ test('cancel acknowledgement requires a cancelled result object', async () => {
       sessionManager.sessions.delete(session.profileId);
       sessionManager.activeRequests.clear();
     }
+  }
+});
+
+test('cancel acknowledgement requires protocol and complete correlation', async () => {
+  const cases = [
+    ['missing protocol', (ack) => { const { protocol, ...rest } = ack; return rest; }],
+    ['wrong protocol version', (ack) => ({ ...ack, protocolVersion: 2 })],
+    ['wrong cancel request id', (ack) => ({ ...ack, requestId: 'CANCEL_wrong' })],
+    ['wrong job id', (ack) => ({ ...ack, jobId: 'job-other' })],
+    ['wrong lease id', (ack) => ({ ...ack, leaseId: 'lease-other' })],
+    ['wrong profile id', (ack) => ({ ...ack, profileId: 'profile-other' })],
+  ];
+  for (const [label, mutate] of cases) {
+    const profileId = `cancel-contract-${label.replaceAll(' ', '-')}`;
+    const session = { profileId, worker: {}, context: { serviceWorkers: () => [] }, state: 'READY', activeRequest: null };
+    sessionManager.sessions.set(profileId, session);
+    const original = sessionManager.ensureWorker;
+    let rejectDispatch;
+    sessionManager.ensureWorker = async () => ({ evaluate: async (_fn, payload) => payload.method === 'production.task.cancel' ? mutate(cancelAck(payload)) : new Promise((_, reject) => { rejectDispatch = reject; }) });
+    try {
+      const dispatch = sessionManager.dispatch(request({ profileId, requestId: `contract-${label.replaceAll(' ', '-')}` }));
+      await new Promise((resolve) => setImmediate(resolve));
+      const result = await sessionManager.cancel('job-unit', session.activeRequest.requestId);
+      assert.equal(result.cancelled, false, label);
+      assert.match(result.acknowledgment.code, /CANCEL_UNCONFIRMED|CORRELATION_MISMATCH/, label);
+      assert.equal(session.state, 'RECONCILING', label);
+      rejectDispatch(new Error('cancelled'));
+      await assert.rejects(dispatch);
+    } finally {
+      sessionManager.ensureWorker = original;
+      sessionManager.sessions.delete(profileId);
+      sessionManager.activeRequests.clear();
+    }
+  }
+});
+
+test('complete cancel acknowledgement is accepted', async () => {
+  const profileId = 'cancel-contract-valid';
+  const session = { profileId, worker: {}, context: { serviceWorkers: () => [] }, state: 'READY', activeRequest: null };
+  sessionManager.sessions.set(profileId, session);
+  const original = sessionManager.ensureWorker;
+  let rejectDispatch;
+  sessionManager.ensureWorker = async () => ({ evaluate: async (_fn, payload) => {
+    if (payload.method === 'production.task.cancel') { rejectDispatch(new Error('cancelled')); return cancelAck(payload); }
+    return new Promise((_, reject) => { rejectDispatch = reject; });
+  } });
+  try {
+    const dispatch = sessionManager.dispatch(request({ profileId, requestId: 'contract-valid' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    const result = await sessionManager.cancel('job-unit', 'contract-valid');
+    assert.equal(result.cancelled, true);
+    rejectDispatch(new Error('cancelled'));
+    await assert.rejects(dispatch);
+  } finally {
+    sessionManager.ensureWorker = original;
+    sessionManager.sessions.delete(profileId);
+    sessionManager.activeRequests.clear();
   }
 });
 

@@ -19,6 +19,15 @@ const READY_DEADLINE: Duration = Duration::from_secs(45);
 const POLL_INTERVAL: Duration = Duration::from_millis(400);
 const PLAYWRIGHT_PORT: u16 = 9223;
 static PLAYWRIGHT_CHILD: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
+const REQUIRED_RUNTIME_ARTIFACTS: &[&str] = &[
+  "donut-runtime/floword-donut-runtime.exe",
+  "node/node.exe",
+  "playwright-sidecar/src/server.js",
+  "playwright-sidecar/package.json",
+  "playwright-sidecar/node_modules/express/package.json",
+  "playwright-sidecar/node_modules/playwright/package.json",
+  "chromex-extension/manifest.json",
+];
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -423,6 +432,15 @@ fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
     return Err("manifest contains no files".to_string());
   }
   let required = value.get("requiredArtifacts").and_then(|v| v.as_array()).ok_or_else(|| "manifest has no requiredArtifacts".to_string())?;
+  let required_names = required.iter().filter_map(serde_json::Value::as_str).collect::<std::collections::HashSet<_>>();
+  for name in REQUIRED_RUNTIME_ARTIFACTS {
+    if !required_names.contains(name) {
+      return Err(format!("manifest requiredArtifacts omits fixed artifact: {name}"));
+    }
+    if !files.contains_key(*name) {
+      return Err(format!("required artifact missing from manifest: {name}"));
+    }
+  }
   for artifact in required {
     let name = artifact.as_str().ok_or_else(|| "invalid required artifact entry".to_string())?;
     if !files.contains_key(name) {
@@ -565,4 +583,60 @@ fn terminate_child_tree(child: &mut Child) {
   }
   let _ = child.kill();
   let _ = child.wait();
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::collections::BTreeMap;
+
+  fn fixture_root(name: &str) -> PathBuf {
+    let root = std::env::temp_dir().join(format!("floword-runtime-manifest-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    root
+  }
+
+  fn write_manifest(root: &Path, include: &[&str]) {
+    let mut files = BTreeMap::new();
+    for relative in include {
+      let path = root.join(relative);
+      std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+      std::fs::write(&path, format!("fixture:{relative}")).unwrap();
+      let digest: String = Sha256::digest(std::fs::read(&path).unwrap()).iter().map(|byte| format!("{byte:02x}")).collect();
+      files.insert((*relative).to_string(), digest);
+    }
+    let required: Vec<&str> = REQUIRED_RUNTIME_ARTIFACTS.to_vec();
+    let manifest = serde_json::json!({ "schemaVersion": 1, "generatedAt": "2026-01-01T00:00:00Z", "requiredArtifacts": required, "files": files });
+    std::fs::write(root.join("runtime-manifest.sha256.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+  }
+
+  #[test]
+  fn manifest_requires_fixed_donut_artifact() {
+    let root = fixture_root("missing-donut");
+    let mut include = REQUIRED_RUNTIME_ARTIFACTS.to_vec();
+    include.retain(|path| !path.starts_with("donut-runtime/"));
+    include.push("playwright/chromium/chrome.exe");
+    write_manifest(&root, &include);
+    assert!(verify_runtime_manifest(&root).is_err());
+    let _ = std::fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn complete_manifest_requires_chromium_and_passes() {
+    let root = fixture_root("complete");
+    let mut include = REQUIRED_RUNTIME_ARTIFACTS.to_vec();
+    include.push("playwright/chromium/chrome.exe");
+    write_manifest(&root, &include);
+    assert!(verify_runtime_manifest(&root).is_ok());
+    let _ = std::fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn manifest_without_chromium_is_rejected() {
+    let root = fixture_root("missing-chromium");
+    write_manifest(&root, REQUIRED_RUNTIME_ARTIFACTS);
+    assert!(verify_runtime_manifest(&root).is_err());
+    let _ = std::fs::remove_dir_all(root);
+  }
 }

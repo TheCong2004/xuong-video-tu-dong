@@ -22,6 +22,12 @@ function required(name) {
   return resolved;
 }
 
+function requiredEnv(name) {
+  const value = process.env[name];
+  if (!value || value === 'unknown') throw new Error(`${name} is required and cannot be unknown`);
+  return value;
+}
+
 function copy(source, destination) {
   fs.rmSync(destination, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(destination), { recursive: true });
@@ -43,6 +49,11 @@ const nodeRuntime = required('FLOWORD_NODE_RUNTIME');
 const chromium = required('FLOWORD_CHROMIUM_DIR');
 const extension = required('FLOWORD_CHROMEX_EXTENSION');
 const donutRuntime = required('FLOWORD_DONUT_RUNTIME_EXE');
+const sourceCommits = {
+  donutbrowser: requiredEnv('FLOWORD_DONUT_COMMIT'),
+  chromex: requiredEnv('FLOWORD_CHROMEX_COMMIT'),
+  artcraft: requiredEnv('FLOWORD_ARTCRAFT_COMMIT'),
+};
 if (path.basename(nodeRuntime).toLowerCase() !== 'node.exe') throw new Error('FLOWORD_NODE_RUNTIME must point to node.exe');
 if (!findChrome(chromium)) throw new Error(`FLOWORD_CHROMIUM_DIR contains no chrome.exe: ${chromium}`);
 if (path.basename(donutRuntime).toLowerCase() !== 'floword-donut-runtime.exe') throw new Error('FLOWORD_DONUT_RUNTIME_EXE must point to floword-donut-runtime.exe');
@@ -81,6 +92,6 @@ if (!chromeArtifact) throw new Error('staged runtime is missing playwright/**/ch
 requiredArtifacts.push(chromeArtifact);
 for (const artifact of requiredArtifacts) if (!manifest[artifact]) throw new Error(`required production artifact missing: ${artifact}`);
 const temporaryManifest = `${manifestPath}.tmp-${process.pid}`;
-fs.writeFileSync(temporaryManifest, `${JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sourceCommits: { donutbrowser: process.env.FLOWORD_DONUT_COMMIT || 'unknown', chromex: process.env.FLOWORD_CHROMEX_COMMIT || 'unknown', artcraft: process.env.FLOWORD_ARTCRAFT_COMMIT || 'unknown' }, requiredArtifacts, files: manifest }, null, 2)}\n`, { flag: 'w' });
+fs.writeFileSync(temporaryManifest, `${JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sourceCommits, requiredArtifacts, files: manifest }, null, 2)}\n`, { flag: 'w' });
 fs.renameSync(temporaryManifest, manifestPath);
 console.log(`Staged ${Object.keys(manifest).length} runtime files in ${resources}`);
