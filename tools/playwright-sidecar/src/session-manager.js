@@ -7,11 +7,12 @@ function canonical(value) { if (Array.isArray(value)) return `[${value.map(canon
 
 class SessionManager {
   constructor() { this.sessions = new Map(); this.startFlights = new Map(); this.activeRequests = new Map(); this.completedRequests = new Map(); this.completedTtlMs = 30 * 60 * 1000; this.maxCompletedRequests = 500; this.cancelSettleTimeoutMs = 15000; }
+  // Retained as validation helpers for callers/tests. CDP mode never creates
+  // or opens this path; the browser profile remains owned by Donut.
   profileDir(id) {
     if (!id || !/^[a-z0-9][a-z0-9-]{0,127}$/i.test(id)) throw new Error('INVALID_PROFILE: profileId is required');
     const root = path.resolve(process.env.FLOWORD_PLAYWRIGHT_PROFILE_ROOT || path.join(process.env.LOCALAPPDATA || process.cwd(), 'Floword', 'playwright-profiles'));
-    const dir = path.resolve(root, id); if (!dir.startsWith(root + path.sep)) throw new Error('INVALID_PROFILE: unsafe profile path');
-    fs.mkdirSync(dir, { recursive: true }); return dir;
+    return path.resolve(root, id);
   }
   extensionDir(value) {
     const dir = path.resolve(value || process.env.FLOWORD_CHROMEX_EXTENSION_PATH || '');
@@ -23,12 +24,16 @@ class SessionManager {
     if (this.startFlights.has(id)) return this.startFlights.get(id);
     const flight = this.startProfile(id, options).finally(() => this.startFlights.delete(id)); this.startFlights.set(id, flight); return flight;
   }
-  async startProfile(id, options) {
-    const userDataDir = this.profileDir(id); const extensionPath = this.extensionDir(options.extensionPath);
-    const context = await chromium.launchPersistentContext(userDataDir, { channel: 'chromium', headless: false, args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`] });
-    const s = { profileId: id, userDataDir, extensionPath, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() }; this.sessions.set(id, s);
+  async startProfile(id, options = {}) {
+    if (!id || !/^[a-z0-9][a-z0-9-]{0,127}$/i.test(id)) throw new Error('INVALID_PROFILE: profileId is required');
+    const cdpEndpoint = options.cdpEndpoint || (options.cdpPort ? `http://127.0.0.1:${options.cdpPort}` : null);
+    if (!cdpEndpoint) throw new Error('CDP_ENDPOINT_REQUIRED: Donut must provide the owned browser CDP endpoint');
+    const browser = await chromium.connectOverCDP(cdpEndpoint, { timeout: options.timeoutMs || 15000 });
+    const context = browser.contexts()[0];
+    if (!context) { await browser.close().catch(() => {}); throw new Error('CDP_CONTEXT_NOT_FOUND: Donut browser exposed no browser context'); }
+    const s = { profileId: id, cdpEndpoint, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() }; this.sessions.set(id, s);
     try { s.worker = await this.waitForServiceWorker(context, options.timeoutMs || 15000); s.state = 'BROWSER_READY'; const page = await this.ensureGrokPage(s, options.url); await this.bindProfile(s); s.state = 'EXTENSION_READY'; return this.describe(s, page); }
-    catch (e) { await context.close().catch(() => {}); this.sessions.delete(id); throw e; }
+    catch (e) { await browser.close().catch(() => {}); this.sessions.delete(id); throw e; }
   }
   async waitForServiceWorker(context, timeout) {
     const found = context.serviceWorkers().find((w) => w.url().startsWith('chrome-extension://')); if (found) return found;
@@ -42,7 +47,8 @@ class SessionManager {
       if (grokPages.length > 1) throw new Error('AMBIGUOUS_GROK_TAB: multiple Grok tabs exist without a managed mapping');
       page = grokPages[0];
     }
-    if (!page) page = await s.context.newPage(); if (!/^https:\/\/(www\.)?grok\.com\//i.test(page.url())) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    if (!page) throw new Error('GROK_TAB_NOT_FOUND: Donut did not expose a managed Grok tab');
+    if (!/^https:\/\/(www\.)?grok\.com\//i.test(page.url()) && url) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.bringToFront().catch(() => {}); await page.waitForLoadState('domcontentloaded').catch(() => {});
     s.grokPage = page; s.managedGrokTabId = page.url(); s.lastHeartbeat = Date.now(); return page;
   }
@@ -185,7 +191,7 @@ class SessionManager {
     return { cancelled: true, jobId, ...result };
   }
   pruneCompleted() { const now = Date.now(); for (const [id, entry] of this.completedRequests) if (entry.expiresAt <= now) this.completedRequests.delete(id); }
-  async stop(id) { const s = this.sessions.get(id); if (!s) return { stopped: false, profileId: id }; await s.context.close(); this.sessions.delete(id); return { stopped: true, profileId: id }; }
+  async stop(id) { const s = this.sessions.get(id); if (!s) return { stopped: false, profileId: id }; await s.browser.close().catch(() => {}); this.sessions.delete(id); return { stopped: true, profileId: id, browserOwnedBy: 'donut' }; }
   async getPages(id) { const s = this.sessions.get(id); if (!s) return []; return Promise.all(s.context.pages().map(async (p, index) => ({ index, url: p.url(), title: await p.title().catch(() => ''), managed: p === s.grokPage }))); }
   async startTrace(id) { const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); await s.context.tracing.start({ screenshots: true, snapshots: true }); s.isTracing = true; return { profileId: id, tracing: true }; }
   async stopTrace(id, outputPath) { const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); await s.context.tracing.stop({ path: outputPath }); s.isTracing = false; return { profileId: id, tracing: false, outputPath }; }
