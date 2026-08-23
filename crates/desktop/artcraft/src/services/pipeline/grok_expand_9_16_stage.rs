@@ -318,22 +318,12 @@ pub async fn execute_grok_expand_9_16(input: GrokExpand916Input, attempt_id: &st
 
     if was_cancelled {
       info!("[FLOWORD][CANCEL] Job cancelled in-flight! Dispatching cancel request to worker {worker_id}");
-      let cancel_payload = serde_json::json!({
-        "protocol": "floword-production",
-        "protocolVersion": 1,
-        "requestId": format!("CANCEL_{}", Uuid::new_v4().simple()),
-        "jobId": job_id,
-        "stepId": step_id,
-        "attemptId": attempt_id,
-        "leaseId": lease_id,
-        "profileId": profile_id,
-        "method": "production.task.cancel",
-        "params": {
-          "targetRequestId": request_id,
-        },
-        "createdAt": chrono::Utc::now().to_rfc3339(),
-      });
-      let _ = client.post(&bridge_url).json(&cancel_payload).send().await;
+      let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", get_donut_browser_api_base_url(), worker_id, job_id);
+      let cancel_response = client.post(cancel_url).json(&serde_json::json!({"stepId": step_id, "attemptId": attempt_id, "leaseId": lease_id, "profileId": profile_id, "targetRequestId": request_id})).send().await.map_err(|e| format!("Cancel request failed: {e}"))?;
+      let cancel_body: serde_json::Value = cancel_response.json().await.unwrap_or_default();
+      if !cancel_body.get("ok").and_then(|v| v.as_bool()).unwrap_or(false) {
+        return Err(format!("CANCEL_UNCONFIRMED: {cancel_body}"));
+      }
       guard.release().await;
       return Err("CANCELLED".to_string());
     }
