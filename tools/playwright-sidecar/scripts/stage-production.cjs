@@ -35,6 +35,12 @@ function copy(source, destination) {
   fs.cpSync(source, destination, { recursive: true });
 }
 
+function copyChromiumResumable(source, destination) {
+  const existingChrome = fs.existsSync(destination) && findChrome(destination);
+  if (existingChrome) return;
+  copy(source, destination);
+}
+
 function files(root, current = root) {
   return fs.readdirSync(current, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(current, entry.name);
@@ -49,9 +55,14 @@ function findChrome(root) {
 function stageDonutExtension(extension) {
   const destination = path.join(resources, 'donut-runtime', 'bundled-extensions', 'chromex.zip');
   const supplied = process.env.FLOWORD_CHROMEX_ZIP;
+  if (fs.existsSync(destination)) {
+    validateChromexZip(destination);
+    return destination;
+  }
   if (supplied) {
     const zip = required('FLOWORD_CHROMEX_ZIP');
     copy(zip, destination);
+    validateChromexZip(destination);
     return destination;
   }
   if (process.platform !== 'win32') throw new Error('FLOWORD_CHROMEX_ZIP is required outside Windows staging');
@@ -62,7 +73,28 @@ function stageDonutExtension(extension) {
     `Compress-Archive -Path ${JSON.stringify(path.join(extension, '*'))} -DestinationPath ${JSON.stringify(destination)} -Force`,
   ], { stdio: 'inherit' });
   if (!fs.existsSync(destination)) throw new Error('failed to create donut-runtime/bundled-extensions/chromex.zip');
+  validateChromexZip(destination);
   return destination;
+}
+
+function validateChromexZip(zipPath) {
+  if (process.platform !== 'win32') throw new Error('Chromex ZIP validation requires Windows staging');
+  const script = [
+    '$ErrorActionPreference = "Stop"',
+    'Add-Type -AssemblyName System.IO.Compression.FileSystem',
+    `$z = [IO.Compression.ZipFile]::OpenRead(${JSON.stringify(zipPath)})`,
+    'try {',
+    '  $names = @($z.Entries | ForEach-Object { $_.FullName.Replace("\\", "/") })',
+    '  if (-not ($names -contains "manifest.json")) { throw "ZIP root manifest.json missing" }',
+    '  foreach ($n in $names) { if ($n.StartsWith("/") -or $n.Contains("../") -or $n.Contains("..\\")) { throw "ZIP path traversal: $n" } }',
+    '  $m = $z.Entries | Where-Object FullName -eq "manifest.json" | Select-Object -First 1',
+    '  $r = New-Object IO.StreamReader($m.Open()); try { $j = $r.ReadToEnd() } finally { $r.Dispose() }',
+    '  $manifest = $j | ConvertFrom-Json',
+    '  if ([int]$manifest.manifest_version -ne 3) { throw "Chromex manifest_version must be 3" }',
+    '  if ([string]::IsNullOrWhiteSpace([string]$manifest.version)) { throw "Chromex manifest version missing" }',
+    '} finally { $z.Dispose() }',
+  ].join('; ');
+  childProcess.execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { stdio: 'inherit' });
 }
 
 const nodeRuntime = required('FLOWORD_NODE_RUNTIME');
@@ -84,7 +116,7 @@ if (!fs.existsSync(path.join(sidecar, 'node_modules', 'playwright', 'package.jso
 copy(nodeRuntime, path.join(resources, 'node', path.basename(nodeRuntime)));
 copy(donutRuntime, path.join(resources, 'donut-runtime', 'floword-donut-runtime.exe'));
 stageDonutExtension(extension);
-copy(chromium, path.join(resources, 'playwright'));
+copyChromiumResumable(chromium, path.join(resources, 'playwright'));
 copy(extension, path.join(resources, 'chromex-extension'));
 copy(path.join(sidecar, 'src'), path.join(resources, 'playwright-sidecar', 'src'));
 copy(path.join(sidecar, 'package.json'), path.join(resources, 'playwright-sidecar', 'package.json'));

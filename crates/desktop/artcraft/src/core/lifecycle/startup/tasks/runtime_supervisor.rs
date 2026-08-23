@@ -21,6 +21,7 @@ const PLAYWRIGHT_PORT: u16 = 9223;
 static PLAYWRIGHT_CHILD: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 const REQUIRED_RUNTIME_ARTIFACTS: &[&str] = &[
   "donut-runtime/floword-donut-runtime.exe",
+  "donut-runtime/bundled-extensions/chromex.zip",
   "node/node.exe",
   "playwright-sidecar/src/server.js",
   "playwright-sidecar/package.json",

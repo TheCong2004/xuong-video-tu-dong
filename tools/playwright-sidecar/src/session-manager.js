@@ -23,8 +23,8 @@ class SessionManager {
     if (this.sessions.has(id)) {
       const s = this.sessions.get(id);
       if ((options.cdpEndpoint && s.cdpEndpoint !== options.cdpEndpoint) ||
-        (options.browserPid && s.browserPid && s.browserPid !== options.browserPid) ||
-        (options.launchGeneration && s.launchGeneration && s.launchGeneration !== options.launchGeneration)) {
+        (options.browserPid !== undefined && (s.browserPid === null || s.browserPid !== options.browserPid)) ||
+        (options.launchGeneration !== undefined && (s.launchGeneration === null || s.launchGeneration !== options.launchGeneration))) {
         if (s.activeRequest) throw new Error('CDP_SESSION_STALE: browser endpoint changed while a request was active');
         await s.browser.close().catch(() => {});
         this.sessions.delete(id);
