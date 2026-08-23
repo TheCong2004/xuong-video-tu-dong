@@ -59,5 +59,7 @@ for (const file of files(resources).sort()) {
   if (relative === 'runtime-manifest.sha256.json') continue;
   manifest[relative] = crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 }
-fs.writeFileSync(path.join(resources, 'runtime-manifest.sha256.json'), `${JSON.stringify({ generatedAt: new Date().toISOString(), files: manifest }, null, 2)}\n`);
+const temporaryManifest = `${manifestPath}.tmp-${process.pid}`;
+fs.writeFileSync(temporaryManifest, `${JSON.stringify({ generatedAt: new Date().toISOString(), files: manifest }, null, 2)}\n`, { flag: 'w' });
+fs.renameSync(temporaryManifest, manifestPath);
 console.log(`Staged ${Object.keys(manifest).length} runtime files in ${resources}`);

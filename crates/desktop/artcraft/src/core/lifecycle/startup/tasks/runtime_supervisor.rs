@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use log::{info, warn};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Manager};
 
 use super::background_command::background_command;
@@ -281,6 +282,14 @@ pub fn start_playwright_runtime(app: &AppHandle) {
     return;
   }
   let resource_dir = app.path().resource_dir().ok();
+  if let Some(root) = resource_dir.as_ref() {
+    if std::env::var_os("FLOWORD_ALLOW_UNVERIFIED_RUNTIME").is_none() {
+      if let Err(error) = verify_runtime_manifest(root) {
+        warn!("RUNTIME_INTEGRITY_ERROR: {error}");
+        return;
+      }
+    }
+  }
   let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| resource_dir.as_ref().map(|root| root.join("playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| {
     let cwd = std::env::current_dir().ok()?;
     [cwd.join("tools/playwright-sidecar/src/server.js"), cwd.join("resources/playwright-sidecar/server.js"), cwd.join("..\\..\\..\\tools\\playwright-sidecar\\src\\server.js")].into_iter().find(|path| path.is_file())
@@ -405,6 +414,29 @@ fn resolve_playwright_node(app: &AppHandle) -> PathBuf {
   {
     PathBuf::from("node.exe")
   }
+}
+
+fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
+  let path = root.join("runtime-manifest.sha256.json");
+  let raw = std::fs::read_to_string(&path).map_err(|e| format!("cannot read {}: {e}", path.display()))?;
+  let value: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("invalid manifest JSON: {e}"))?;
+  if value.get("generatedAt").and_then(|v| v.as_str()).is_none() || value.get("files").and_then(|v| v.as_object()).is_none() {
+    return Err("manifest has no generatedAt/files".to_string());
+  }
+  let files = value.get("files").and_then(|v| v.as_object()).unwrap();
+  if files.is_empty() {
+    return Err("manifest contains no files".to_string());
+  }
+  for (relative, expected) in files {
+    let expected = expected.as_str().ok_or_else(|| format!("invalid hash for {relative}"))?;
+    let file = root.join(relative);
+    let bytes = std::fs::read(&file).map_err(|e| format!("missing {relative}: {e}"))?;
+    let actual: String = Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect();
+    if actual != expected {
+      return Err(format!("SHA256 mismatch for {relative}"));
+    }
+  }
+  Ok(())
 }
 
 fn playwright_health_ok() -> bool {

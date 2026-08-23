@@ -6,7 +6,7 @@ const crypto = require('crypto');
 function canonical(value) { if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`; if (value && typeof value === 'object') return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`; return JSON.stringify(value); }
 
 class SessionManager {
-  constructor() { this.sessions = new Map(); this.startFlights = new Map(); this.activeRequests = new Map(); this.completedRequests = new Map(); this.completedTtlMs = 30 * 60 * 1000; this.maxCompletedRequests = 500; }
+  constructor() { this.sessions = new Map(); this.startFlights = new Map(); this.activeRequests = new Map(); this.completedRequests = new Map(); this.completedTtlMs = 30 * 60 * 1000; this.maxCompletedRequests = 500; this.cancelSettleTimeoutMs = 15000; }
   profileDir(id) {
     if (!id || !/^[a-z0-9][a-z0-9-]{0,127}$/i.test(id)) throw new Error('INVALID_PROFILE: profileId is required');
     const root = path.resolve(process.env.FLOWORD_PLAYWRIGHT_PROFILE_ROOT || path.join(process.env.LOCALAPPDATA || process.cwd(), 'Floword', 'playwright-profiles'));
@@ -63,7 +63,23 @@ class SessionManager {
     return s.worker;
   }
   describe(s, page) { return { profileId: s.profileId, userDataDir: s.userDataDir, extensionId: s.worker?.url().match(/^chrome-extension:\/\/([^/]+)/)?.[1] || null, serviceWorkerUrl: s.worker?.url() || null, grokUrl: page?.url() || null, browserOpen: true, state: s.state, activeRequest: s.activeRequest }; }
-  async health(id) { const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); const worker = await this.ensureWorker(s); const result = await worker.evaluate((profileId) => globalThis.__flowordProduction?.health(profileId), id); if (!result) throw new Error('EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: health bridge returned no result'); if (result.protocol !== 'floword-production' || result.protocolVersion !== 1) throw new Error('PROTOCOL_MISMATCH: health response protocol is invalid'); s.lastHeartbeat = Date.now(); s.state = result.ok ? (result.result?.status === 'LOGIN_REQUIRED' ? 'LOGIN_REQUIRED' : 'READY') : s.state; return result; }
+  async health(id) {
+    const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
+    const worker = await this.ensureWorker(s); const result = await worker.evaluate((profileId) => globalThis.__flowordProduction?.health(profileId), id);
+    if (!result) throw new Error('EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: health bridge returned no result');
+    if (result.protocol !== 'floword-production' || result.protocolVersion !== 1 || result.result?.profileId && result.result.profileId !== id) throw new Error('PROTOCOL_MISMATCH: health response protocol/profile is invalid');
+    s.lastHeartbeat = Date.now();
+    if (s.activeRequest) { s.state = 'BUSY'; return result; }
+    if (!result.ok) return result;
+    const details = result.result || {};
+    const status = String(details.status || '').toUpperCase();
+    const workerState = String(details.workerState || '').toUpperCase();
+    if (details.loggedIn === false || status === 'LOGIN_REQUIRED') s.state = 'LOGIN_REQUIRED';
+    else if (status === 'BUSY' || status === 'LEASED' || workerState === 'BUSY' || workerState === 'LEASED') s.state = 'BUSY';
+    else if (status === 'READY' && (workerState === 'IDLE' || workerState === 'READY')) s.state = 'READY';
+    else if (s.state !== 'RECONCILING') s.state = 'EXTENSION_READY';
+    return result;
+  }
   async cancelRequest(s, active, timeoutMs = 10000) {
     const worker = await this.ensureWorker(s);
     const cancelRequest = { protocol: 'floword-production', protocolVersion: 1, requestId: `CANCEL_${crypto.randomUUID()}`, jobId: active.jobId, stepId: active.stepId, attemptId: active.attemptId, leaseId: active.leaseId, profileId: active.profileId, method: 'production.task.cancel', params: { targetRequestId: active.requestId }, createdAt: new Date().toISOString() };
@@ -92,6 +108,7 @@ class SessionManager {
     let timeoutHandle;
     const dispatchPromise = worker.evaluate((payload) => globalThis.__flowordProduction?.dispatch(payload), request);
     const timeoutPromise = new Promise((_, reject) => { timeoutHandle = setTimeout(() => reject(new Error('RESULT_TIMEOUT: dispatch timed out')), timeoutMs); });
+    let retainOwnership = false;
     const promise = (async () => {
       try {
         const result = await Promise.race([dispatchPromise, timeoutPromise]);
@@ -104,7 +121,9 @@ class SessionManager {
         if (String(error?.message || error).startsWith('RESULT_TIMEOUT:')) {
           try {
             await this.cancelRequest(s, activeRequest, 10000);
-            s.state = 'READY';
+            const settled = await Promise.race([dispatchPromise.then(() => true).catch(() => true), new Promise((resolve) => setTimeout(() => resolve(false), this.cancelSettleTimeoutMs))]);
+            if (!settled) { retainOwnership = true; s.state = 'RECONCILING'; throw new Error('CANCEL_UNCONFIRMED: dispatch did not settle after cancellation'); }
+            s.state = 'RECONCILING';
           } catch (cancelError) {
             s.state = 'RECONCILING';
             throw new Error(`CANCEL_UNCONFIRMED: ${cancelError.message}`);
@@ -113,27 +132,29 @@ class SessionManager {
         throw error;
       } finally {
         clearTimeout(timeoutHandle);
-        if (s.activeRequest?.requestId === requestId) s.activeRequest = null;
-        if (s.state === 'BUSY') s.state = 'READY';
-        this.activeRequests.delete(requestId);
+        if (!retainOwnership) {
+          if (s.activeRequest?.requestId === requestId) s.activeRequest = null;
+          if (s.state === 'BUSY') s.state = 'RECONCILING';
+          this.activeRequests.delete(requestId);
+        }
       }
     })();
-    this.activeRequests.set(requestId, { fingerprint, promise, session: s }); return promise;
+    this.activeRequests.set(requestId, { fingerprint, promise, dispatchPromise, session: s, request: activeRequest }); return promise;
   }
   async cancel(jobId, targetRequestId) {
     const s = [...this.sessions.values()].find((x) => x.activeRequest?.jobId === jobId);
     if (!s) return { cancelled: false, jobId, requestId: targetRequestId || null, acknowledgment: { ok: false, code: 'JOB_NOT_FOUND' } };
     const active = s.activeRequest;
     if (targetRequestId && active.requestId !== targetRequestId) return { cancelled: false, jobId, requestId: targetRequestId, acknowledgment: { ok: false, code: 'CORRELATION_MISMATCH' } };
+    const entry = this.activeRequests.get(active.requestId);
+    if (!entry || entry.session !== s || entry.request.jobId !== jobId || entry.request.profileId !== s.profileId) { s.state = 'RECONCILING'; return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } }; }
     const result = await this.cancelRequest(s, active);
-    const settled = await Promise.race([
-      active.promise.then(() => true).catch(() => true),
-      new Promise((resolve) => setTimeout(() => resolve(false), 15000)),
-    ]);
+    const settled = await Promise.race([entry.dispatchPromise.then(() => true).catch(() => true), new Promise((resolve) => setTimeout(() => resolve(false), this.cancelSettleTimeoutMs))]);
     if (!settled) {
       s.state = 'RECONCILING';
       return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } };
     }
+    if (result.requestId !== targetRequestId || result.acknowledgment?.ok !== true) { s.state = 'RECONCILING'; return { cancelled: false, jobId, requestId: active.requestId, acknowledgment: { ok: false, code: 'CANCEL_UNCONFIRMED' } }; }
     return { cancelled: true, jobId, ...result };
   }
   pruneCompleted() { const now = Date.now(); for (const [id, entry] of this.completedRequests) if (entry.expiresAt <= now) this.completedRequests.delete(id); }

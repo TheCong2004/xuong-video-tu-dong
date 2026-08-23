@@ -58,16 +58,52 @@ test('dispatch timeout sends a cancel acknowledgement before releasing the profi
   const original = sessionManager.ensureWorker;
   const worker = { evaluate: async (_fn, payload) => { calls.push(payload.method); if (payload.method === 'production.task.cancel') return { ok: true, protocol: 'floword-production', protocolVersion: 1 }; return new Promise(() => {}); } };
   sessionManager.ensureWorker = async () => worker;
+  const originalSettle = sessionManager.cancelSettleTimeoutMs;
+  sessionManager.cancelSettleTimeoutMs = 20;
   try {
-    await assert.rejects(sessionManager.dispatch(request({ profileId: session.profileId, requestId: 'timeout-1', params: { timeoutMs: 1000 } })), /RESULT_TIMEOUT/);
+    await assert.rejects(sessionManager.dispatch(request({ profileId: session.profileId, requestId: 'timeout-1', params: { timeoutMs: 1000 } })), /CANCEL_UNCONFIRMED/);
     assert.deepEqual(calls, ['grok.image.edit', 'production.task.cancel']);
+    assert.notEqual(session.activeRequest, null);
+    assert.equal(session.state, 'RECONCILING');
+  } finally {
+    sessionManager.ensureWorker = original;
+    sessionManager.sessions.delete(session.profileId);
+    sessionManager.activeRequests.clear();
+    sessionManager.cancelSettleTimeoutMs = originalSettle;
+  }
+});
+
+test('active cancel waits for dispatch settlement and uses the authoritative entry', async () => {
+  let rejectDispatch;
+  const session = { profileId: 'success-cancel', worker: {}, context: { serviceWorkers: () => [] }, state: 'READY', activeRequest: null };
+  sessionManager.sessions.set(session.profileId, session);
+  const original = sessionManager.ensureWorker;
+  sessionManager.ensureWorker = async () => ({ evaluate: async (_fn, payload) => {
+    if (payload.method === 'production.task.cancel') { rejectDispatch(new Error('cancelled')); return { ok: true }; }
+    return new Promise((_, reject) => { rejectDispatch = reject; });
+  } });
+  try {
+    const dispatch = sessionManager.dispatch(request({ profileId: session.profileId, requestId: 'cancel-1', jobId: 'cancel-job' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    const result = await sessionManager.cancel('cancel-job', 'cancel-1');
+    assert.equal(result.cancelled, true);
+    assert.equal(result.acknowledgment.ok, true);
+    await assert.rejects(dispatch, /cancelled/);
     assert.equal(session.activeRequest, null);
-    assert.equal(session.state, 'READY');
   } finally {
     sessionManager.ensureWorker = original;
     sessionManager.sessions.delete(session.profileId);
     sessionManager.activeRequests.clear();
   }
+});
+
+test('health never upgrades BUSY or active sessions to READY', async () => {
+  const session = { profileId: 'health-busy', worker: {}, context: { serviceWorkers: () => [] }, state: 'READY', activeRequest: { requestId: 'busy-1' } };
+  sessionManager.sessions.set(session.profileId, session);
+  const original = sessionManager.ensureWorker;
+  sessionManager.ensureWorker = async () => ({ evaluate: async () => ({ protocol: 'floword-production', protocolVersion: 1, ok: true, result: { profileId: session.profileId, status: 'READY', workerState: 'IDLE', loggedIn: true } }) });
+  try { await sessionManager.health(session.profileId); assert.equal(session.state, 'BUSY'); }
+  finally { sessionManager.ensureWorker = original; sessionManager.sessions.delete(session.profileId); }
 });
 
 test('cancel is fail-closed for missing or mismatched active requests', async () => {
