@@ -60,24 +60,23 @@ class ActionRunner {
   }
 
   async startTrace() {
-    if (!sessionManager.context) {
+    const session = [...sessionManager.sessions.values()][0];
+    if (!session) {
       throw new Error('No active browser context');
     }
-    await sessionManager.context.tracing.start({ screenshots: true, snapshots: true });
-    sessionManager.isTracing = true;
-    return { success: true, tracing: true };
+    return sessionManager.startTrace(session.profileId);
   }
 
   async stopTrace(outputPath) {
-    if (!sessionManager.context || !sessionManager.isTracing) {
+    const session = [...sessionManager.sessions.values()][0];
+    if (!session || !session.isTracing) {
       throw new Error('Tracing was not active');
     }
     const dir = path.dirname(outputPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    await sessionManager.context.tracing.stop({ path: outputPath });
-    sessionManager.isTracing = false;
+    await sessionManager.stopTrace(session.profileId, outputPath);
     const stat = fs.statSync(outputPath);
     if (stat.size === 0) {
       throw new Error('Trace ZIP created with 0 bytes');

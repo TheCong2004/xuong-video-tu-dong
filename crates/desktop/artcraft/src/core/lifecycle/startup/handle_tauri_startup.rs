@@ -7,7 +7,7 @@ use crate::core::lifecycle::startup::tasks::spawn_capcut_mate_backend::{health_r
 use crate::core::lifecycle::startup::tasks::spawn_discord_presence_thread::spawn_discord_presence_thread;
 use crate::core::lifecycle::startup::tasks::spawn_main_window_thread::spawn_main_window_thread;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::{health_ready as omniroute_health_ready, spawn_omniroute_backend};
-use crate::core::lifecycle::startup::tasks::runtime_supervisor::start_runtime_supervisor;
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::{start_playwright_runtime, start_runtime_supervisor};
 use crate::core::lifecycle::startup::tasks::spawn_sora_task_polling_thread::spawn_sora_task_polling_thread;
 use crate::core::lifecycle::startup::tasks::spawn_storyteller_threads::spawn_storyteller_threads;
 use crate::core::providers::credentials::provider_credential_loading_cache::ProviderCredentialLoadingCache;
@@ -40,7 +40,7 @@ pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_con
   // Floword owns the headless Donut runtime. It is intentionally started in a
   // background thread so the Studio can render while runtime health is pending.
   let app_for_donut = app.clone();
-  std::thread::spawn(move || start_runtime_supervisor(&app_for_donut));
+  std::thread::spawn(move || { start_playwright_runtime(); start_runtime_supervisor(&app_for_donut); });
 
   // Python backend: capcut-mate owns :30000 (the single always-on Python port).
   // (artcraft-server.exe / spawn_unified_backend removed — it fought capcut-mate

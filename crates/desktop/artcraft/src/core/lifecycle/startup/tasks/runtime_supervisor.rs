@@ -16,6 +16,7 @@ const HOST: &str = "127.0.0.1";
 const PORT: u16 = 10108;
 const READY_DEADLINE: Duration = Duration::from_secs(45);
 const POLL_INTERVAL: Duration = Duration::from_millis(400);
+const PLAYWRIGHT_PORT: u16 = 9223;
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -249,6 +250,32 @@ pub fn start_runtime_supervisor(app: &AppHandle) {
   if let Some(supervisor) = app.try_state::<RuntimeSupervisor>() {
     supervisor.start(app);
   }
+}
+
+/// Starts the dev Playwright owner before Donut. Packaged builds may provide
+/// an explicit FLOWORD_PLAYWRIGHT_SIDECAR entrypoint; no duplicate is spawned
+/// when an authenticated Floword runtime already owns port 9223.
+pub fn start_playwright_runtime() {
+  if std::env::var_os("FLOWORD_PLAYWRIGHT_RUNTIME_URL").is_none() {
+    std::env::set_var("FLOWORD_PLAYWRIGHT_RUNTIME_URL", format!("http://{HOST}:{PLAYWRIGHT_PORT}"));
+  }
+  if playwright_health_ok() { return; }
+  let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| std::env::current_dir().ok().and_then(|cwd| [cwd.join("tools/playwright-sidecar/src/server.js"), cwd.join("..\\..\\..\\tools\\playwright-sidecar\\src\\server.js")].into_iter().find(|path| path.is_file())));
+  let Some(sidecar) = sidecar.filter(|path| path.is_file()) else { warn!("Playwright sidecar entrypoint not found; Floword will report PLAYWRIGHT_RUNTIME_OFFLINE"); return; };
+  let mut command = background_command(Command::new("node"));
+  command.arg(&sidecar).current_dir(sidecar.parent().unwrap_or(Path::new("."))).env("PLAYWRIGHT_SIDECAR_PORT", PLAYWRIGHT_PORT.to_string()).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+  if std::env::var_os("FLOWORD_CHROMEX_EXTENSION_PATH").is_none() {
+    if let Some(path) = std::env::current_dir().ok().and_then(|cwd| [cwd.join("..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod")].into_iter().find(|path| path.join("manifest.json").is_file())) { command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path); }
+  }
+  match command.spawn() { Ok(child) => info!("Started Floword Playwright runtime (pid={})", child.id()), Err(error) => warn!("Failed to start Playwright runtime: {error}") }
+}
+
+fn playwright_health_ok() -> bool {
+  let Ok(mut stream) = TcpStream::connect_timeout(&format!("{HOST}:{PLAYWRIGHT_PORT}").parse().unwrap(), Duration::from_millis(250)) else { return false; };
+  let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+  let _ = stream.write_all(format!("GET /health HTTP/1.1\r\nHost: {HOST}:{PLAYWRIGHT_PORT}\r\nConnection: close\r\n\r\n").as_bytes());
+  let mut response = String::new(); let _ = stream.read_to_string(&mut response);
+  response.contains("floword-playwright-runtime") && response.contains("\"protocolVersion\":1")
 }
 
 #[tauri::command]
