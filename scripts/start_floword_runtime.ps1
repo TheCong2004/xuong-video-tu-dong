@@ -1,8 +1,5 @@
 # PowerShell Script to Start NEODONUT ENGINE Runtime Services cleanly
-param (
-    [switch]$SkipChrome = $false,
-    [switch]$RequireAll = $false
-)
+param ([switch]$RequireAll = $false)
 
 $ErrorActionPreference = "Stop"
 
@@ -11,11 +8,9 @@ Set-Location $repoRoot
 
 $pidsDir = ".runtime/pids"
 $logsDir = ".runtime/logs"
-$chromeProfileDir = ".runtime/chrome-cdp-profile"
 
 if (-not (Test-Path $pidsDir)) { New-Item -ItemType Directory -Force -Path $pidsDir | Out-Null }
 if (-not (Test-Path $logsDir)) { New-Item -ItemType Directory -Force -Path $logsDir | Out-Null }
-if (-not (Test-Path $chromeProfileDir)) { New-Item -ItemType Directory -Force -Path $chromeProfileDir | Out-Null }
 
 Write-Host "[RUNTIME] Launching NEODONUT ENGINE Runtime Services from $repoRoot..." -ForegroundColor Cyan
 
@@ -46,34 +41,15 @@ if (-not $capcutConn) {
 $sidecarPort = 9223
 $sidecarConn = Get-NetTCPConnection -LocalPort $sidecarPort -ErrorAction SilentlyContinue
 if (-not $sidecarConn) {
-    Write-Host "[SIDECAR] Starting Playwright CDP Sidecar on port $sidecarPort..." -ForegroundColor Yellow
-    Start-RuntimeProcess "playwright-sidecar" "node" "index.js" "tools/playwright-sidecar" | Out-Null
+    $extensionPath = Join-Path $repoRoot "..\chromex\packages\extension\build\chrome-mv3-prod"
+    if (-not (Test-Path (Join-Path $extensionPath "manifest.json"))) {
+        throw "EXTENSION_NOT_BUILT: expected unpacked Chromex at $extensionPath"
+    }
+    Write-Host "[SIDECAR] Starting Playwright runtime on port $sidecarPort..." -ForegroundColor Yellow
+    $env:FLOWORD_CHROMEX_EXTENSION_PATH = $extensionPath
+    Start-RuntimeProcess "playwright-sidecar" "node" "src/server.js" "tools/playwright-sidecar" | Out-Null
 } else {
     Write-Host "[SIDECAR] Already running on port $sidecarPort." -ForegroundColor Green
-}
-
-# 3. Chrome Remote Debugging
-if (-not $SkipChrome) {
-    $cdpPort = 9222
-    $cdpConn = Get-NetTCPConnection -LocalPort $cdpPort -ErrorAction SilentlyContinue
-    if (-not $cdpConn) {
-        $chromePaths = @(
-            "C:\Program Files\Google\Chrome\Application\chrome.exe",
-            "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-            "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
-        )
-        $chromeExe = $chromePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-        if ($chromeExe) {
-            Write-Host "[CHROME CDP] Starting Chrome CDP Debugging on port $cdpPort..." -ForegroundColor Yellow
-            $chromeArgs = "--remote-debugging-address=127.0.0.1 --remote-debugging-port=9222 --remote-allow-origins=* --user-data-dir=`"$repoRoot\$chromeProfileDir`" --no-first-run --no-default-browser-check --disable-background-mode about:blank"
-            $chromeProc = Start-Process -FilePath $chromeExe -ArgumentList $chromeArgs -PassThru -NoNewWindow
-            $chromeProc.Id | Out-File "$pidsDir/chrome-cdp.pid" -Force
-        } else {
-            Write-Host "[CHROME CDP] Executable not found in standard paths." -ForegroundColor Yellow
-        }
-    } else {
-        Write-Host "[CHROME CDP] Already active on port $cdpPort." -ForegroundColor Green
-    }
 }
 
 # Readiness verifier

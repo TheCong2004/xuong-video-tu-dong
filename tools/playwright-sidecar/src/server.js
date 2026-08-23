@@ -3,121 +3,36 @@ const sessionManager = require('./session-manager');
 const actionRunner = require('./action-runner');
 
 const app = express();
-const PORT = process.env.PLAYWRIGHT_SIDECAR_PORT || 9223;
-
-app.use(express.json());
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'playwright-cdp-sidecar', port: PORT });
+const PORT = Number(process.env.PLAYWRIGHT_SIDECAR_PORT || 9223);
+const token = process.env.FLOWORD_SIDECAR_TOKEN;
+app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  if (token && req.get('authorization') !== `Bearer ${token}`) return res.status(401).json({ error: 'UNAUTHORIZED' });
+  next();
 });
+const route = (fn) => async (req, res) => { try { res.json(await fn(req, res)); } catch (e) { res.status(500).json({ error: { code: String(e.message).split(':', 1)[0], message: e.message } }); } };
 
-app.post('/connect', async (req, res) => {
-  try {
-    const { cdpUrl } = req.body || {};
-    const result = await sessionManager.connect(cdpUrl);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'floword-playwright-runtime', protocolVersion: 1, pid: process.pid }));
+app.post('/v1/profiles/:profileId/start', route((req) => sessionManager.ensureProfile(req.params.profileId, req.body || {})));
+app.post('/v1/profiles/:profileId/stop', route((req) => sessionManager.stop(req.params.profileId)));
+app.get('/v1/profiles/:profileId/status', route((req) => sessionManager.health(req.params.profileId)));
+app.get('/v1/profiles/:profileId/pages', route((req) => sessionManager.getPages(req.params.profileId)));
+app.post('/v1/profiles/:profileId/dispatch', route((req) => sessionManager.dispatch({ ...(req.body || {}), profileId: req.params.profileId })));
+app.post('/v1/jobs/:jobId/cancel', route((req) => sessionManager.cancel(req.params.jobId)));
 
-app.get('/pages', async (req, res) => {
-  try {
-    const pages = await sessionManager.getPages();
-    res.json({ pages });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+// Backward-compatible endpoints used by the existing developer tooling.
+app.post('/connect', route((req) => sessionManager.ensureProfile(req.body.profileId, req.body)));
+app.get('/pages', route(() => sessionManager.getPages([...sessionManager.sessions.keys()][0])));
+app.post('/navigate', route((req) => actionRunner.navigate(req.body.url)));
+app.post('/click', route((req) => actionRunner.click(req.body.selector)));
+app.post('/fill', route((req) => actionRunner.fill(req.body.selector, req.body.value)));
+app.post('/upload', route((req) => actionRunner.upload(req.body.selector, req.body.filePaths)));
+app.post('/screenshot', route((req) => actionRunner.screenshot(req.body.outputPath)));
+app.post('/trace/start', route(() => actionRunner.startTrace()));
+app.post('/trace/stop', route((req) => actionRunner.stopTrace(req.body.outputPath)));
+app.post('/cancel', route((req) => sessionManager.cancel(req.body.jobId)));
+app.post('/disconnect', route(() => sessionManager.disconnect()));
 
-app.post('/navigate', async (req, res) => {
-  try {
-    const { url } = req.body;
-    if (!url) return res.status(400).json({ error: 'Missing url parameter' });
-    const result = await actionRunner.navigate(url);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/click', async (req, res) => {
-  try {
-    const { selector } = req.body;
-    if (!selector) return res.status(400).json({ error: 'Missing selector' });
-    const result = await actionRunner.click(selector);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/fill', async (req, res) => {
-  try {
-    const { selector, value } = req.body;
-    if (!selector || value === undefined) return res.status(400).json({ error: 'Missing selector or value' });
-    const result = await actionRunner.fill(selector, value);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/upload', async (req, res) => {
-  try {
-    const { selector, filePaths } = req.body;
-    if (!selector || !filePaths) return res.status(400).json({ error: 'Missing selector or filePaths' });
-    const result = await actionRunner.upload(selector, filePaths);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/screenshot', async (req, res) => {
-  try {
-    const { outputPath } = req.body;
-    if (!outputPath) return res.status(400).json({ error: 'Missing outputPath' });
-    const result = await actionRunner.screenshot(outputPath);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/trace/start', async (req, res) => {
-  try {
-    const result = await actionRunner.startTrace();
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/trace/stop', async (req, res) => {
-  try {
-    const { outputPath } = req.body;
-    if (!outputPath) return res.status(400).json({ error: 'Missing outputPath' });
-    const result = await actionRunner.stopTrace(outputPath);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.post('/cancel', (req, res) => {
-  res.json({ success: true, message: 'Sidecar action cancelled' });
-});
-
-app.post('/disconnect', async (req, res) => {
-  try {
-    const result = await sessionManager.disconnect();
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.listen(PORT, () => {
-  console.log(`Playwright CDP sidecar listening on port ${PORT}`);
-});
+const server = app.listen(PORT, '127.0.0.1', () => console.log(`Floword Playwright runtime listening on 127.0.0.1:${PORT}`));
+const shutdown = async () => { await sessionManager.disconnect(); server.close(() => process.exit(0)); };
+process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown);

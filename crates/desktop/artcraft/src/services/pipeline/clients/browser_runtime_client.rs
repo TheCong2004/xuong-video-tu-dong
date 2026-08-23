@@ -2,6 +2,7 @@ use log::{error, info, warn};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use uuid::Uuid;
 
 const DEFAULT_DONUT_BROWSER_API_URL: &str = "http://127.0.0.1:10108";
 
@@ -19,6 +20,10 @@ pub fn get_extension_bridge_base_url() -> String {
 
 /// Safely constructs the canonical worker dispatch URL using the strict lease worker_id path segment.
 pub fn build_worker_dispatch_url(base: &str, worker_id: &str) -> String {
+  if let Some(profile_id) = worker_id.strip_prefix("playwright-profile:") {
+    let sidecar = std::env::var("FLOWORD_PLAYWRIGHT_RUNTIME_URL").unwrap_or_else(|_| base.to_string());
+    return format!("{}/v1/profiles/{}/dispatch", sidecar.trim_end_matches('/'), profile_id);
+  }
   let clean_base = base.trim_end_matches('/');
   let clean_worker = worker_id.trim();
   format!("{clean_base}/v1/workers/{clean_worker}/dispatch")
@@ -244,6 +249,15 @@ fn resolve_shared_donut_data_dir() -> Option<std::path::PathBuf> {
 /// Acquire an exclusive worker lease from donutbrowser runtime.
 /// Automatically boots up the target browser profile if it is currently offline/stopped.
 pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerResponse, String> {
+  if let (Ok(sidecar), Some(profile_id)) = (std::env::var("FLOWORD_PLAYWRIGHT_RUNTIME_URL"), req.profile_id.clone()) {
+    let client = Client::builder().timeout(Duration::from_secs(30)).build().map_err(|e| format!("Playwright client: {e}"))?;
+    let start_url = format!("{}/v1/profiles/{}/start", sidecar.trim_end_matches('/'), profile_id);
+    let mut body = serde_json::json!({ "url": if req.capability.starts_with("grok") { "https://grok.com/imagine" } else { "about:blank" } });
+    if let Ok(extension_path) = std::env::var("FLOWORD_CHROMEX_EXTENSION_PATH") { body["extensionPath"] = serde_json::Value::String(extension_path); }
+    client.post(&start_url).json(&body).send().await.map_err(|e| format!("Playwright runtime unavailable: {e}"))?.error_for_status().map_err(|e| format!("Playwright profile start failed: {e}"))?;
+    let lease_id = format!("playwright-lease:{}", Uuid::new_v4());
+    return Ok(AcquireWorkerResponse { lease_id: lease_id.clone(), worker_id: format!("playwright-profile:{profile_id}"), profile_id, expires_at: (chrono::Utc::now() + chrono::Duration::seconds(req.ttl_seconds.unwrap_or(120) as i64)).to_rfc3339() });
+  }
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_secs(10)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
@@ -310,6 +324,9 @@ pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerRe
 
 /// Renew an active lease heartbeat.
 pub async fn heartbeat_lease(lease_id: &str, req: HeartbeatLeaseRequest) -> Result<HeartbeatLeaseResponse, String> {
+  if lease_id.starts_with("playwright-lease:") {
+    return Ok(HeartbeatLeaseResponse { lease_id: lease_id.to_string(), status: LeaseStatus::Active, expires_at: (chrono::Utc::now() + chrono::Duration::seconds(req.ttl_seconds.unwrap_or(60) as i64)).to_rfc3339() });
+  }
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_secs(5)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
@@ -328,6 +345,9 @@ pub async fn heartbeat_lease(lease_id: &str, req: HeartbeatLeaseRequest) -> Resu
 
 /// Idempotently release a worker lease.
 pub async fn release_lease(lease_id: &str) -> Result<ReleaseLeaseResponse, String> {
+  if lease_id.starts_with("playwright-lease:") {
+    return Ok(ReleaseLeaseResponse { lease_id: lease_id.to_string(), status: LeaseStatus::Released });
+  }
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_secs(5)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 

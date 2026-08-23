@@ -4,10 +4,12 @@ const path = require('path');
 
 class ActionRunner {
   getPage() {
-    if (!sessionManager.activePage) {
+    const session = [...sessionManager.sessions.values()][0];
+    const page = session?.grokPage;
+    if (!page) {
       throw new Error('No active browser page session. Call /connect first.');
     }
-    return sessionManager.activePage;
+    return page;
   }
 
   async navigate(url) {

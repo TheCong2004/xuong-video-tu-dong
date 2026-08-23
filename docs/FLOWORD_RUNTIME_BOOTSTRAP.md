@@ -11,8 +11,7 @@ This document defines the audited runtime launch parameters, ports, health endpo
 | **be-youwee** | `be-youwee` | `cargo run` | N/A (Tauri IPC) | N/A (Tauri Command) | `TAURI_ENV=development` | Rust / Tauri App |
 | **OpenMontage Engine** | `OpenMontage` | `python render_demo.py` | N/A (CLI / Direct Exec) | N/A (Script Exec) | `PYTHONPATH=.` | Python CLI Engine |
 | **CapCut Mate** | `capcut-mate` | `uvicorn main:app --port 30000` / `python main.py` | `30000` | `http://127.0.0.1:30000/health` | `PORT=30000` | Python FastAPI Service |
-| **Playwright CDP Sidecar** | `tools/playwright-sidecar` | `npm start` / `node index.js` | `9223` | `http://127.0.0.1:9223/health` | `PLAYWRIGHT_SIDECAR_PORT=9223` | Node.js Express Service |
-| **Chrome Remote Debugging** | `system` | `chrome.exe --remote-debugging-port=9222 --user-data-dir=.runtime/chrome-cdp-profile` | `9222` | `http://127.0.0.1:9222/json/version` | N/A | Browser Daemon |
+| **Playwright Runtime** | `tools/playwright-sidecar` | `npm start` / `node src/server.js` | `9223` | `http://127.0.0.1:9223/health` | `PLAYWRIGHT_SIDECAR_PORT=9223`, `FLOWORD_CHROMEX_EXTENSION_PATH` | Node.js / bundled Chromium |
 | **ArtCraft Engine** | `crates/desktop/artcraft` | `cargo run --package artcraft` | N/A (Tauri IPC) | N/A (Tauri Command) | `RUST_LOG=info` | Rust / Tauri Desktop App |
 
 ---
@@ -37,9 +36,14 @@ This document defines the audited runtime launch parameters, ports, health endpo
 - **Save Draft Endpoint**: `POST /openapi/capcut-mate/v1/save_draft`
 - **Get Draft Endpoint**: `GET /openapi/capcut-mate/v1/get_draft`
 
-### 4. Playwright CDP Sidecar
+### 4. Playwright Runtime
 - **Base URL**: `http://127.0.0.1:9223`
 - **Health Endpoint**: `GET /health`
-- **Connect CDP Endpoint**: `POST /connect`
+- **Start profile**: `POST /v1/profiles/:profileId/start`
+- **Dispatch**: `POST /v1/profiles/:profileId/dispatch`
+- **Cancel**: `POST /v1/jobs/:jobId/cancel`
+- **Browser**: Playwright-pinned Chromium (`npx playwright install chromium`), never Wayfern/Chrome CDP
+- **Profile root**: `%LOCALAPPDATA%\Floword\playwright-profiles\<profileId>`
+- **Extension**: unpacked Chromex directory via `FLOWORD_CHROMEX_EXTENSION_PATH`
 - **Screenshot Endpoint**: `POST /screenshot`
 - **Trace Stop Endpoint**: `POST /trace/stop`
