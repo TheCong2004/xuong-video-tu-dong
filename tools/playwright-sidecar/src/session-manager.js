@@ -47,6 +47,12 @@ class SessionManager {
     s.grokPage = page; s.managedGrokTabId = page.url(); s.lastHeartbeat = Date.now(); return page;
   }
   async bindProfile(s) { let last; for (let attempt = 0; attempt < 30; attempt += 1) { try { const result = await s.worker.evaluate((profileId) => globalThis.__flowordProduction?.bind(profileId), s.profileId); if (result?.ok) return result; last = result?.error || { code: 'CONTENT_SCRIPT_NOT_READY', message: 'Content script has not acknowledged binding' }; if (last.code === 'INVALID_PROFILE') break; } catch (error) { last = { code: 'CONTENT_SCRIPT_NOT_READY', message: error.message }; } await new Promise((resolve) => setTimeout(resolve, 300)); } throw new Error(`${last?.code || 'CONTENT_SCRIPT_BIND_TIMEOUT'}: ${last?.message || 'Profile binding timed out'}`); }
+  timeoutForRequest(request) {
+    const requested = Number(request?.params?.timeoutMs);
+    const fallback = request?.method === 'grok.video.generate' ? 300000 : 180000;
+    if (!Number.isFinite(requested)) return fallback;
+    return Math.min(Math.max(Math.trunc(requested), 5000), 900000);
+  }
   async ensureWorker(s) {
     const alive = s.worker && (!s.worker.isClosed || !s.worker.isClosed());
     if (!alive || !s.context.serviceWorkers().includes(s.worker)) {
@@ -58,23 +64,63 @@ class SessionManager {
   }
   describe(s, page) { return { profileId: s.profileId, userDataDir: s.userDataDir, extensionId: s.worker?.url().match(/^chrome-extension:\/\/([^/]+)/)?.[1] || null, serviceWorkerUrl: s.worker?.url() || null, grokUrl: page?.url() || null, browserOpen: true, state: s.state, activeRequest: s.activeRequest }; }
   async health(id) { const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); const worker = await this.ensureWorker(s); const result = await worker.evaluate((profileId) => globalThis.__flowordProduction?.health(profileId), id); if (!result) throw new Error('EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: health bridge returned no result'); if (result.protocol !== 'floword-production' || result.protocolVersion !== 1) throw new Error('PROTOCOL_MISMATCH: health response protocol is invalid'); s.lastHeartbeat = Date.now(); s.state = result.ok ? (result.result?.status === 'LOGIN_REQUIRED' ? 'LOGIN_REQUIRED' : 'READY') : s.state; return result; }
+  async cancelRequest(s, active, timeoutMs = 10000) {
+    const worker = await this.ensureWorker(s);
+    const cancelRequest = { protocol: 'floword-production', protocolVersion: 1, requestId: `CANCEL_${crypto.randomUUID()}`, jobId: active.jobId, stepId: active.stepId, attemptId: active.attemptId, leaseId: active.leaseId, profileId: active.profileId, method: 'production.task.cancel', params: { targetRequestId: active.requestId }, createdAt: new Date().toISOString() };
+    const cancelPromise = worker.evaluate((payload) => globalThis.__flowordProduction?.cancel(payload), cancelRequest);
+    let cancelTimer;
+    try {
+      const result = await Promise.race([cancelPromise, new Promise((_, reject) => { cancelTimer = setTimeout(() => reject(new Error('CANCEL_TIMEOUT: cancellation acknowledgement timed out')), Math.min(Math.max(timeoutMs, 1000), 15000)); })]);
+      if (!result?.ok) throw new Error(`${result?.error?.code || 'CANCEL_FAILED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`);
+      return { cancelled: true, requestId: active.requestId, acknowledgment: result };
+    } finally {
+      clearTimeout(cancelTimer);
+    }
+  }
   async dispatch(request) {
     const { profileId, requestId, jobId } = request; if (!profileId || !requestId || !jobId) throw new Error('INVALID_REQUEST: profileId, requestId and jobId are required');
     this.pruneCompleted(); const fingerprint = crypto.createHash('sha256').update(canonical({ requestId, jobId, stepId: request.stepId, attemptId: request.attemptId, leaseId: request.leaseId, profileId, method: request.method, params: request.params })).digest('hex');
     const active = this.activeRequests.get(requestId); if (active) { if (active.fingerprint !== fingerprint) throw new Error('CORRELATION_CONFLICT: requestId was reused with different payload'); return active.promise; }
     const completed = this.completedRequests.get(requestId); if (completed) { if (completed.fingerprint !== fingerprint) throw new Error('CORRELATION_CONFLICT: requestId was reused with different payload'); return completed.result; }
     const s = this.sessions.get(profileId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
-    if (s.activeRequest) throw new Error('JOB_ALREADY_RUNNING: profile has an active request');
-    s.activeRequest = { ...request }; s.state = 'BUSY';
     const worker = await this.ensureWorker(s);
-    const timeoutMs = Number(process.env.FLOWORD_SIDECAR_DISPATCH_TIMEOUT_MS || 120000);
+    if (s.state === 'RECONCILING') throw new Error('WORKER_RECONCILING: profile is recovering after an unconfirmed cancellation');
+    if (s.activeRequest) throw new Error('JOB_ALREADY_RUNNING: profile has an active request');
+    const activeRequest = { ...request };
+    s.activeRequest = activeRequest; s.state = 'BUSY';
+    const timeoutMs = this.timeoutForRequest(request);
     let timeoutHandle;
     const dispatchPromise = worker.evaluate((payload) => globalThis.__flowordProduction?.dispatch(payload), request);
     const timeoutPromise = new Promise((_, reject) => { timeoutHandle = setTimeout(() => reject(new Error('RESULT_TIMEOUT: dispatch timed out')), timeoutMs); });
-    const promise = Promise.race([dispatchPromise, timeoutPromise]).then((result) => { if (!result || typeof result !== 'object') throw new Error('INVALID_EXTENSION_RESPONSE: dispatch returned no object'); if (result.protocol !== 'floword-production' || result.protocolVersion !== 1 || result.requestId !== request.requestId || result.jobId !== request.jobId || result.stepId !== request.stepId || result.attemptId !== request.attemptId || result.leaseId !== request.leaseId || result.profileId !== request.profileId) throw new Error('CORRELATION_MISMATCH: extension response did not echo request identity'); this.completedRequests.set(requestId, { fingerprint, result, expiresAt: Date.now() + this.completedTtlMs }); while (this.completedRequests.size > this.maxCompletedRequests) this.completedRequests.delete(this.completedRequests.keys().next().value); return result; }).finally(() => { clearTimeout(timeoutHandle); if (s.activeRequest?.requestId === requestId) { s.activeRequest = null; s.state = 'READY'; } this.activeRequests.delete(requestId); });
+    const promise = (async () => {
+      try {
+        const result = await Promise.race([dispatchPromise, timeoutPromise]);
+        if (!result || typeof result !== 'object') throw new Error('INVALID_EXTENSION_RESPONSE: dispatch returned no object');
+        if (result.protocol !== 'floword-production' || result.protocolVersion !== 1 || result.requestId !== request.requestId || result.jobId !== request.jobId || result.stepId !== request.stepId || result.attemptId !== request.attemptId || result.leaseId !== request.leaseId || result.profileId !== request.profileId) throw new Error('CORRELATION_MISMATCH: extension response did not echo request identity');
+        this.completedRequests.set(requestId, { fingerprint, result, expiresAt: Date.now() + this.completedTtlMs });
+        while (this.completedRequests.size > this.maxCompletedRequests) this.completedRequests.delete(this.completedRequests.keys().next().value);
+        return result;
+      } catch (error) {
+        if (String(error?.message || error).startsWith('RESULT_TIMEOUT:')) {
+          try {
+            await this.cancelRequest(s, activeRequest, 10000);
+            s.state = 'READY';
+          } catch (cancelError) {
+            s.state = 'RECONCILING';
+            throw new Error(`CANCEL_UNCONFIRMED: ${cancelError.message}`);
+          }
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutHandle);
+        if (s.activeRequest?.requestId === requestId) s.activeRequest = null;
+        if (s.state === 'BUSY') s.state = 'READY';
+        this.activeRequests.delete(requestId);
+      }
+    })();
     this.activeRequests.set(requestId, { fingerprint, promise, session: s }); return promise;
   }
-  async cancel(jobId) { const s = [...this.sessions.values()].find((x) => x.activeRequest?.jobId === jobId); if (!s) return { cancelled: false, jobId }; const active = s.activeRequest; const worker = await this.ensureWorker(s); const cancelRequest = { protocol: 'floword-production', protocolVersion: 1, requestId: `CANCEL_${crypto.randomUUID()}`, jobId: active.jobId, stepId: active.stepId, attemptId: active.attemptId, leaseId: active.leaseId, profileId: active.profileId, method: 'production.task.cancel', params: { targetRequestId: active.requestId }, createdAt: new Date().toISOString() }; const result = await worker.evaluate((payload) => globalThis.__flowordProduction?.cancel(payload), cancelRequest); if (!result?.ok) throw new Error(`${result?.error?.code || 'CANCEL_FAILED'}: ${result?.error?.message || 'Cancellation was not acknowledged'}`); return { cancelled: true, jobId, requestId: active.requestId, acknowledgment: result }; }
+  async cancel(jobId) { const s = [...this.sessions.values()].find((x) => x.activeRequest?.jobId === jobId); if (!s) return { cancelled: false, jobId }; const active = s.activeRequest; const result = await this.cancelRequest(s, active); return { cancelled: true, jobId, ...result }; }
   pruneCompleted() { const now = Date.now(); for (const [id, entry] of this.completedRequests) if (entry.expiresAt <= now) this.completedRequests.delete(id); }
   async stop(id) { const s = this.sessions.get(id); if (!s) return { stopped: false, profileId: id }; await s.context.close(); this.sessions.delete(id); return { stopped: true, profileId: id }; }
   async getPages(id) { const s = this.sessions.get(id); if (!s) return []; return Promise.all(s.context.pages().map(async (p, index) => ({ index, url: p.url(), title: await p.title().catch(() => ''), managed: p === s.grokPage }))); }

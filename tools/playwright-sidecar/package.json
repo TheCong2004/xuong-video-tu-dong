@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test tests/unit.test.js",
+    "test": "node --test tests/unit.test.js tests/server.test.js",
     "test:integration": "node --test tests/integration.playwright.test.js"
   },
   "dependencies": {
