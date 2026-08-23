@@ -26,6 +26,29 @@ test('concurrent ensureProfile calls share one launch flight', async () => {
   }
 });
 
+test('CDP attach requires authoritative browser identity', async () => {
+  await assert.rejects(
+    sessionManager.startProfile('identity-profile', { cdpEndpoint: 'http://127.0.0.1:9222' }),
+    /CDP_IDENTITY_REQUIRED/,
+  );
+});
+
+test('different CDP identities do not share an attach flight', async () => {
+  const original = sessionManager.startProfile;
+  let launches = 0;
+  sessionManager.startProfile = async (id, options) => { launches += 1; return { profileId: id, browserPid: options.browserPid, launchGeneration: options.launchGeneration }; };
+  try {
+    await Promise.all([
+      sessionManager.ensureProfile('identity-flight', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 11, launchGeneration: 1 }),
+      sessionManager.ensureProfile('identity-flight', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 12, launchGeneration: 2 }),
+    ]);
+    assert.equal(launches, 2);
+  } finally {
+    sessionManager.startProfile = original;
+    sessionManager.startFlights.clear();
+  }
+});
+
 function request(overrides = {}) {
   return { protocol: 'floword-production', protocolVersion: 1, requestId: 'req-unit', jobId: 'job-unit', stepId: 'image', attemptId: 'attempt-1', leaseId: 'lease-1', profileId: 'unit-session', method: 'grok.image.edit', params: {}, ...overrides };
 }

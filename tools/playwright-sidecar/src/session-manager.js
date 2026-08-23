@@ -22,6 +22,9 @@ class SessionManager {
   async ensureProfile(id, options = {}) {
     if (this.sessions.has(id)) {
       const s = this.sessions.get(id);
+      if (!Number.isInteger(options.browserPid) || options.browserPid <= 0 || !Number.isInteger(options.launchGeneration)) {
+        throw new Error('CDP_IDENTITY_REQUIRED: browserPid and launchGeneration are required for every attach');
+      }
       if ((options.cdpEndpoint && s.cdpEndpoint !== options.cdpEndpoint) ||
         (options.browserPid !== undefined && (s.browserPid === null || s.browserPid !== options.browserPid)) ||
         (options.launchGeneration !== undefined && (s.launchGeneration === null || s.launchGeneration !== options.launchGeneration))) {
@@ -32,13 +35,15 @@ class SessionManager {
         return this.describe(s, await this.ensureGrokPage(s, options.url));
       }
     }
-    if (this.startFlights.has(id)) return this.startFlights.get(id);
-    const flight = this.startProfile(id, options).finally(() => this.startFlights.delete(id)); this.startFlights.set(id, flight); return flight;
+    const flightKey = `${id}|${options.cdpEndpoint || ''}|${options.browserPid || ''}|${options.launchGeneration || ''}`;
+    if (this.startFlights.has(flightKey)) return this.startFlights.get(flightKey);
+    const flight = this.startProfile(id, options).finally(() => this.startFlights.delete(flightKey)); this.startFlights.set(flightKey, flight); return flight;
   }
   async startProfile(id, options = {}) {
     if (!id || !/^[a-z0-9][a-z0-9-]{0,127}$/i.test(id)) throw new Error('INVALID_PROFILE: profileId is required');
     const cdpEndpoint = options.cdpEndpoint || (options.cdpPort ? `http://127.0.0.1:${options.cdpPort}` : null);
     if (!cdpEndpoint) throw new Error('CDP_ENDPOINT_REQUIRED: Donut must provide the owned browser CDP endpoint');
+    if (!Number.isInteger(options.browserPid) || options.browserPid <= 0 || !Number.isInteger(options.launchGeneration)) throw new Error('CDP_IDENTITY_REQUIRED: browserPid and launchGeneration are required');
     const browser = await chromium.connectOverCDP(cdpEndpoint, { timeout: options.timeoutMs || 15000 });
     const context = browser.contexts()[0];
     if (!context) { await browser.close().catch(() => {}); throw new Error('CDP_CONTEXT_NOT_FOUND: Donut browser exposed no browser context'); }

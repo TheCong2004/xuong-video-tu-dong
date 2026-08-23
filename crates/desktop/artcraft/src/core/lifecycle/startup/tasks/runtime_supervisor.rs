@@ -451,9 +451,6 @@ fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
       return Err(format!("placeholder artifact is not allowed: {name}"));
     }
   }
-  if !files.keys().any(|name| name.starts_with("playwright/") && name.to_ascii_lowercase().ends_with("/chrome.exe")) {
-    return Err("manifest has no staged Chromium executable".to_string());
-  }
   for (relative, expected) in files {
     let expected = expected.as_str().ok_or_else(|| format!("invalid hash for {relative}"))?;
     let file = root.join(relative);
@@ -624,20 +621,10 @@ mod tests {
   }
 
   #[test]
-  fn complete_manifest_requires_chromium_and_passes() {
+  fn complete_manifest_without_chromium_passes() {
     let root = fixture_root("complete");
-    let mut include = REQUIRED_RUNTIME_ARTIFACTS.to_vec();
-    include.push("playwright/chromium/chrome.exe");
-    write_manifest(&root, &include);
-    assert!(verify_runtime_manifest(&root).is_ok());
-    let _ = std::fs::remove_dir_all(root);
-  }
-
-  #[test]
-  fn manifest_without_chromium_is_rejected() {
-    let root = fixture_root("missing-chromium");
     write_manifest(&root, REQUIRED_RUNTIME_ARTIFACTS);
-    assert!(verify_runtime_manifest(&root).is_err());
+    assert!(verify_runtime_manifest(&root).is_ok());
     let _ = std::fs::remove_dir_all(root);
   }
 }

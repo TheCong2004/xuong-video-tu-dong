@@ -5,11 +5,14 @@ const sessionManager = require('../src/session-manager');
 test('Donut-owned Chromium attaches through CDP and reuses profile', async (t) => {
   const cdpEndpoint = process.env.FLOWORD_CDP_ENDPOINT;
   const profileId = process.env.FLOWORD_CDP_PROFILE_ID || 'fixture-profile';
-  if (!cdpEndpoint) {
-    t.skip('set FLOWORD_CDP_ENDPOINT to a running Donut-owned browser for the integration test');
+  const browserPid = Number(process.env.FLOWORD_CDP_BROWSER_PID);
+  const launchGeneration = Number(process.env.FLOWORD_CDP_LAUNCH_GENERATION);
+  if (!cdpEndpoint || !Number.isInteger(browserPid) || !Number.isInteger(launchGeneration)) {
+    t.skip('set FLOWORD_CDP_ENDPOINT, FLOWORD_CDP_BROWSER_PID and FLOWORD_CDP_LAUNCH_GENERATION for a Donut-owned browser');
     return;
   }
-  const first = await sessionManager.ensureProfile(profileId, { cdpEndpoint, url: 'https://grok.com/imagine' });
+  const identity = { cdpEndpoint, browserPid, launchGeneration };
+  const first = await sessionManager.ensureProfile(profileId, { ...identity, url: 'https://grok.com/imagine' });
   assert.match(first.serviceWorkerUrl, /^chrome-extension:\/\//);
   const health = await sessionManager.health(profileId);
   assert.equal(health.profileId, profileId);
@@ -19,7 +22,7 @@ test('Donut-owned Chromium attaches through CDP and reuses profile', async (t) =
   assert.deepEqual(await sessionManager.dispatch(request), dispatched);
   const cancelled = await sessionManager.cancel('missing-job');
   assert.equal(cancelled.cancelled, false);
-  const second = await sessionManager.ensureProfile(profileId, { cdpEndpoint });
+  const second = await sessionManager.ensureProfile(profileId, identity);
   assert.equal(second.serviceWorkerUrl, first.serviceWorkerUrl);
   await sessionManager.stop(profileId);
 });

@@ -2,7 +2,6 @@
 // Stage the immutable runtime inputs used by the packaged Tauri app.
 // Required environment variables:
 //   FLOWORD_NODE_RUNTIME       path to node.exe
-//   FLOWORD_CHROMIUM_DIR       Playwright Chromium directory
 //   FLOWORD_CHROMEX_EXTENSION  unpacked extension directory
 //   FLOWORD_DONUT_RUNTIME_EXE  floword-donut-runtime.exe
 
@@ -35,12 +34,6 @@ function copy(source, destination) {
   fs.cpSync(source, destination, { recursive: true });
 }
 
-function copyChromiumResumable(source, destination) {
-  const existingChrome = fs.existsSync(destination) && findChrome(destination);
-  if (existingChrome) return;
-  copy(source, destination);
-}
-
 function files(root, current = root) {
   return fs.readdirSync(current, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(current, entry.name);
@@ -48,17 +41,12 @@ function files(root, current = root) {
   });
 }
 
-function findChrome(root) {
-  return files(root).find((file) => path.basename(file).toLowerCase() === 'chrome.exe');
-}
-
 function stageDonutExtension(extension) {
   const destination = path.join(resources, 'donut-runtime', 'bundled-extensions', 'chromex.zip');
   const supplied = process.env.FLOWORD_CHROMEX_ZIP;
-  if (fs.existsSync(destination)) {
-    validateChromexZip(destination);
-    return destination;
-  }
+  // Always refresh the small extension archive. Reusing an existing ZIP can
+  // silently stage an older Chromex build after the unpacked source changed.
+  fs.rmSync(destination, { force: true });
   if (supplied) {
     const zip = required('FLOWORD_CHROMEX_ZIP');
     copy(zip, destination);
@@ -66,7 +54,6 @@ function stageDonutExtension(extension) {
     return destination;
   }
   if (process.platform !== 'win32') throw new Error('FLOWORD_CHROMEX_ZIP is required outside Windows staging');
-  fs.rmSync(destination, { force: true });
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   childProcess.execFileSync('powershell.exe', [
     '-NoProfile', '-NonInteractive', '-Command',
@@ -85,9 +72,10 @@ function validateChromexZip(zipPath) {
     `$z = [IO.Compression.ZipFile]::OpenRead(${JSON.stringify(zipPath)})`,
     'try {',
     '  $names = @($z.Entries | ForEach-Object { $_.FullName.Replace("\\", "/") })',
-    '  if (-not ($names -contains "manifest.json")) { throw "ZIP root manifest.json missing" }',
-    '  foreach ($n in $names) { if ($n.StartsWith("/") -or $n.Contains("../") -or $n.Contains("..\\")) { throw "ZIP path traversal: $n" } }',
-    '  $m = $z.Entries | Where-Object FullName -eq "manifest.json" | Select-Object -First 1',
+    '  $normalized = @($z.Entries | ForEach-Object { $_.FullName.Replace("\\", "/") })',
+    '  if (@($normalized | Where-Object { $_ -eq "manifest.json" }).Count -ne 1) { throw "ZIP must contain exactly one root manifest.json" }',
+    '  foreach ($n in $normalized) { $parts = $n.Split("/"); if ($n.StartsWith("/") -or $n -match "^[A-Za-z]:/" -or ($parts -contains "..")) { throw "ZIP path traversal: $n" } }',
+    '  $m = $z.Entries | Where-Object { $_.FullName.Replace("\\", "/") -eq "manifest.json" } | Select-Object -First 1',
     '  $r = New-Object IO.StreamReader($m.Open()); try { $j = $r.ReadToEnd() } finally { $r.Dispose() }',
     '  $manifest = $j | ConvertFrom-Json',
     '  if ([int]$manifest.manifest_version -ne 3) { throw "Chromex manifest_version must be 3" }',
@@ -98,7 +86,6 @@ function validateChromexZip(zipPath) {
 }
 
 const nodeRuntime = required('FLOWORD_NODE_RUNTIME');
-const chromium = required('FLOWORD_CHROMIUM_DIR');
 const extension = required('FLOWORD_CHROMEX_EXTENSION');
 const donutRuntime = required('FLOWORD_DONUT_RUNTIME_EXE');
 const sourceCommits = {
@@ -107,7 +94,6 @@ const sourceCommits = {
   artcraft: requiredEnv('FLOWORD_ARTCRAFT_COMMIT'),
 };
 if (path.basename(nodeRuntime).toLowerCase() !== 'node.exe') throw new Error('FLOWORD_NODE_RUNTIME must point to node.exe');
-if (!findChrome(chromium)) throw new Error(`FLOWORD_CHROMIUM_DIR contains no chrome.exe: ${chromium}`);
 if (path.basename(donutRuntime).toLowerCase() !== 'floword-donut-runtime.exe') throw new Error('FLOWORD_DONUT_RUNTIME_EXE must point to floword-donut-runtime.exe');
 if (!fs.existsSync(path.join(extension, 'manifest.json'))) throw new Error('FLOWORD_CHROMEX_EXTENSION is missing manifest.json');
 if (!fs.existsSync(path.join(sidecar, 'node_modules', 'express', 'package.json'))) throw new Error('sidecar express dependency is missing; run npm ci');
@@ -116,7 +102,6 @@ if (!fs.existsSync(path.join(sidecar, 'node_modules', 'playwright', 'package.jso
 copy(nodeRuntime, path.join(resources, 'node', path.basename(nodeRuntime)));
 copy(donutRuntime, path.join(resources, 'donut-runtime', 'floword-donut-runtime.exe'));
 stageDonutExtension(extension);
-copyChromiumResumable(chromium, path.join(resources, 'playwright'));
 copy(extension, path.join(resources, 'chromex-extension'));
 copy(path.join(sidecar, 'src'), path.join(resources, 'playwright-sidecar', 'src'));
 copy(path.join(sidecar, 'package.json'), path.join(resources, 'playwright-sidecar', 'package.json'));
@@ -141,9 +126,6 @@ const requiredArtifacts = [
   'playwright-sidecar/node_modules/playwright/package.json',
   'chromex-extension/manifest.json',
 ];
-const chromeArtifact = Object.keys(manifest).find((file) => file.startsWith('playwright/') && file.toLowerCase().endsWith('/chrome.exe'));
-if (!chromeArtifact) throw new Error('staged runtime is missing playwright/**/chrome.exe');
-requiredArtifacts.push(chromeArtifact);
 for (const artifact of requiredArtifacts) if (!manifest[artifact]) throw new Error(`required production artifact missing: ${artifact}`);
 const temporaryManifest = `${manifestPath}.tmp-${process.pid}`;
 fs.writeFileSync(temporaryManifest, `${JSON.stringify({ schemaVersion: 1, generatedAt: new Date().toISOString(), sourceCommits, requiredArtifacts, files: manifest }, null, 2)}\n`, { flag: 'w' });
