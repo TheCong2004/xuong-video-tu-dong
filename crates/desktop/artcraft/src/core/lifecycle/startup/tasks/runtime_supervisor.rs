@@ -21,6 +21,7 @@ const PLAYWRIGHT_PORT: u16 = 9223;
 static PLAYWRIGHT_CHILD: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 const REQUIRED_RUNTIME_ARTIFACTS: &[&str] = &[
   "donut-runtime/floword-donut-runtime.exe",
+  "donut-runtime/donut-proxy.exe",
   "donut-runtime/bundled-extensions/chromex.zip",
   "node/node.exe",
   "playwright-sidecar/src/server.js",
@@ -325,11 +326,6 @@ pub fn start_playwright_runtime(app: &AppHandle) {
   };
   let mut command = background_command(Command::new(node));
   command.arg(&sidecar).current_dir(sidecar.parent().unwrap_or(Path::new("."))).env("PLAYWRIGHT_SIDECAR_PORT", PLAYWRIGHT_PORT.to_string()).env("FLOWORD_PARENT_PID", std::process::id().to_string()).stdin(Stdio::null()).stdout(Stdio::from(stdout)).stderr(Stdio::from(stderr));
-  if let Some(root) = resource_dir.as_ref() {
-    if root.join("playwright").is_dir() {
-      command.env("PLAYWRIGHT_BROWSERS_PATH", root.join("playwright"));
-    }
-  }
   if std::env::var_os("FLOWORD_CHROMEX_EXTENSION_PATH").is_none() {
     if let Some(path) = resource_dir.as_ref().map(|root| root.join("chromex-extension")).filter(|path| path.join("manifest.json").is_file()) {
       command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path);
@@ -339,9 +335,6 @@ pub fn start_playwright_runtime(app: &AppHandle) {
     if let Some(path) = std::env::current_dir().ok().and_then(|cwd| [cwd.join("resources/chromex-extension"), cwd.join("..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod")].into_iter().find(|path| path.join("manifest.json").is_file())) {
       command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path);
     }
-  }
-  if let Some(browsers) = std::env::var_os("FLOWORD_PLAYWRIGHT_BROWSERS_PATH") {
-    command.env("PLAYWRIGHT_BROWSERS_PATH", browsers);
   }
   let child = match command.spawn() {
     Ok(child) => child,
@@ -428,6 +421,13 @@ fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
   if value.get("schemaVersion").and_then(|v| v.as_u64()) != Some(1) || value.get("generatedAt").and_then(|v| v.as_str()).is_none() || value.get("files").and_then(|v| v.as_object()).is_none() {
     return Err("manifest has no generatedAt/files".to_string());
   }
+  let commits = value.get("sourceCommits").and_then(|v| v.as_object()).ok_or_else(|| "manifest has no sourceCommits".to_string())?;
+  for key in ["donutbrowser", "chromex", "artcraft"] {
+    let commit = commits.get(key).and_then(|v| v.as_str()).ok_or_else(|| format!("manifest sourceCommits missing {key}"))?;
+    if commit.len() != 40 || !commit.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+      return Err(format!("manifest source commit {key} is not a full SHA"));
+    }
+  }
   let files = value.get("files").and_then(|v| v.as_object()).unwrap();
   if files.is_empty() {
     return Err("manifest contains no files".to_string());
@@ -452,6 +452,9 @@ fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
     }
   }
   for (relative, expected) in files {
+    if relative.starts_with("playwright/") {
+      return Err(format!("obsolete Chromium artifact is not allowed: {relative}"));
+    }
     let expected = expected.as_str().ok_or_else(|| format!("invalid hash for {relative}"))?;
     let file = root.join(relative);
     let bytes = std::fs::read(&file).map_err(|e| format!("missing {relative}: {e}"))?;
@@ -605,7 +608,8 @@ mod tests {
       files.insert((*relative).to_string(), digest);
     }
     let required: Vec<&str> = REQUIRED_RUNTIME_ARTIFACTS.to_vec();
-    let manifest = serde_json::json!({ "schemaVersion": 1, "generatedAt": "2026-01-01T00:00:00Z", "requiredArtifacts": required, "files": files });
+    let source_commits = serde_json::json!({ "donutbrowser": "0123456789abcdef0123456789abcdef01234567", "chromex": "89abcdef0123456789abcdef0123456789abcdef", "artcraft": "fedcba9876543210fedcba9876543210fedcba98" });
+    let manifest = serde_json::json!({ "schemaVersion": 1, "generatedAt": "2026-01-01T00:00:00Z", "sourceCommits": source_commits, "requiredArtifacts": required, "files": files });
     std::fs::write(root.join("runtime-manifest.sha256.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
   }
 

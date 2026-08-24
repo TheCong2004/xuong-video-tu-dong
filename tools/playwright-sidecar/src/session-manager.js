@@ -19,15 +19,27 @@ class SessionManager {
     if (!dir || !fs.existsSync(path.join(dir, 'manifest.json'))) throw new Error(`EXTENSION_NOT_LOADED: manifest.json not found at ${dir}`);
     return dir;
   }
+  validateAndNormalizeIdentity(profileId, options = {}) {
+    if (!profileId || !/^[a-z0-9][a-z0-9-]{0,127}$/i.test(profileId)) throw new Error('INVALID_PROFILE: profileId is required');
+    const endpoint = String(options.cdpEndpoint || (options.cdpPort ? `http://127.0.0.1:${options.cdpPort}` : ''));
+    let parsed;
+    try { parsed = new URL(endpoint); } catch (_) { throw new Error('CDP_IDENTITY_REQUIRED: invalid cdpEndpoint'); }
+    if (parsed.protocol !== 'http:' || !['127.0.0.1', 'localhost'].includes(parsed.hostname) || parsed.pathname !== '/' || parsed.search || parsed.hash) throw new Error('CDP_IDENTITY_REQUIRED: cdpEndpoint must be loopback http');
+    if (!parsed.port) throw new Error('CDP_IDENTITY_REQUIRED: explicit cdpEndpoint port is required');
+    const port = Number(parsed.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('CDP_IDENTITY_REQUIRED: invalid cdpEndpoint port');
+    const browserPid = options.browserPid;
+    const launchGeneration = options.launchGeneration;
+    if (!Number.isSafeInteger(browserPid) || browserPid <= 0 || !Number.isSafeInteger(launchGeneration) || launchGeneration <= 0) throw new Error('CDP_IDENTITY_REQUIRED: browserPid and launchGeneration are required');
+    const normalizedEndpoint = `http://${parsed.hostname}:${port}`;
+    return { profileId, cdpEndpoint: normalizedEndpoint, browserPid, launchGeneration, fingerprint: `${profileId}|${normalizedEndpoint}|${browserPid}|${launchGeneration}` };
+  }
   async ensureProfile(id, options = {}) {
+    const identity = this.validateAndNormalizeIdentity(id, options);
     if (this.sessions.has(id)) {
       const s = this.sessions.get(id);
-      if (!Number.isInteger(options.browserPid) || options.browserPid <= 0 || !Number.isInteger(options.launchGeneration)) {
-        throw new Error('CDP_IDENTITY_REQUIRED: browserPid and launchGeneration are required for every attach');
-      }
-      if ((options.cdpEndpoint && s.cdpEndpoint !== options.cdpEndpoint) ||
-        (options.browserPid !== undefined && (s.browserPid === null || s.browserPid !== options.browserPid)) ||
-        (options.launchGeneration !== undefined && (s.launchGeneration === null || s.launchGeneration !== options.launchGeneration))) {
+      const sessionFingerprint = `${id}|${s.cdpEndpoint}|${s.browserPid}|${s.launchGeneration}`;
+      if (sessionFingerprint !== identity.fingerprint) {
         if (s.activeRequest) throw new Error('CDP_SESSION_STALE: browser endpoint changed while a request was active');
         await s.browser.close().catch(() => {});
         this.sessions.delete(id);
@@ -35,19 +47,24 @@ class SessionManager {
         return this.describe(s, await this.ensureGrokPage(s, options.url));
       }
     }
-    const flightKey = `${id}|${options.cdpEndpoint || ''}|${options.browserPid || ''}|${options.launchGeneration || ''}`;
-    if (this.startFlights.has(flightKey)) return this.startFlights.get(flightKey);
-    const flight = this.startProfile(id, options).finally(() => this.startFlights.delete(flightKey)); this.startFlights.set(flightKey, flight); return flight;
+    const flight = this.startFlights.get(id);
+    if (flight) {
+      if (flight.fingerprint !== identity.fingerprint) throw new Error('CDP_SESSION_STALE: another attach is already starting for this profile');
+      return flight.promise;
+    }
+    const promise = this.startProfile(id, { ...options, ...identity }).finally(() => {
+      const current = this.startFlights.get(id);
+      if (current?.promise === promise) this.startFlights.delete(id);
+    });
+    this.startFlights.set(id, { fingerprint: identity.fingerprint, promise });
+    return promise;
   }
   async startProfile(id, options = {}) {
-    if (!id || !/^[a-z0-9][a-z0-9-]{0,127}$/i.test(id)) throw new Error('INVALID_PROFILE: profileId is required');
-    const cdpEndpoint = options.cdpEndpoint || (options.cdpPort ? `http://127.0.0.1:${options.cdpPort}` : null);
-    if (!cdpEndpoint) throw new Error('CDP_ENDPOINT_REQUIRED: Donut must provide the owned browser CDP endpoint');
-    if (!Number.isInteger(options.browserPid) || options.browserPid <= 0 || !Number.isInteger(options.launchGeneration)) throw new Error('CDP_IDENTITY_REQUIRED: browserPid and launchGeneration are required');
-    const browser = await chromium.connectOverCDP(cdpEndpoint, { timeout: options.timeoutMs || 15000 });
+    const identity = this.validateAndNormalizeIdentity(id, options);
+    const browser = await chromium.connectOverCDP(identity.cdpEndpoint, { timeout: options.timeoutMs || 15000 });
     const context = browser.contexts()[0];
     if (!context) { await browser.close().catch(() => {}); throw new Error('CDP_CONTEXT_NOT_FOUND: Donut browser exposed no browser context'); }
-    const s = { profileId: id, cdpEndpoint, browserPid: options.browserPid || null, launchGeneration: options.launchGeneration || null, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() }; this.sessions.set(id, s);
+    const s = { profileId: id, cdpEndpoint: identity.cdpEndpoint, browserPid: identity.browserPid, launchGeneration: identity.launchGeneration, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() }; this.sessions.set(id, s);
     try { s.worker = await this.waitForServiceWorker(context, options.timeoutMs || 15000); s.state = 'BROWSER_READY'; const page = await this.ensureGrokPage(s, options.url); await this.bindProfile(s); s.state = 'EXTENSION_READY'; return this.describe(s, page); }
     catch (e) { await browser.close().catch(() => {}); this.sessions.delete(id); throw e; }
   }

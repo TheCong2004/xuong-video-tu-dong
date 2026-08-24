@@ -17,7 +17,8 @@ test('concurrent ensureProfile calls share one launch flight', async () => {
   let launches = 0;
   sessionManager.startProfile = async (id) => { launches += 1; await new Promise((r) => setTimeout(r, 10)); return { profileId: id }; };
   try {
-    const [a, b] = await Promise.all([sessionManager.ensureProfile('flight-profile'), sessionManager.ensureProfile('flight-profile')]);
+    const identity = { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 11, launchGeneration: 1 };
+    const [a, b] = await Promise.all([sessionManager.ensureProfile('flight-profile', identity), sessionManager.ensureProfile('flight-profile', identity)]);
     assert.equal(launches, 1);
     assert.deepEqual(a, b);
   } finally {
@@ -38,15 +39,29 @@ test('different CDP identities do not share an attach flight', async () => {
   let launches = 0;
   sessionManager.startProfile = async (id, options) => { launches += 1; return { profileId: id, browserPid: options.browserPid, launchGeneration: options.launchGeneration }; };
   try {
-    await Promise.all([
-      sessionManager.ensureProfile('identity-flight', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 11, launchGeneration: 1 }),
-      sessionManager.ensureProfile('identity-flight', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 12, launchGeneration: 2 }),
-    ]);
-    assert.equal(launches, 2);
+    const first = sessionManager.ensureProfile('identity-flight', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 11, launchGeneration: 1 });
+    await assert.rejects(sessionManager.ensureProfile('identity-flight', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 12, launchGeneration: 2 }), /CDP_SESSION_STALE/);
+    await first;
+    assert.equal(launches, 1);
   } finally {
     sessionManager.startProfile = original;
     sessionManager.startFlights.clear();
   }
+});
+
+test('CDP identity rejects non-loopback and non-canonical values', () => {
+  assert.throws(() => sessionManager.validateAndNormalizeIdentity('identity', { cdpEndpoint: 'http://10.0.0.2:9222', browserPid: 1, launchGeneration: 1 }), /CDP_IDENTITY_REQUIRED/);
+  assert.throws(() => sessionManager.validateAndNormalizeIdentity('identity', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: '1', launchGeneration: 1 }), /CDP_IDENTITY_REQUIRED/);
+  assert.throws(() => sessionManager.validateAndNormalizeIdentity('identity', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 1, launchGeneration: 0 }), /CDP_IDENTITY_REQUIRED/);
+});
+
+test('existing sessions cannot be reused without complete CDP identity', async () => {
+  const session = { profileId: 'existing-identity', cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 11, launchGeneration: 1, activeRequest: { requestId: 'active' }, browser: { close: async () => {} } };
+  sessionManager.sessions.set(session.profileId, session);
+  try {
+    await assert.rejects(sessionManager.ensureProfile(session.profileId), /CDP_IDENTITY_REQUIRED/);
+    await assert.rejects(sessionManager.ensureProfile(session.profileId, { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 11, launchGeneration: 2 }), /CDP_SESSION_STALE/);
+  } finally { sessionManager.sessions.delete(session.profileId); }
 });
 
 function request(overrides = {}) {

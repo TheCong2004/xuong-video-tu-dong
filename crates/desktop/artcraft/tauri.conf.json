@@ -162,7 +162,6 @@
       "resources/OmniRoute",
       "resources/donut-runtime",
       "resources/node",
-      "resources/playwright",
       "resources/playwright-sidecar",
       "resources/chromex-extension",
       "resources/runtime-manifest.sha256.json"
