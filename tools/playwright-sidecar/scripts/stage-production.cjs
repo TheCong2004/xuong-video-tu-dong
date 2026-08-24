@@ -16,20 +16,28 @@ const sidecar = path.resolve(__dirname, '..');
 const resources = path.resolve(process.env.FLOWORD_STAGE_OUTPUT_ROOT || path.join(repo, 'crates', 'desktop', 'artcraft', 'resources'));
 const stagingLock = path.join(resources, '.runtime-staging.lock');
 function acquireStagingLock() {
-if (fs.existsSync(stagingLock)) {
-  let owner;
-  try { owner = JSON.parse(fs.readFileSync(stagingLock, 'utf8')); } catch (_) { throw new Error(`runtime staging lock is invalid: ${stagingLock}`); }
-  let alive = false;
-  if (Number.isInteger(owner.pid) && owner.pid > 0) {
-    try { process.kill(owner.pid, 0); alive = true; } catch (_) { alive = false; }
+  fs.mkdirSync(resources, { recursive: true });
+  for (;;) {
+    try {
+      const fd = fs.openSync(stagingLock, 'wx');
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+      fs.closeSync(fd);
+      return;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let owner;
+      try { owner = JSON.parse(fs.readFileSync(stagingLock, 'utf8')); } catch (_) { throw new Error(`runtime staging lock is invalid: ${stagingLock}`); }
+      let alive = false;
+      if (Number.isInteger(owner.pid) && owner.pid > 0) {
+        try { process.kill(owner.pid, 0); alive = true; } catch (_) { alive = false; }
+      }
+      if (alive) throw new Error(`runtime staging is already locked by pid ${owner.pid}: ${stagingLock}`);
+      fs.rmSync(stagingLock, { force: true });
+    }
   }
-  if (alive) throw new Error(`runtime staging is already locked by pid ${owner.pid}: ${stagingLock}`);
-  fs.rmSync(stagingLock, { force: true });
 }
-fs.mkdirSync(resources, { recursive: true });
-fs.writeFileSync(stagingLock, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
-process.once('exit', () => fs.rmSync(stagingLock, { force: true }));
-}
+
+function releaseStagingLock() { fs.rmSync(stagingLock, { force: true }); }
 
 function required(name) {
   const value = process.env[name];
@@ -170,6 +178,7 @@ if (process.env.FLOWORD_STAGE_TEST_FAIL_AT === 'before-manifest-replace') {
 }
 fs.renameSync(temporaryManifest, manifestPath);
 console.log(`Staged ${Object.keys(manifest).length} runtime files in ${resources}`);
+releaseStagingLock();
 }
 
 if (require.main === module) main();

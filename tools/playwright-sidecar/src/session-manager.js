@@ -36,6 +36,13 @@ class SessionManager {
   }
   async ensureProfile(id, options = {}) {
     const identity = this.validateAndNormalizeIdentity(id, options);
+    // A STARTING session is not authoritative yet. Always join the existing
+    // attach flight before consulting the published session map.
+    const flight = this.startFlights.get(id);
+    if (flight) {
+      if (flight.fingerprint !== identity.fingerprint) throw new Error('CDP_SESSION_STALE: another attach is already starting for this profile');
+      return flight.promise;
+    }
     if (this.sessions.has(id)) {
       const s = this.sessions.get(id);
       const sessionFingerprint = `${id}|${s.cdpEndpoint}|${s.browserPid}|${s.launchGeneration}`;
@@ -46,11 +53,6 @@ class SessionManager {
       } else {
         return this.describe(s, await this.ensureGrokPage(s, options.url));
       }
-    }
-    const flight = this.startFlights.get(id);
-    if (flight) {
-      if (flight.fingerprint !== identity.fingerprint) throw new Error('CDP_SESSION_STALE: another attach is already starting for this profile');
-      return flight.promise;
     }
     const promise = this.startProfile(id, { ...options, ...identity }).finally(() => {
       const current = this.startFlights.get(id);
@@ -64,9 +66,16 @@ class SessionManager {
     const browser = await chromium.connectOverCDP(identity.cdpEndpoint, { timeout: options.timeoutMs || 15000 });
     const context = browser.contexts()[0];
     if (!context) { await browser.close().catch(() => {}); throw new Error('CDP_CONTEXT_NOT_FOUND: Donut browser exposed no browser context'); }
-    const s = { profileId: id, cdpEndpoint: identity.cdpEndpoint, browserPid: identity.browserPid, launchGeneration: identity.launchGeneration, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() }; this.sessions.set(id, s);
-    try { s.worker = await this.waitForServiceWorker(context, options.timeoutMs || 15000); s.state = 'BROWSER_READY'; const page = await this.ensureGrokPage(s, options.url); await this.bindProfile(s); s.state = 'EXTENSION_READY'; return this.describe(s, page); }
-    catch (e) { await browser.close().catch(() => {}); this.sessions.delete(id); throw e; }
+    const s = { profileId: id, cdpEndpoint: identity.cdpEndpoint, browserPid: identity.browserPid, launchGeneration: identity.launchGeneration, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() };
+    try {
+      s.worker = await this.waitForServiceWorker(context, options.timeoutMs || 15000);
+      s.state = 'BROWSER_READY';
+      const page = await this.ensureGrokPage(s, options.url);
+      await this.bindProfile(s);
+      s.state = 'EXTENSION_READY';
+      this.sessions.set(id, s);
+      return this.describe(s, page);
+    } catch (e) { await browser.close().catch(() => {}); throw e; }
   }
   async waitForServiceWorker(context, timeout) {
     const deadline = Date.now() + timeout;
