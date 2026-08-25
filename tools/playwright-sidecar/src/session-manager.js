@@ -68,9 +68,10 @@ class SessionManager {
     if (!context) { await browser.close().catch(() => {}); throw new Error('CDP_CONTEXT_NOT_FOUND: Donut browser exposed no browser context'); }
     const s = { profileId: id, cdpEndpoint: identity.cdpEndpoint, browserPid: identity.browserPid, launchGeneration: identity.launchGeneration, browser, userDataDir: null, extensionPath: null, context, worker: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now() };
     try {
+      const page = await this.ensureGrokPage(s, options.url);
+      await this.wakeServiceWorker(page, options.timeoutMs || 15000);
       s.worker = await this.waitForServiceWorker(context, options.timeoutMs || 15000);
       s.state = 'BROWSER_READY';
-      const page = await this.ensureGrokPage(s, options.url);
       await this.bindProfile(s);
       s.state = 'EXTENSION_READY';
       this.sessions.set(id, s);
@@ -89,6 +90,30 @@ class SessionManager {
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     throw new Error('EXTENSION_PRODUCTION_WORKER_NOT_READY: Donut browser has no Floword production service worker');
+  }
+  async wakeServiceWorker(page, timeout) {
+    const result = await page.evaluate(async (wakeTimeoutMs) => {
+      const eventName = 'floword.runtime.wake';
+      const resultEventName = 'floword.runtime.wake.result';
+      return await new Promise((resolve) => {
+        let settled = false;
+        const finish = (value) => {
+          if (settled) return;
+          settled = true;
+          window.removeEventListener(resultEventName, onResult);
+          clearTimeout(timer);
+          resolve(value);
+        };
+        const onResult = (event) => finish(event instanceof CustomEvent ? event.detail : null);
+        const timer = window.setTimeout(() => finish(null), Math.max(1000, wakeTimeoutMs));
+        window.addEventListener(resultEventName, onResult, { once: true });
+        window.dispatchEvent(new CustomEvent(eventName, { detail: { protocol: 'floword-production', protocolVersion: 1 } }));
+      });
+    }, Math.min(Math.max(timeout, 1000), 15000));
+    if (result?.protocol !== 'floword-production' || result?.protocolVersion !== 1 || result?.ok !== true) {
+      throw new Error('EXTENSION_PRODUCTION_WORKER_NOT_READY: Floword service worker wake failed');
+    }
+    return result;
   }
   async ensureGrokPage(s, url = 'https://grok.com/imagine') {
     let page = s.grokPage && !s.grokPage.isClosed() ? s.grokPage : null;

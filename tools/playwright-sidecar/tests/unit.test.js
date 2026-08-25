@@ -55,6 +55,35 @@ test('CDP identity rejects non-loopback and non-canonical values', () => {
   assert.throws(() => sessionManager.validateAndNormalizeIdentity('identity', { cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 1, launchGeneration: 0 }), /CDP_IDENTITY_REQUIRED/);
 });
 
+test('sleeping Floword service worker is woken through the existing Grok page', async () => {
+  const calls = [];
+  const page = {
+    evaluate: async (_fn, timeoutMs) => {
+      calls.push(timeoutMs);
+      return { ok: true, protocol: 'floword-production', protocolVersion: 1 };
+    },
+  };
+  const result = await sessionManager.wakeServiceWorker(page, 2000);
+  assert.equal(result.ok, true);
+  assert.equal(result.protocolVersion, 1);
+  assert.deepEqual(calls, [2000]);
+});
+
+test('failed Floword service-worker wake is fail-closed', async () => {
+  const page = { evaluate: async () => ({ ok: false, protocol: 'floword-production', protocolVersion: 1 }) };
+  await assert.rejects(sessionManager.wakeServiceWorker(page, 1000), /EXTENSION_PRODUCTION_WORKER_NOT_READY/);
+});
+
+test('Grok attach reuses the existing tab and never creates a duplicate', async () => {
+  let broughtToFront = 0;
+  const page = { url: () => 'https://grok.com/imagine', isClosed: () => false, bringToFront: async () => { broughtToFront += 1; }, waitForLoadState: async () => {} };
+  const session = { context: { pages: () => [page] }, grokPage: null, managedGrokTabId: null };
+  const attached = await sessionManager.ensureGrokPage(session);
+  assert.equal(attached, page);
+  assert.equal(broughtToFront, 1);
+  assert.equal(session.context.pages().length, 1);
+});
+
 test('existing sessions cannot be reused without complete CDP identity', async () => {
   const session = { profileId: 'existing-identity', cdpEndpoint: 'http://127.0.0.1:9222', browserPid: 11, launchGeneration: 1, activeRequest: { requestId: 'active' }, browser: { close: async () => {} } };
   sessionManager.sessions.set(session.profileId, session);
