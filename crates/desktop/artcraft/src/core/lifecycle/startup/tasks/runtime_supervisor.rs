@@ -141,7 +141,22 @@ impl RuntimeSupervisor {
       },
     };
     let mut command = background_command(Command::new(&executable));
+    // Keep every browser input rooted in the same ArtCraft resource directory.
+    // The embedded Donut runtime otherwise only sees its own `donut-runtime`
+    // directory and cannot rediscover CFT/Chromex after the first browser is
+    // stopped.  These are supervisor-owned paths (never supplied by /run).
+    let resource_root = runtime_root.parent().unwrap_or(runtime_root.as_path());
+    let cft_root = resource_root.join("playwright");
+    let cft_executable = cft_root.join("chrome-win64").join("chrome.exe");
+    let extension_root = resource_root.join("chromex-extension");
     command.current_dir(&runtime_root).stdin(Stdio::null()).stdout(Stdio::from(stdout_log)).stderr(Stdio::from(log_file)).env("FLOWORD_DONUT_HOST", HOST).env("FLOWORD_DONUT_PORT", PORT.to_string()).env("FLOWORD_PARENT_PID", std::process::id().to_string()).env("FLOWORD_DONUT_RESOURCE_ROOT", &runtime_root);
+    if cft_executable.is_file() {
+      command.env("FLOWORD_CHROMIUM_EXECUTABLE", &cft_executable);
+      command.env("FLOWORD_CHROMIUM_SOURCE_DIR", &cft_root);
+    }
+    if extension_root.join("manifest.json").is_file() {
+      command.env("FLOWORD_CHROMEX_EXTENSION_PATH", &extension_root);
+    }
     if let Some(data_dir) = resolve_shared_donut_data_dir() {
       command.env("DONUTBROWSER_DATA_DIR", data_dir);
     }

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { stageDonutExtension, validateChromexZip } = require('../scripts/stage-production.cjs');
+const { stageDonutExtension, validateChromexZip, incrementalPlan, transactionalApply, REQUIRED_ARTIFACTS } = require('../scripts/stage-production.cjs');
 
 const repo = path.resolve(__dirname, '..', '..', '..', '..');
 const script = path.join(__dirname, '..', 'scripts', 'stage-production.cjs');
@@ -79,4 +79,52 @@ test('failed replacement preserves the previous valid ZIP SHA256', { skip: proce
     else process.env.FLOWORD_CHROMEX_ZIP = oldZip;
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('incremental dry-run reports unchanged/add/replace/stale without mutation', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'floword-incremental-'));
+  const source = path.join(dir, 'source');
+  const active = path.join(dir, 'active');
+  const debug = path.join(dir, 'debug');
+  const resourcesRoot = path.join(dir, 'resources');
+  const zip = path.join(dir, 'new.zip');
+  fs.mkdirSync(source, { recursive: true }); fs.mkdirSync(active, { recursive: true }); fs.mkdirSync(debug, { recursive: true }); fs.mkdirSync(resourcesRoot, { recursive: true });
+  fs.writeFileSync(path.join(source, 'same.js'), 'same');
+  fs.writeFileSync(path.join(source, 'changed.js'), 'new');
+  fs.writeFileSync(path.join(source, 'added.js'), 'added');
+  fs.writeFileSync(path.join(active, 'same.js'), 'same');
+  fs.writeFileSync(path.join(active, 'changed.js'), 'old');
+  fs.writeFileSync(path.join(active, 'stale.js'), 'stale');
+  fs.writeFileSync(path.join(debug, 'same.js'), 'same');
+  fs.writeFileSync(zip, 'zip-new');
+  const destinationZip = path.join(resourcesRoot, 'donut-runtime', 'bundled-extensions', 'chromex.zip');
+  fs.mkdirSync(path.dirname(destinationZip), { recursive: true }); fs.writeFileSync(destinationZip, 'zip-old');
+  const plan = incrementalPlan({ extension: source, zip, activeRoot: active, debugRoot: debug, zipDestination: destinationZip, manifestPath: path.join(resourcesRoot, 'runtime-manifest.sha256.json') });
+  assert.ok(plan.unchangedFileCount >= 2);
+  assert.ok(plan.plans.some((item) => item.kind === 'ADD' && item.relative === 'added.js'));
+  assert.ok(plan.plans.some((item) => item.kind === 'REPLACE' && item.relative === 'changed.js'));
+  assert.ok(plan.plans.some((item) => item.kind === 'REMOVE_STALE' && item.relative === 'stale.js'));
+  assert.equal(fs.readFileSync(path.join(active, 'changed.js'), 'utf8'), 'old');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('incremental transaction rolls back exact files and keeps old manifest on failure', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'floword-rollback-'));
+  const source = path.join(dir, 'source'); const active = path.join(dir, 'active'); const debug = path.join(dir, 'debug'); const resourceRoot = path.join(dir, 'resources');
+  fs.mkdirSync(source, { recursive: true }); fs.mkdirSync(active, { recursive: true }); fs.mkdirSync(debug, { recursive: true });
+  fs.writeFileSync(path.join(source, 'x.js'), 'new'); fs.writeFileSync(path.join(active, 'x.js'), 'old');
+  const zip = path.join(dir, 'new.zip'); fs.writeFileSync(zip, 'newzip');
+  const zipDestination = path.join(resourceRoot, 'donut-runtime', 'bundled-extensions', 'chromex.zip');
+  for (const relative of REQUIRED_ARTIFACTS) { const file = path.join(resourceRoot, relative); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, relative); }
+  fs.writeFileSync(zipDestination, 'oldzip');
+  const manifestPath = path.join(resourceRoot, 'runtime-manifest.sha256.json'); fs.writeFileSync(manifestPath, 'OLD-MANIFEST');
+  const plan = incrementalPlan({ extension: source, zip, activeRoot: active, debugRoot: debug, zipDestination, manifestPath });
+  const previous = process.env.FLOWORD_STAGE_TEST_FAIL_AFTER; process.env.FLOWORD_STAGE_TEST_FAIL_AFTER = '1';
+  try {
+    assert.throws(() => transactionalApply(plan, { transactionRoot: dir, sourceCommits: { donutbrowser: 'd', chromex: 'c', artcraft: 'a' }, manifestPath, resourceRoot }));
+  } finally { if (previous === undefined) delete process.env.FLOWORD_STAGE_TEST_FAIL_AFTER; else process.env.FLOWORD_STAGE_TEST_FAIL_AFTER = previous; }
+  assert.equal(fs.readFileSync(path.join(active, 'x.js'), 'utf8'), 'old');
+  assert.equal(fs.readFileSync(zipDestination, 'utf8'), 'oldzip');
+  assert.equal(fs.readFileSync(manifestPath, 'utf8'), 'OLD-MANIFEST');
+  fs.rmSync(dir, { recursive: true, force: true });
 });

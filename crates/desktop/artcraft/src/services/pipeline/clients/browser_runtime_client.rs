@@ -107,6 +107,8 @@ pub struct RunProfileRequest {
   pub url: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub headless: Option<bool>,
+  pub cold_start_only: Option<bool>,
+  pub browser_engine: Option<String>,
 }
 
 /// Send auto-launch request to Donut runtime to boot up the browser profile.
@@ -121,7 +123,12 @@ pub async fn launch_donut_profile(profile_id: &str, target_url: Option<&str>) ->
   let url = format!("{base_url}/v1/profiles/{profile_id}/run");
   info!("[DonutAutoLaunch] Auto-launching profile: {profile_id} (target_url={:?})", target_url);
 
-  let req_body = RunProfileRequest { url: target_url.map(|u| u.to_string()), headless: Some(false) };
+  let req_body = RunProfileRequest {
+    url: target_url.map(|u| u.to_string()),
+    headless: Some(false),
+    cold_start_only: Some(true),
+    browser_engine: Some("chromium".to_string()),
+  };
 
   let resp = client.post(&url).header("X-Floword-Integration", "1").json(&req_body).send().await.map_err(|e| format!("Auto-launch profile request failed: {e}"))?;
   if resp.status().is_success() {
