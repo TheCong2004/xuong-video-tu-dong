@@ -5,7 +5,7 @@ use sqlite_tasks::queries::content_pages::get_content_page_by_id::{get_content_p
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
-use crate::services::pipeline::clients::browser_runtime_client::BrowserWorkerInfo;
+use crate::services::pipeline::clients::browser_runtime_backend::{runtime_api_base_url, BrowserWorkerInfo, ListWorkersResponse};
 
 pub static LAST_SCHEDULER_TICK_UNIX: AtomicI64 = AtomicI64::new(0);
 pub static LAST_PUBLISHING_WORKER_TICK_UNIX: AtomicI64 = AtomicI64::new(0);
@@ -165,13 +165,13 @@ impl SystemHealthProbes {
     let publishing_worker_ready = is_publishing_worker_alive(10);
     details.push(ProbeDetail { service: "Publishing Worker".to_string(), ready: publishing_worker_ready, message: if publishing_worker_ready { "Publishing worker thread active & polling".to_string() } else { "Publishing worker thread not running or heartbeat expired".to_string() }, latency_ms: None });
 
-    // 5. Real Donut Runtime Query via canonical base URL
-    let donut_base_url = crate::services::pipeline::clients::browser_runtime_client::get_donut_browser_api_base_url();
+    // 5. Query the ArtCraft Local Browser Runtime via its canonical base URL.
+    let runtime_base_url = runtime_api_base_url();
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_millis(1000)).build().unwrap_or_default();
 
-    let t_donut = std::time::Instant::now();
-    let donut_url = format!("{donut_base_url}/v1/workers");
-    let donut_probe = client.get(&donut_url).send().await;
+    let t_runtime = std::time::Instant::now();
+    let runtime_url = format!("{runtime_base_url}/v1/workers");
+    let runtime_probe = client.get(&runtime_url).send().await;
 
     let mut donut_ready = false;
     let mut workers_online_count = 0usize;
@@ -183,12 +183,11 @@ impl SystemHealthProbes {
     let mut youtube_capability_available = false;
     let mut youtube_profile_ready = false;
 
-    match donut_probe {
+    match runtime_probe {
       Ok(resp) if resp.status().is_success() => {
-        let latency = t_donut.elapsed().as_millis() as u64;
+        let latency = t_runtime.elapsed().as_millis() as u64;
 
         // Parse response as typed struct to avoid root-array misparse
-        use crate::services::pipeline::clients::browser_runtime_client::ListWorkersResponse;
         match resp.json::<ListWorkersResponse>().await {
           Ok(list) => {
             donut_ready = true;
@@ -225,21 +224,21 @@ impl SystemHealthProbes {
               youtube_profile_ready = false;
             }
 
-            details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: true, message: format!("Donut runtime reachable at {donut_base_url} ({workers_online_count}/{} workers online, grok_ready={grok_profile_ready}, {latency}ms)", list.total), latency_ms: Some(latency) });
+            details.push(ProbeDetail { service: "Browser Worker Bridge".to_string(), ready: true, message: format!("ArtCraft runtime reachable at {runtime_base_url} ({workers_online_count}/{} workers online, grok_ready={grok_profile_ready}, {latency}ms)", list.total), latency_ms: Some(latency) });
           },
           Err(e) => {
-            // HTTP reachable but payload failed to deserialize — Donut is NOT ready to be used
-            error!("[SystemHealth] Donut /v1/workers response parse failed: {e}");
+            // HTTP reachable but payload failed to deserialize — runtime is not ready.
+            error!("[SystemHealth] ArtCraft runtime /v1/workers response parse failed: {e}");
             donut_ready = false;
-            details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: false, message: format!("Donut reachable at {donut_base_url} but worker payload could not be parsed: {e} ({latency}ms)"), latency_ms: Some(latency) });
+            details.push(ProbeDetail { service: "Browser Worker Bridge".to_string(), ready: false, message: format!("ArtCraft runtime reachable at {runtime_base_url} but worker payload could not be parsed: {e} ({latency}ms)"), latency_ms: Some(latency) });
           },
         }
       },
       Ok(resp) => {
-        details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: false, message: format!("Donut returned HTTP {}", resp.status()), latency_ms: None });
+        details.push(ProbeDetail { service: "Browser Worker Bridge".to_string(), ready: false, message: format!("ArtCraft runtime returned HTTP {}", resp.status()), latency_ms: None });
       },
       Err(e) => {
-        details.push(ProbeDetail { service: "Donut Worker Bridge".to_string(), ready: false, message: format!("Donut offline ({donut_base_url}): {e}"), latency_ms: None });
+        details.push(ProbeDetail { service: "Browser Worker Bridge".to_string(), ready: false, message: format!("ArtCraft runtime offline ({runtime_base_url}): {e}"), latency_ms: None });
       },
     }
 
@@ -291,7 +290,7 @@ fn probe_artifact_dir(artifact_dir: &PathBuf, details: &mut Vec<ProbeDetail>) ->
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::services::pipeline::clients::browser_runtime_client::{BrowserWorkerInfo, ListWorkersResponse};
+  use crate::services::pipeline::clients::browser_runtime_backend::{BrowserWorkerInfo, ListWorkersResponse};
 
   /// 11.16 Case A: Donut offline, Grok unavailable -> core_generation_ready=false, overall_ready=false
   #[test]

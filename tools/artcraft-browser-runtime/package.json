@@ -1,0 +1,10 @@
+{
+  "name": "artcraft-local-browser-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "main": "src/server.js",
+  "scripts": {
+    "test:phase3": "node --test tests/phase3.test.js"
+  }
+}

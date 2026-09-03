@@ -12,7 +12,7 @@ app.use((req, res, next) => {
   if (token && req.get('authorization') !== `Bearer ${token}`) return res.status(401).json({ error: 'UNAUTHORIZED' });
   next();
 });
-const statusFor = (code) => ({ INVALID_REQUEST: 400, INVALID_PROFILE: 400, PROTOCOL_MISMATCH: 400, UNAUTHORIZED: 401, PROFILE_NOT_FOUND: 404, GROK_TAB_NOT_FOUND: 404, GROK_MANAGED_TARGET_STALE: 409, JOB_ALREADY_RUNNING: 409, CORRELATION_CONFLICT: 409, PLAYWRIGHT_PROFILE_LOCKED: 409, WORKER_BUSY: 409, INVALID_LEASE: 409, CAPABILITY_UNAVAILABLE: 422, GROK_AUTH_REQUIRED: 422, GROK_NOT_LOGGED_IN: 422, PLAYWRIGHT_RUNTIME_OFFLINE: 503, EXTENSION_NOT_LOADED: 503, EXTENSION_NOT_READY: 503, EXTENSION_CONTENT_CONTEXT_NOT_FOUND: 503, EXTENSION_PRODUCTION_CONTENT_CONTRACT_MISSING: 503, CDP_AUTOMATION_UNAVAILABLE: 503, CDP_IDENTITY_REQUIRED: 503, CDP_SESSION_STALE: 503, CDP_CONTEXT_NOT_FOUND: 503, EXTENSION_PRODUCTION_WORKER_NOT_READY: 503, CONTENT_SCRIPT_BIND_TIMEOUT: 503, EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: 503, CONTENT_SCRIPT_NOT_READY: 503, RESULT_TIMEOUT: 504 }[code] || 500);
+const statusFor = (code) => ({ INVALID_REQUEST: 400, INVALID_PROFILE: 400, PROTOCOL_MISMATCH: 400, PAGE_TARGET_ID_REQUIRED: 400, UNAUTHORIZED: 401, PROFILE_NOT_FOUND: 404, GROK_TAB_NOT_FOUND: 404, PAGE_NOT_FOUND: 404, GROK_MANAGED_TARGET_STALE: 409, AMBIGUOUS_MANAGED_SESSION: 409, PAGE_NOT_OWNED: 409, JOB_ALREADY_RUNNING: 409, CORRELATION_CONFLICT: 409, PLAYWRIGHT_PROFILE_LOCKED: 409, WORKER_BUSY: 409, INVALID_LEASE: 409, CAPABILITY_UNAVAILABLE: 422, GROK_AUTH_REQUIRED: 422, GROK_NOT_LOGGED_IN: 422, PLAYWRIGHT_RUNTIME_OFFLINE: 503, PLAYWRIGHT_PROFILE_OFFLINE: 503, EXTENSION_NOT_LOADED: 503, EXTENSION_NOT_READY: 503, EXTENSION_CONTENT_CONTEXT_NOT_FOUND: 503, EXTENSION_PRODUCTION_CONTENT_CONTRACT_MISSING: 503, CDP_AUTOMATION_UNAVAILABLE: 503, CDP_IDENTITY_REQUIRED: 503, CDP_SESSION_STALE: 503, CDP_CONTEXT_NOT_FOUND: 503, EXTENSION_PRODUCTION_WORKER_NOT_READY: 503, CONTENT_SCRIPT_BIND_TIMEOUT: 503, EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: 503, CONTENT_SCRIPT_NOT_READY: 503, RESULT_TIMEOUT: 504 }[code] || 500);
 const route = (fn) => async (req, res) => {
   try {
     res.json(await fn(req, res));
@@ -28,8 +28,8 @@ const route = (fn) => async (req, res) => {
 app.get('/health', (_req, res) => res.json({ status: 'ok', service: 'floword-playwright-runtime', protocol: 'floword-playwright', protocolVersion: 1, pid: process.pid, playwrightVersion: require('playwright/package.json').version, extensionPath: process.env.FLOWORD_CHROMEX_EXTENSION_PATH || null }));
 app.post('/v1/profiles/:profileId/start', route((req) => sessionManager.ensureProfile(req.params.profileId, req.body || {})));
 app.post('/v1/profiles/:profileId/stop', route((req) => sessionManager.stop(req.params.profileId)));
-app.get('/v1/profiles/:profileId/status', route((req) => sessionManager.health(req.params.profileId)));
-app.get('/v1/profiles/:profileId/pages', route((req) => sessionManager.getPages(req.params.profileId)));
+app.get('/v1/profiles/:profileId/status', route((req) => sessionManager.health(req.params.profileId, req.query.targetId || null)));
+app.get('/v1/profiles/:profileId/pages', route((req) => sessionManager.getPages(req.params.profileId, req.query.targetId || null)));
 app.post('/v1/profiles/:profileId/artifacts/fetch', route((req) => sessionManager.fetchArtifact(req.params.profileId, req.body?.locator)));
 app.post('/v1/profiles/:profileId/dispatch', route((req) => sessionManager.dispatch({ ...(req.body || {}), profileId: req.params.profileId })));
 app.post('/v1/profiles/:profileId/trace/start', route((req) => sessionManager.startTrace(req.params.profileId)));

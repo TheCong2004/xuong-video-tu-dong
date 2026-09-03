@@ -1,4 +1,5 @@
 const { chromium } = require('playwright');
+const { DonutSession } = require('./donut-session');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -25,6 +26,18 @@ function canonical(value) { if (Array.isArray(value)) return `[${value.map(canon
 
 class SessionManager {
   constructor() { this.sessions = new Map(); this.startFlights = new Map(); this.activeRequests = new Map(); this.completedRequests = new Map(); this.terminalRequests = new Map(); this.requestJournals = new Map(); this.requestStateCache = new Map(); this.completedTtlMs = 30 * 60 * 1000; this.maxCompletedRequests = 500; this.cancelSettleTimeoutMs = 15000; this.reconciliationQuarantineMs = 30 * 1000; }
+  sessionKey(profileId, launchGeneration, targetId) { return `${profileId}:${launchGeneration}:${targetId}`; }
+  sessionsForProfile(profileId) { return [...this.sessions.values()].filter((session) => session.profileId === profileId); }
+  resolveSession(profileId, targetId = null) {
+    const candidates = this.sessionsForProfile(profileId);
+    if (targetId) {
+      const exact = candidates.find((session) => session.managedGrokTabId === targetId);
+      if (!exact) throw new Error('GROK_MANAGED_TARGET_STALE: requested target is not attached');
+      return exact;
+    }
+    if (candidates.length > 1) throw new Error('AMBIGUOUS_MANAGED_SESSION: targetId is required when a profile has multiple sessions');
+    return candidates[0] || null;
+  }
   journalStage(request, stage, details = {}) {
     const entry = { timestamp: new Date().toISOString(), requestId: request.requestId, jobId: request.jobId, stepId: request.stepId, attempt: request.attemptId, stage, submissionState: details.submissionState || 'NOT_SUBMITTED', ...details };
     const list = this.requestJournals.get(request.requestId) || [];
@@ -110,27 +123,36 @@ class SessionManager {
     const identity = this.validateAndNormalizeIdentity(id, options);
     // A STARTING session is not authoritative yet. Always join the existing
     // attach flight before consulting the published session map.
-    const flight = this.startFlights.get(id);
+    const flightKey = `${id}|${identity.fingerprint}|${options.grokTargetId || ''}`;
+    const flight = this.startFlights.get(flightKey);
     if (flight) {
       if (flight.fingerprint !== identity.fingerprint) throw new Error('CDP_SESSION_STALE: another attach is already starting for this profile');
       return flight.promise;
     }
-    if (this.sessions.has(id)) {
-      const s = this.sessions.get(id);
+    const requestedTargetId = options.grokTargetId || null;
+    const existingSessions = this.sessionsForProfile(id);
+    const existing = existingSessions.find((session) => {
+      const sameIdentity = `${id}|${session.cdpEndpoint}|${session.browserPid}|${session.launchGeneration}` === identity.fingerprint;
+      return sameIdentity && (!requestedTargetId || session.managedGrokTabId === requestedTargetId);
+    });
+    if (existing) {
+      const s = existing;
       const sessionFingerprint = `${id}|${s.cdpEndpoint}|${s.browserPid}|${s.launchGeneration}`;
       if (sessionFingerprint !== identity.fingerprint) {
         if (s.activeRequest) throw new Error('CDP_SESSION_STALE: browser endpoint changed while a request was active');
         await s.browser.disconnect?.().catch(() => {});
-        this.sessions.delete(id);
+        this.sessions.delete(this.sessionKey(s.profileId, s.launchGeneration, s.managedGrokTabId));
       } else {
-        return this.describe(s, await this.ensureGrokPage(s, options.url, options.grokTargetId));
+        const page = await this.ensureGrokPage(s, options.url, options.grokTargetId);
+        await this.ensureSessionFacade(s, page);
+        return this.describe(s, page);
       }
     }
     const promise = this.startProfile(id, { ...options, ...identity }).finally(() => {
-      const current = this.startFlights.get(id);
-      if (current?.promise === promise) this.startFlights.delete(id);
+      const current = this.startFlights.get(flightKey);
+      if (current?.promise === promise) this.startFlights.delete(flightKey);
     });
-    this.startFlights.set(id, { fingerprint: identity.fingerprint, promise });
+    this.startFlights.set(flightKey, { fingerprint: identity.fingerprint, promise });
     return promise;
   }
   async startProfile(id, options = {}) {
@@ -146,8 +168,10 @@ class SessionManager {
       s.state = 'BROWSER_READY';
       await this.bindContentContract(s, page, options.timeoutMs || 15000);
       await this.bindProfile(s);
+      await this.ensureSessionFacade(s, page);
       s.state = 'EXTENSION_READY';
-      this.sessions.set(id, s);
+      s.sessionKey = this.sessionKey(s.profileId, s.launchGeneration, s.managedGrokTabId);
+      this.sessions.set(s.sessionKey, s);
       return this.describe(s, page);
     // This browser is owned by Donut.  A failed attach/wake must never close
     // the user's Donut browser or its profile.
@@ -157,6 +181,24 @@ class SessionManager {
       }
       throw e;
     }
+  }
+  async ensureSessionFacade(s, page) {
+    if (s.session) return s.session;
+    // Lightweight unit fakes and non-Playwright callers may not expose the
+    // browser context surface. Keep the existing contract usable in that mode;
+    // real CDP sessions always provide pages/newCDPSession.
+    if (!s.context?.pages || !s.context?.newCDPSession) return null;
+    s.session = await DonutSession.connect({
+      profileId: s.profileId,
+      cdpEndpoint: s.cdpEndpoint,
+      browserPid: s.browserPid,
+      launchGeneration: s.launchGeneration,
+      browserEngine: s.browserEngine,
+      browser: s.browser,
+      context: s.context,
+      page,
+    });
+    return s.session;
   }
   async attachContentCdp(s, page) {
     if (s.cdpSession) return s.cdpSession;
@@ -404,8 +446,8 @@ class SessionManager {
   }
   async ensureWorker(s) { return this.ensureContentContract(s); }
   describe(s, page) { return { profileId: s.profileId, userDataDir: s.userDataDir, extensionId: s.contentOrigin?.match(/^chrome-extension:\/\/([^/]+)/)?.[1] || null, serviceWorkerUrl: null, grokTargetId: s.managedGrokTabId || null, grokPageUrl: this.navigationUrl(page?.url?.()), grokUrl: page?.url() || null, browserOpen: true, state: s.state, activeRequest: s.activeRequest }; }
-  async health(id) {
-    const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
+  async health(id, targetId = null) {
+    const s = this.resolveSession(id, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
     const managedPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : s.context.pages().find((candidate) => this.isGrokAuthUrl(candidate.url()));
     if (managedPage && this.isGrokAuthUrl(managedPage.url())) throw this.grokAuthRequired(s, managedPage, managedPage.url());
     await this.ensureContentContract(s); const result = await this.cdpEvaluate(s, 'globalThis.__flowordProductionContent.health()');
@@ -495,7 +537,11 @@ class SessionManager {
     const active = this.activeRequests.get(requestId); if (active) { if (active.fingerprint !== fingerprint) throw new Error('CORRELATION_CONFLICT: requestId was reused with different payload'); this.journalStage(request, 'DISPATCH_DUPLICATE', { submissionState: 'UNKNOWN', retryable: false }); return active.promise; }
     const completed = this.completedRequests.get(requestId); if (completed) { if (completed.fingerprint !== fingerprint) throw new Error('CORRELATION_CONFLICT: requestId was reused with different payload'); this.journalStage(request, 'DISPATCH_DUPLICATE', { submissionState: 'COMPLETED', retryable: false }); return completed.result; }
     const terminal = this.terminalRequests.get(requestId); if (terminal) { if (terminal.fingerprint !== fingerprint) throw new Error('CORRELATION_CONFLICT: requestId was reused with different payload'); this.journalStage(request, 'DISPATCH_DUPLICATE', { submissionState: terminal.submissionState || 'SUBMITTED', retryable: false, resolutionState: terminal.resolutionState }); throw new Error(`DUPLICATE_REQUEST: requestId is terminal (${terminal.resolutionState || 'ORPHANED'}) and cannot be dispatched again`); }
-    const s = this.sessions.get(profileId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
+    // Dispatch must retain the caller's exact managed target when a profile
+    // owns more than one CDP session.  The worker envelope carries the target
+    // at top level; pageId/params.targetId are accepted for older callers.
+    const targetId = request.targetId || request.pageId || request.params?.targetId || null;
+    const s = this.resolveSession(profileId, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
     const currentPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : null;
     if (s.state === 'AUTH_REQUIRED' || (currentPage && this.isGrokAuthUrl(currentPage.url()))) throw this.grokAuthRequired(s, currentPage, currentPage?.url() || '');
     try { await this.ensureContentContract(s); } catch (error) {
@@ -714,10 +760,18 @@ class SessionManager {
     return { cancelled: true, jobId, ...result };
   }
   pruneCompleted() { const now = Date.now(); for (const [id, entry] of this.completedRequests) if (entry.expiresAt <= now) this.completedRequests.delete(id); for (const [id, entry] of this.terminalRequests) if (entry.expiresAt <= now) this.terminalRequests.delete(id); }
-  async stop(id) { const s = this.sessions.get(id); if (!s) return { stopped: false, profileId: id }; await s.browser.disconnect?.().catch(() => {}); this.sessions.delete(id); return { stopped: true, profileId: id, browserOwnedBy: 'donut' }; }
-  async getPages(id) { const s = this.sessions.get(id); if (!s) return []; return Promise.all(s.context.pages().map(async (p, index) => ({ index, url: p.url(), title: await p.title().catch(() => ''), managed: p === s.grokPage }))); }
+  async stop(id, targetId = null) {
+    const sessions = targetId ? [this.resolveSession(id, targetId)].filter(Boolean) : this.sessionsForProfile(id);
+    if (!sessions.length) return { stopped: false, profileId: id };
+    await Promise.all(sessions.map(async (s) => { await s.browser.disconnect?.().catch(() => {}); this.sessions.delete(s.sessionKey || this.sessionKey(s.profileId, s.launchGeneration, s.managedGrokTabId)); }));
+    return { stopped: true, profileId: id, targetId: targetId || null, browserOwnedBy: 'artcraft-local-runtime' };
+  }
+  async getPages(id, targetId = null) {
+    const s = this.resolveSession(id, targetId); if (!s) return [];
+    return Promise.all(s.context.pages().map(async (p, index) => ({ index, targetId: await this.targetIdForPage(s, p).catch(() => null), url: p.url(), title: await p.title().catch(() => ''), managed: p === s.grokPage, purpose: p === s.grokPage ? 'GROK_AUTOMATION' : 'USER' })));
+  }
   async fetchArtifact(id, locator) {
-    const s = this.sessions.get(id);
+    const s = this.resolveSession(id);
     if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
     let parsed = validateArtifactLocator(locator);
     for (let redirect = 0; redirect <= 3; redirect += 1) {
@@ -748,8 +802,10 @@ class SessionManager {
     }
     throw new Error('ARTIFACT_FETCH_FORBIDDEN: redirect policy failed');
   }
-  async startTrace(id) { const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); await s.context.tracing.start({ screenshots: true, snapshots: true }); s.isTracing = true; return { profileId: id, tracing: true }; }
-  async stopTrace(id, outputPath) { const s = this.sessions.get(id); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); await s.context.tracing.stop({ path: outputPath }); s.isTracing = false; return { profileId: id, tracing: false, outputPath }; }
-  async disconnect() { await Promise.all([...this.sessions.keys()].map((id) => this.stop(id))); return { success: true }; }
+  async startTrace(id, targetId = null) { const s = this.resolveSession(id, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); await s.context.tracing.start({ screenshots: true, snapshots: true }); s.isTracing = true; return { profileId: id, tracing: true, targetId: s.managedGrokTabId }; }
+  async stopTrace(id, outputPath, targetId = null) { const s = this.resolveSession(id, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started'); await s.context.tracing.stop({ path: outputPath }); s.isTracing = false; return { profileId: id, tracing: false, outputPath, targetId: s.managedGrokTabId }; }
+  async disconnect() { await Promise.all(this.sessionsForProfile ? [...new Set([...this.sessions.values()].map((s) => s.profileId))].map((id) => this.stop(id)) : []); return { success: true }; }
 }
-module.exports = new SessionManager();
+const sessionManager = new SessionManager();
+module.exports = sessionManager;
+module.exports.SessionManager = SessionManager;

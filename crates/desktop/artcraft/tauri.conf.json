@@ -160,9 +160,11 @@
       "resources/openmontage",
       "resources/ffmpeg",
       "resources/OmniRoute",
-      "resources/donut-runtime",
+      "resources/artcraft-browser-runtime",
       "resources/node",
+      "resources/playwright",
       "resources/playwright-sidecar",
+      "resources/chromex",
       "resources/chromex-extension",
       "resources/runtime-manifest.sha256.json"
     ]

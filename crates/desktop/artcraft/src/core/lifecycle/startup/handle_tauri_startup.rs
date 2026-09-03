@@ -7,7 +7,7 @@ use crate::core::lifecycle::startup::tasks::spawn_capcut_mate_backend::{health_r
 use crate::core::lifecycle::startup::tasks::spawn_discord_presence_thread::spawn_discord_presence_thread;
 use crate::core::lifecycle::startup::tasks::spawn_main_window_thread::spawn_main_window_thread;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::{health_ready as omniroute_health_ready, spawn_omniroute_backend};
-use crate::core::lifecycle::startup::tasks::runtime_supervisor::{runtime_manifest_ready, start_playwright_runtime, start_runtime_supervisor};
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::{ensure_donut_desktop, start_attach_only_sidecar};
 use crate::core::lifecycle::startup::tasks::spawn_sora_task_polling_thread::spawn_sora_task_polling_thread;
 use crate::core::lifecycle::startup::tasks::spawn_storyteller_threads::spawn_storyteller_threads;
 use crate::core::providers::credentials::provider_credential_loading_cache::ProviderCredentialLoadingCache;
@@ -37,16 +37,26 @@ use tauri::{AppHandle, Manager};
 pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_configs: AppEnvConfigs, artcraft_platform_info: ArtcraftPlatformInfo, artcraft_usage_tracker: ArtcraftUsageTracker, storyteller_creds_manager: StorytellerCredentialManager, sora_credential_manager: SoraCredentialManager, sora_task_queue: SoraTaskQueue, mj_creds_manager: MidjourneyCredentialManager, grok_creds_manager: GrokCredentialManager, grok_image_prompt_queue: GrokImagePromptQueue, worldlabs_bearer_bridge: WorldlabsBearerBridge, worldlabs_creds_manager: WorldlabsCredentialManager, credential_cache: ProviderCredentialLoadingCache, command_dispatcher: CommandDispatcher) -> AnyhowResult<()> {
   set_app_log_level(&app, &root)?;
 
-  // Floword owns the headless Donut runtime. It is intentionally started in a
-  // background thread so the Studio can render while runtime health is pending.
-  let app_for_donut = app.clone();
+  // Donut Desktop owns the browser/runtime process. ArtCraft ensures the
+  // manager is present, waits for its loopback health endpoint, and starts only
+  // the attach-only Sidecar; it never launches CFT or a browser runtime itself.
+  let _ = ensure_donut_desktop();
+  let app_for_sidecar = app.clone();
   std::thread::spawn(move || {
-    if runtime_manifest_ready(&app_for_donut) {
-      start_playwright_runtime(&app_for_donut);
-      start_runtime_supervisor(&app_for_donut);
-    } else {
-      warn!("Runtime manifest verification failed; Donut and Playwright runtimes were not spawned");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while std::time::Instant::now() < deadline {
+      let donut_ready = std::net::TcpStream::connect_timeout(
+        &"127.0.0.1:10108".parse().expect("loopback address"),
+        std::time::Duration::from_millis(250),
+      )
+      .is_ok();
+      if donut_ready {
+        start_attach_only_sidecar(&app_for_sidecar);
+        return;
+      }
+      std::thread::sleep(std::time::Duration::from_millis(250));
     }
+    warn!("DONUT_LOCAL_MANAGER_NOT_READY: Sidecar startup deferred until Donut Desktop is ready");
   });
 
   // Python backend: capcut-mate owns :30000 (the single always-on Python port).

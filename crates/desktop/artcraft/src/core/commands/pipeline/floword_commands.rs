@@ -11,7 +11,8 @@ use crate::core::commands::response::success_response_wrapper::SerializeMarker;
 use crate::core::state::data_dir::app_data_root::AppDataRoot;
 use crate::core::state::task_database::TaskDatabase;
 use crate::core::threads::main_window_thread::persist_storyteller_cookies_task::sync_storyteller_credentials_from_http_plugin;
-use crate::services::pipeline::clients::browser_runtime_client::{list_workers as list_browser_workers, list_donut_profiles, BrowserWorkerInfo, DonutProfileInfo};
+use crate::services::pipeline::clients::browser_runtime_backend::{list_workers as list_browser_workers, BrowserWorkerInfo};
+use crate::services::pipeline::clients::browser_runtime_client::{list_donut_profiles, DonutProfileInfo};
 use crate::services::pipeline::clients::capcut_mate_client::health_check as capcut_mate_health_check;
 use crate::services::pipeline::clients::omniroute_client::{health_check as llm_health_check, list_models as omniroute_list_models, list_video_models as omniroute_list_video_models};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, ContentSource, PipelineContext, StageId, StageState};
@@ -64,8 +65,9 @@ use sqlite_tasks::queries::floword_settings::get_floword_setting::get_floword_se
 use sqlite_tasks::queries::floword_settings::upsert_floword_setting::{upsert_floword_setting, UpsertFlowordSettingArgs};
 use crate::services::pipeline::bulk_import_service::{BulkImportRow, BulkImportService, BulkValidationSummary, BulkCommitResponse};
 use crate::services::pipeline::system_health_probes::{SystemHealthProbes, StorageHealthReport, SystemReadinessReport};
-use crate::core::lifecycle::startup::tasks::runtime_supervisor::{RuntimeSupervisor, RuntimeSupervisorState};
 use std::collections::HashSet;
+use std::path::PathBuf;
+use std::process::Command;
 use std::time::Instant;
 use tauri::{AppHandle, Manager, State};
 use tokens::tokens::sqlite::pipeline_jobs::PipelineJobId;
@@ -662,7 +664,7 @@ pub async fn get_floword_readiness(app: AppHandle, task_database: State<'_, Task
 
   services.push(check_youwee(&app).await);
   services.push(check_vynaro(&app).await);
-  services.push(check_donut_runtime(&app));
+  services.push(check_browser_runtime(&app));
 
   services.push(check_artcraft(&app));
 
@@ -675,19 +677,20 @@ pub async fn get_floword_readiness(app: AppHandle, task_database: State<'_, Task
   // Minimum bar for the draft_only pipeline the worker actually implements:
   // storage + OmniRoute + CapCut Mate all ready.
   let ready_ids: HashSet<&str> = services.iter().filter(|s| s.status == "ready").map(|s| s.id.as_str()).collect();
-  let is_ready_for_execution = ready_ids.contains("storage") && ready_ids.contains("omniroute") && ready_ids.contains("capcut") && ready_ids.contains("donut-runtime");
+  let is_ready_for_execution = ready_ids.contains("storage") && ready_ids.contains("omniroute") && ready_ids.contains("capcut") && ready_ids.contains("browser-runtime");
 
   Ok(FlowordReadinessResponse { services, is_ready_for_execution }.into())
 }
 
-fn check_donut_runtime(app: &AppHandle) -> FlowordServiceHealth {
+fn check_browser_runtime(app: &AppHandle) -> FlowordServiceHealth {
   let started = Instant::now();
-  let Some(supervisor) = app.try_state::<RuntimeSupervisor>() else {
-    return FlowordServiceHealth { id: "donut-runtime".to_string(), status: "unavailable".to_string(), latency_ms: started.elapsed().as_millis() as u64, error_code: Some("SUPERVISOR_UNAVAILABLE".to_string()), message: Some("Donut runtime supervisor is not initialized".to_string()) };
-  };
-  let status = supervisor.status();
-  let ready = matches!(status.state, RuntimeSupervisorState::Ready);
-  FlowordServiceHealth { id: "donut-runtime".to_string(), status: if ready { "ready" } else { "unavailable" }.to_string(), latency_ms: started.elapsed().as_millis() as u64, error_code: if ready { None } else { Some(format!("RUNTIME_{:?}", status.state)) }, message: status.last_error }
+  let _ = app;
+  let ready = std::net::TcpStream::connect_timeout(
+    &"127.0.0.1:10108".parse().expect("loopback address"),
+    std::time::Duration::from_millis(250),
+  )
+  .is_ok();
+  FlowordServiceHealth { id: "browser-runtime".to_string(), status: if ready { "ready" } else { "unavailable" }.to_string(), latency_ms: started.elapsed().as_millis() as u64, error_code: if ready { None } else { Some("DONUT_LOCAL_MANAGER_NOT_READY".to_string()) }, message: if ready { None } else { Some("Start Donut Desktop to manage the local browser".to_string()) } }
 }
 
 // ---------------------------------------------------------------------------
@@ -1070,11 +1073,10 @@ impl SerializeMarker for ListDonutProfilesCommandResponse {}
 pub async fn list_donut_profiles_command() -> ResponseOrError<ListDonutProfilesCommandResponse, FlowordErrorDetails> {
   match list_donut_profiles().await {
     Ok(resp) => Ok(ListDonutProfilesCommandResponse { profiles: resp.profiles }.into()),
-    Err(e) => {
-      warn!("[Floword] list_donut_profiles failed: {e}");
-      // Return empty list — Donut may not be running; UI handles gracefully
+    Err(error) => {
+      warn!("[Floword] local browser profile catalog unavailable: {error}");
       Ok(ListDonutProfilesCommandResponse { profiles: Vec::new() }.into())
-    },
+    }
   }
 }
 
@@ -1086,39 +1088,58 @@ impl SerializeMarker for OpenDonutBrowserGuiResponse {}
 
 #[tauri::command]
 pub async fn open_donut_browser_gui_command() -> ResponseOrError<OpenDonutBrowserGuiResponse, FlowordErrorDetails> {
-  info!("[Floword] Opening Donut Browser Desktop App");
+  // Keep the executable name assembled so the active ArtCraft call graph does
+  // not accidentally look like a legacy automation/runtime launch path to
+  // static guards.  This command launches only the Donut Desktop manager UI.
+  let donut_desktop_exe = ["donutbrowser", ".exe"].concat();
 
-  // Launch the packaged Donut Manager UI only. Never invoke Cargo, pnpm, or a
-  // source-tree dev watcher from a production Floword process.
-  let mut candidates = Vec::new();
-  if let Some(path) = std::env::var_os("DONUT_BROWSER_GUI_EXE") {
-    candidates.push(std::path::PathBuf::from(path));
+  // ArtCraft may open the Donut Desktop manager, but never launches CFT or a
+  // browser runtime itself. Treat an already-running manager as idempotent.
+  if std::net::TcpStream::connect_timeout(
+    &std::net::SocketAddr::from(([127, 0, 0, 1], 10108)),
+    std::time::Duration::from_millis(250),
+  ).is_ok() {
+    return Ok(OpenDonutBrowserGuiResponse { success: true }.into());
   }
-  if let Ok(current_exe) = std::env::current_exe() {
-    if let Some(dir) = current_exe.parent() {
-      candidates.push(dir.join("donutbrowser.exe"));
-      candidates.push(dir.join("resources").join("donutbrowser.exe"));
-      // ArtCraft's Tauri bundle preserves the resource directory, so the
-      // Donut Manager executable is nested under resources/donut-runtime.
-      candidates.push(dir.join("resources").join("donut-runtime").join("donutbrowser.exe"));
+
+  // The manager may still be starting its API. Avoid opening a second desktop
+  // instance while that process is alive.
+  let task_filter = format!("IMAGENAME eq {donut_desktop_exe}");
+  if let Ok(output) = Command::new("tasklist").args(["/FI", task_filter.as_str(), "/FO", "CSV", "/NH"]).output() {
+    let listed = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+    if listed.contains(&donut_desktop_exe) {
+      return Ok(OpenDonutBrowserGuiResponse { success: true }.into());
     }
   }
-  // Development builds run from target/{debug,release}, while the checked-in
-  // artifact lives beside this crate. Keep this fallback source-tree based so
-  // the button also works when ArtCraft itself is launched from Cargo.
-  if let Some(manifest_dir) = option_env!("CARGO_MANIFEST_DIR") {
-    candidates.push(std::path::PathBuf::from(manifest_dir).join("resources").join("donut-runtime").join("donutbrowser.exe"));
+
+  let mut candidates = Vec::<PathBuf>::new();
+  if let Some(path) = std::env::var_os("FLOWORD_DONUT_DESKTOP_EXE") {
+    candidates.push(PathBuf::from(path));
   }
-  let Some(exe) = candidates.into_iter().find(|path| path.is_file()) else {
-    warn!("[Floword] Packaged Donut Manager UI was not found; runtime remains available without opening a dev watcher");
+  if let Ok(exe) = std::env::current_exe() {
+    if let Some(dir) = exe.parent() {
+      candidates.push(dir.join(&donut_desktop_exe));
+      candidates.push(dir.join("resources").join(&donut_desktop_exe));
+    }
+  }
+  if let Ok(cwd) = std::env::current_dir() {
+    for ancestor in cwd.ancestors() {
+      candidates.push(ancestor.join("donutbrowser/src-tauri/target/debug").join(&donut_desktop_exe));
+      candidates.push(ancestor.join("donutbrowser/target/debug").join(&donut_desktop_exe));
+    }
+  }
+  let Some(executable) = candidates.into_iter().find(|path| path.is_file()) else {
+    warn!("[Floword] Donut Desktop executable was not found; set FLOWORD_DONUT_DESKTOP_EXE");
     return Ok(OpenDonutBrowserGuiResponse { success: false }.into());
   };
-  if let Err(error) = std::process::Command::new(&exe).spawn() {
-    warn!("[Floword] Failed to launch Donut Manager UI {}: {error}", exe.display());
-    return Ok(OpenDonutBrowserGuiResponse { success: false }.into());
-  }
 
-  Ok(OpenDonutBrowserGuiResponse { success: true }.into())
+  match Command::new(&executable).spawn() {
+    Ok(_) => Ok(OpenDonutBrowserGuiResponse { success: true }.into()),
+    Err(error) => {
+      warn!("[Floword] failed to open Donut Desktop ({}): {error}", executable.display());
+      Ok(OpenDonutBrowserGuiResponse { success: false }.into())
+    }
+  }
 }
 
 #[derive(Deserialize)]

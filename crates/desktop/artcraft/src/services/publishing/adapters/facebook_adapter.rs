@@ -1,6 +1,6 @@
 use super::dispatch_protocol::{parse_dispatch_body, validate_dispatch_response, ExpectedDispatchIdentity};
 use super::publisher_adapter::{PublicationExecutionContext, PublicationResult, PublisherAdapter, PublisherError, PublisherErrorCode};
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, release_lease, AcquireWorkerRequest};
+use crate::services::pipeline::clients::browser_runtime_backend::{acquire_worker, release_lease, runtime_api_base_url, AcquireWorkerRequest};
 use async_trait::async_trait;
 use log::{error, info};
 use reqwest::Client;
@@ -61,7 +61,7 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     let lease_id = lease.lease_id.clone();
 
     // 2. Dispatch using canonical floword-production v1 request envelope
-    let base_url = crate::services::pipeline::clients::browser_runtime_client::get_donut_browser_api_base_url();
+    let base_url = runtime_api_base_url();
     let client = Client::builder().timeout(Duration::from_secs(180)).build().map_err(|e| PublisherError::new(PublisherErrorCode::NetworkError, e.to_string(), true))?;
 
     let dispatch_url = format!("{base_url}/v1/workers/{}/dispatch", lease.worker_id);
@@ -148,7 +148,7 @@ impl PublisherAdapter for FacebookPublisherAdapter {
 
   async fn verify(&self, ctx: &PublicationExecutionContext) -> Result<Option<PublicationResult>, PublisherError> {
     info!("[FacebookPublisher] Verifying publication status for pub_id={} key={}", ctx.publication_id, ctx.idempotency_key);
-    let base_url = crate::services::pipeline::clients::browser_runtime_client::get_donut_browser_api_base_url();
+    let base_url = runtime_api_base_url();
     let client = Client::builder().timeout(Duration::from_secs(15)).build().map_err(|e| PublisherError::new(PublisherErrorCode::NetworkError, e.to_string(), true))?;
 
     let verify_url = format!("{base_url}/v1/publications/verify");

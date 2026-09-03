@@ -48,7 +48,6 @@ use crate::core::lifecycle::startup::setup_main_window::setup_main_window;
 use crate::core::lifecycle::startup::tasks::spawn_auxiliary_backends::AuxiliaryBackendProcesses;
 use crate::core::lifecycle::startup::tasks::spawn_capcut_mate_backend::CapcutMateProcess;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::OmniRouteProcess;
-use crate::core::lifecycle::startup::tasks::runtime_supervisor::{get_donut_runtime_status, stop_playwright_runtime, RuntimeSupervisor};
 use crate::core::state::app_env_configs::app_env_configs::AppEnvConfigs;
 use crate::core::state::app_preferences::app_preferences_manager::load_app_preferences_or_default;
 use crate::core::state::artcraft_platform_info::ArtcraftPlatformInfo;
@@ -225,7 +224,6 @@ pub fn run() {
     .manage(worldlabs_creds_manager)
     .manage(VynaroProcessManager::default())
     .manage(InkosProcessManager::default());
-  let builder = builder.manage(RuntimeSupervisor::default());
 
   // TODO: Break this out into another module, because RustRover/IntelliJ lags with these macros.
   //  My first attempt at naively doing this didn't work because the macros can't find their codegen'd targets.
@@ -311,7 +309,6 @@ pub fn run() {
     get_floword_system_setting_command,
     update_floword_settings_command,
     update_floword_system_setting_command,
-    get_donut_runtime_status,
     list_pipeline_job_events_command,
     list_job_publications_command,
     approve_publication_command,
@@ -510,10 +507,6 @@ pub fn run() {
       if let Some(processes) = app.try_state::<AuxiliaryBackendProcesses>() {
         processes.stop();
       }
-      if let Some(supervisor) = app.try_state::<RuntimeSupervisor>() {
-        supervisor.stop();
-      }
-      stop_playwright_runtime();
     }
   });
 }

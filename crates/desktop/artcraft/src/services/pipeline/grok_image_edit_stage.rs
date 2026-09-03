@@ -1,5 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_donut_browser_api_base_url, get_extension_bridge_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse, LeaseStatus, GROK_IMAGE_EDIT_CAPABILITY};
+use crate::services::pipeline::clients::browser_runtime_backend::{acquire_worker, build_dispatch_url, extension_bridge_base_url, heartbeat_lease, release_lease, runtime_api_base_url, AcquireWorkerRequest, HeartbeatLeaseRequest, HeartbeatLeaseResponse, LeaseStatus, GROK_IMAGE_EDIT_CAPABILITY};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use log::{error, info, warn};
 use reqwest::Client;
@@ -294,8 +294,8 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
     let client = Client::builder().timeout(Duration::from_millis(input.timeout_ms.unwrap_or(180000) + 10000)).build().map_err(|e| format!("Failed to create client: {e}"))?;
 
     // Forward to extension bridge endpoint
-    let bridge_base = get_extension_bridge_base_url();
-    let bridge_url = build_worker_dispatch_url(&bridge_base, &worker_id);
+    let bridge_base = extension_bridge_base_url();
+    let bridge_url = build_dispatch_url(&bridge_base, &worker_id);
 
     let (resp_res, was_cancelled) = tokio::select! {
       res = async {
@@ -339,7 +339,7 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
 
     if was_cancelled {
       info!("[GrokImageEdit] Job cancelled in-flight! Dispatching cancel request to worker {worker_id}");
-      let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", get_donut_browser_api_base_url(), worker_id, job_id);
+      let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", runtime_api_base_url(), worker_id, job_id);
       let cancel_result = match client.post(cancel_url).json(&serde_json::json!({"stepId": step_id, "attemptId": attempt_id, "leaseId": lease_id, "profileId": profile_id, "targetRequestId": request_id})).send().await {
         Ok(response) => response.json::<serde_json::Value>().await.map_err(|error| error.to_string()),
         Err(error) => Err(error.to_string()),

@@ -1,5 +1,5 @@
 use crate::services::pipeline::artifact_store::ArtifactStore;
-use crate::services::pipeline::clients::browser_runtime_client::{acquire_worker, build_worker_dispatch_url, get_donut_browser_api_base_url, heartbeat_lease, release_lease, AcquireWorkerRequest, HeartbeatLeaseRequest, LeaseStatus, GROK_VIDEO_GENERATE_CAPABILITY};
+use crate::services::pipeline::clients::browser_runtime_backend::{acquire_worker, build_dispatch_url, heartbeat_lease, release_lease, runtime_api_base_url, AcquireWorkerRequest, HeartbeatLeaseRequest, LeaseStatus, GROK_VIDEO_GENERATE_CAPABILITY};
 use crate::services::pipeline::contracts::{ArtifactKind, ArtifactRef, StageId};
 use crate::services::pipeline::grok_image_edit_stage::{compute_sha256, detect_image_mime};
 use log::{error, info, warn};
@@ -223,7 +223,7 @@ pub async fn execute_grok_video_generate(input: GrokVideoGenerateInput, attempt_
 
     let client = Client::builder().timeout(Duration::from_millis(timeout_val + 10000)).build().map_err(|e| format!("Failed to create client: {e}"))?;
 
-    let bridge_url = build_worker_dispatch_url(&get_donut_browser_api_base_url(), &worker_id);
+    let bridge_url = build_dispatch_url(&runtime_api_base_url(), &worker_id);
 
     let (resp_res, was_cancelled) = tokio::select! {
       res = client.post(&bridge_url).json(&req_payload).send() => {
@@ -244,7 +244,7 @@ pub async fn execute_grok_video_generate(input: GrokVideoGenerateInput, attempt_
 
     if was_cancelled {
       info!("[FLOWORD][CANCEL] Job cancelled in-flight! Dispatching cancel request to worker {worker_id}");
-      let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", get_donut_browser_api_base_url(), worker_id, job_id);
+      let cancel_url = format!("{}/v1/workers/{}/jobs/{}/cancel", runtime_api_base_url(), worker_id, job_id);
       let cancel_result = match client.post(cancel_url).json(&serde_json::json!({"stepId": step_id, "attemptId": attempt_id, "leaseId": lease_id, "profileId": profile_id, "targetRequestId": request_id})).send().await {
         Ok(response) => response.json::<serde_json::Value>().await.map_err(|error| error.to_string()),
         Err(error) => Err(error.to_string()),

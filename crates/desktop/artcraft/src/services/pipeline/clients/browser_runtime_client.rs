@@ -120,8 +120,8 @@ pub async fn launch_donut_profile(profile_id: &str, target_url: Option<&str>) ->
   // return early when it is already running: a blank tab still needs to be
   // navigated to the target site so the extension can report capabilities.
 
-  let url = format!("{base_url}/v1/profiles/{profile_id}/run");
-  info!("[DonutAutoLaunch] Auto-launching profile: {profile_id} (target_url={:?})", target_url);
+  let url = format!("{base_url}/v1/local/browser/profiles/{profile_id}/run");
+  info!("[LocalBrowser] Requesting Donut Desktop to launch profile: {profile_id} (target_url={:?})", target_url);
 
   let req_body = RunProfileRequest {
     url: target_url.map(|u| u.to_string()),
@@ -130,15 +130,15 @@ pub async fn launch_donut_profile(profile_id: &str, target_url: Option<&str>) ->
     browser_engine: Some("chromium".to_string()),
   };
 
-  let resp = client.post(&url).header("X-Floword-Integration", "1").json(&req_body).send().await.map_err(|e| format!("Auto-launch profile request failed: {e}"))?;
+  let resp = client.post(&url).json(&req_body).send().await.map_err(|e| format!("Local browser launch request failed: {e}"))?;
   if resp.status().is_success() {
-    info!("[DonutAutoLaunch] Profile {profile_id} launched successfully");
+    info!("[LocalBrowser] Profile {profile_id} launched successfully");
     Ok(())
   } else {
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
-    warn!("[DonutAutoLaunch] Auto-launch returned {status}: {body}");
-    Err(format!("Auto-launch returned status {status}: {body}"))
+    warn!("[LocalBrowser] Launch returned {status}: {body}");
+    Err(format!("Local browser launch returned status {status}: {body}"))
   }
 }
 
@@ -168,55 +168,14 @@ pub fn resolve_runtime_executable_candidates() -> Vec<std::path::PathBuf> {
   candidates
 }
 
+/// Read-only readiness probe. Browser ownership belongs to Donut Desktop;
+/// this compatibility helper must never spawn a runtime or browser.
 pub async fn ensure_runtime_alive() {
   let base_url = get_donut_browser_api_base_url();
-  let client = Client::builder().timeout(Duration::from_millis(600)).build().ok();
-  if let Some(c) = client {
-    if let Ok(res) = c.get(format!("{base_url}/v1/health")).send().await {
-      if res.status().is_success() {
-        return;
-      }
-    }
-  }
-
-  info!("[BrowserRuntime] Donut runtime is not responding on 10108; attempting auto-spawn...");
-  let candidates = resolve_runtime_executable_candidates();
-
-  for exe in &candidates {
-    if exe.exists() {
-      info!("[BrowserRuntime] Spawning runtime binary: {:?}", exe);
-      #[cfg(windows)]
-      {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let mut command = std::process::Command::new(exe);
-        command.creation_flags(CREATE_NO_WINDOW);
-        if let Some(data_dir) = resolve_shared_donut_data_dir() {
-          command.env("DONUTBROWSER_DATA_DIR", data_dir);
-        }
-        let _ = command.spawn();
-      }
-      #[cfg(not(windows))]
-      {
-        let mut command = std::process::Command::new(exe);
-        if let Some(data_dir) = resolve_shared_donut_data_dir() {
-          command.env("DONUTBROWSER_DATA_DIR", data_dir);
-        }
-        let _ = command.spawn();
-      }
-      break;
-    }
-  }
-
-  for _ in 0..10 {
-    tokio::time::sleep(Duration::from_millis(400)).await;
-    if let Some(c) = Client::builder().timeout(Duration::from_millis(400)).build().ok() {
-      if let Ok(res) = c.get(format!("{base_url}/v1/health")).send().await {
-        if res.status().is_success() {
-          info!("[BrowserRuntime] Runtime online and responsive on 10108");
-          break;
-        }
-      }
+  let Ok(client) = Client::builder().timeout(Duration::from_millis(600)).build() else { return; };
+  if let Ok(response) = client.get(format!("{base_url}/v1/runtime/health")).send().await {
+    if response.status().is_success() {
+      info!("[BrowserRuntime] Donut Desktop local manager is online");
     }
   }
 }
@@ -248,8 +207,8 @@ fn resolve_shared_donut_data_dir() -> Option<std::path::PathBuf> {
   None
 }
 
-/// Acquire an exclusive worker lease from donutbrowser runtime.
-/// Automatically boots up the target browser profile if it is currently offline/stopped.
+/// Acquire an exclusive worker lease from Donut Desktop's local manager.
+/// ArtCraft never starts a browser/runtime as a side effect of this call.
 pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerResponse, String> {
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_secs(60)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
@@ -257,13 +216,9 @@ pub async fn acquire_worker(req: AcquireWorkerRequest) -> Result<AcquireWorkerRe
   let url = format!("{base_url}/v1/workers/acquire");
   info!("[BrowserRuntime] Acquiring worker: url={url} job_id={} capability={} profile_id={:?}", req.job_id, req.capability, req.profile_id);
 
-  ensure_runtime_alive().await;
   let resp = match client.post(&url).json(&req).send().await {
     Ok(r) => r,
-    Err(_) => {
-      ensure_runtime_alive().await;
-      client.post(&url).json(&req).send().await.map_err(|e| format!("BrowserRuntime unavailable: {e}"))?
-    },
+    Err(e) => return Err(format!("BrowserRuntime unavailable: {e}")),
   };
 
   if resp.status().is_success() {
@@ -370,17 +325,17 @@ pub async fn list_donut_profiles() -> Result<ListDonutProfilesResponse, String> 
   let base_url = get_donut_browser_api_base_url();
   let client = Client::builder().timeout(Duration::from_secs(8)).build().map_err(|e| format!("Failed to create HTTP client: {e}"))?;
 
-  let url = format!("{base_url}/v1/profiles");
+  let url = format!("{base_url}/v1/local/browser/profiles");
   info!("[DonutProfiles] Fetching profile catalog: {url}");
 
-  let resp = client.get(&url).header("X-Floword-Integration", "1").send().await.map_err(|e| format!("List profiles failed: {e}"))?;
+  let resp = client.get(&url).send().await.map_err(|e| format!("List profiles failed: {e}"))?;
 
   if resp.status().is_success() {
     resp.json::<ListDonutProfilesResponse>().await.map_err(|e| format!("Failed to parse ListDonutProfilesResponse: {e}"))
   } else {
     let status = resp.status();
     let body = resp.text().await.unwrap_or_default();
-    warn!("[DonutProfiles] GET /v1/profiles returned {status}: {body}");
+    warn!("[LocalBrowser] GET /v1/local/browser/profiles returned {status}: {body}");
     Err(format!("List profiles request returned status {status}"))
   }
 }

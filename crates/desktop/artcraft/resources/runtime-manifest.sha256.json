@@ -1,31 +1,33 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-08-31T03:12:42.517Z",
-  "sourceCommits": {
-    "donutbrowser": "a37c8078ae01363884f4db3621b8ffff2e1f154f",
-    "chromex": "b41badbacf3236cc4e15f28957dd652ff2cd6f90",
-    "artcraft": "c8bbad3e2249812fd40f4928f3af5bb62e4ed6b9"
-  },
-  "requiredArtifacts": [
-    "donut-runtime/floword-donut-runtime.exe",
-    "donut-runtime/donut-proxy.exe",
-    "donut-runtime/bundled-extensions/chromex.zip",
-    "node/node.exe",
-    "playwright-sidecar/src/server.js",
-    "playwright-sidecar/package.json",
-    "playwright-sidecar/node_modules/express/package.json",
-    "playwright-sidecar/node_modules/playwright/package.json",
-    "chromex-extension/manifest.json"
-  ],
-  "files": {
-    "donut-runtime/floword-donut-runtime.exe": "d5d3583efcbbd39e5eae46a97edbe8c690bda539f2d043d40c186d84f983209d",
-    "donut-runtime/donut-proxy.exe": "222857723d14cc1ab41c76ae231a898f2e9f8f1d6b01eae1244573cea8602df8",
-    "donut-runtime/bundled-extensions/chromex.zip": "1cc00c961969dab6f9594cd0f030065a5f9af4e429e8b2fd9c398f51214f411a",
-    "node/node.exe": "780f44f2c53c108bae261ada21a525b4bfe733c020ac85e41bfe94479090ac9b",
-    "playwright-sidecar/src/server.js": "2b022d5dc9bb113dd8124773630089a82304a2008299f0887fb222b8f657ca3f",
-    "playwright-sidecar/package.json": "563dbaee95e2830176bdea1ebd07e8ce8ab7b147f7051f0c7ebd894e677c2151",
-    "playwright-sidecar/node_modules/express/package.json": "c7db3b72582355c80cdcef1ad7b2c9a8f53557550724c6bef8502e9818c2ebe7",
-    "playwright-sidecar/node_modules/playwright/package.json": "ca170ec143a88ed3043ac953eb3b2377b2b97304104f4e1e23316684ce2c35af",
-    "chromex-extension/manifest.json": "601a140f6eef566842d50b07c1f53cc923820b75d2f889e9ba1d7c5c81cee51c"
-  }
+    "schemaVersion":  1,
+    "generatedAt":  "2026-09-03T11:32:21.4548588Z",
+    "sourceCommits":  {
+                          "donutbrowser":  "a37c8078ae01363884f4db3621b8ffff2e1f154f",
+                          "chromex":  "7101d37800542ef8a4fd46a0c7c91ecb26775990",
+                          "artcraft":  "8554f2992fb277da2052dc9935dc3ee86368047a"
+                      },
+    "requiredArtifacts":  [
+                              "artcraft-browser-runtime/src/server.js",
+                              "artcraft-browser-runtime/package.json",
+                              "playwright/chrome-win64/chrome.exe",
+                              "chromex/chromex.zip",
+                              "node/node.exe",
+                              "playwright-sidecar/src/server.js",
+                              "playwright-sidecar/package.json",
+                              "playwright-sidecar/node_modules/express/package.json",
+                              "playwright-sidecar/node_modules/playwright/package.json",
+                              "chromex-extension/manifest.json"
+                          ],
+    "files":  {
+                  "artcraft-browser-runtime/src/server.js":  "5bb757d0da3c49dfb9294434be8d0a7e5e1635db4f19413917741fda099ca7b7",
+                  "artcraft-browser-runtime/package.json":  "8a13ffd575d2dc7ddc4a129b5421a23bb2c923c49bddfd5a53959b504129ed6d",
+                  "playwright/chrome-win64/chrome.exe":  "409805a16d6416087e6b2f778df1cf8f7bbb267d6b99f6b5bb0a618eace234f2",
+                  "chromex/chromex.zip":  "94a073ce9b74eb4d16c445f9824eb900f0c0f3f76e4c972647abe510b73ff074",
+                  "node/node.exe":  "780f44f2c53c108bae261ada21a525b4bfe733c020ac85e41bfe94479090ac9b",
+                  "playwright-sidecar/src/server.js":  "be334de7099228582eeb2cc46b3b49ffc0179701b3a228aea8396567952143b2",
+                  "playwright-sidecar/package.json":  "563dbaee95e2830176bdea1ebd07e8ce8ab7b147f7051f0c7ebd894e677c2151",
+                  "playwright-sidecar/node_modules/express/package.json":  "c7db3b72582355c80cdcef1ad7b2c9a8f53557550724c6bef8502e9818c2ebe7",
+                  "playwright-sidecar/node_modules/playwright/package.json":  "ca170ec143a88ed3043ac953eb3b2377b2b97304104f4e1e23316684ce2c35af",
+                  "chromex-extension/manifest.json":  "f04feb596545ac53390f91bf274d6de678bd397f9fc798d1651ba85d37e84faa"
+              }
 }

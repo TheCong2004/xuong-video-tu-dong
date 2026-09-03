@@ -5,7 +5,7 @@ const path = require('path');
 class ActionRunner {
   getPage() {
     const session = [...sessionManager.sessions.values()][0];
-    const page = session?.grokPage;
+    const page = session?.session?.page || session?.grokPage;
     if (!page) {
       throw new Error('No active browser page session. Call /connect first.');
     }
@@ -36,7 +36,8 @@ class ActionRunner {
 
   async upload(selector, filePaths) {
     const page = this.getPage();
-    await page.setInputFiles(selector, filePaths);
+    if (typeof page.setInputFiles === 'function') await page.setInputFiles(selector, filePaths);
+    else await page.locator(selector).setInputFiles(filePaths);
     return { success: true, uploaded: filePaths };
   }
 

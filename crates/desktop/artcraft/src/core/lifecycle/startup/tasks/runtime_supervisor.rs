@@ -20,15 +20,11 @@ const POLL_INTERVAL: Duration = Duration::from_millis(400);
 const PLAYWRIGHT_PORT: u16 = 9223;
 static PLAYWRIGHT_CHILD: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
 const REQUIRED_RUNTIME_ARTIFACTS: &[&str] = &[
-  "donut-runtime/floword-donut-runtime.exe",
-  "donut-runtime/donut-proxy.exe",
-  "donut-runtime/bundled-extensions/chromex.zip",
   "node/node.exe",
   "playwright-sidecar/src/server.js",
   "playwright-sidecar/package.json",
   "playwright-sidecar/node_modules/express/package.json",
   "playwright-sidecar/node_modules/playwright/package.json",
-  "chromex-extension/manifest.json",
 ];
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -149,7 +145,7 @@ impl RuntimeSupervisor {
     let cft_root = resource_root.join("playwright");
     let cft_executable = cft_root.join("chrome-win64").join("chrome.exe");
     let extension_root = resource_root.join("chromex-extension");
-    command.current_dir(&runtime_root).stdin(Stdio::null()).stdout(Stdio::from(stdout_log)).stderr(Stdio::from(log_file)).env("FLOWORD_DONUT_HOST", HOST).env("FLOWORD_DONUT_PORT", PORT.to_string()).env("FLOWORD_PARENT_PID", std::process::id().to_string()).env("FLOWORD_DONUT_RESOURCE_ROOT", &runtime_root);
+    command.current_dir(&runtime_root).stdin(Stdio::null()).stdout(Stdio::from(stdout_log)).stderr(Stdio::from(log_file)).env("FLOWORD_DONUT_HOST", HOST).env("FLOWORD_DONUT_PORT", PORT.to_string()).env("FLOWORD_PLAYWRIGHT_RUNTIME_URL", format!("http://{HOST}:{PLAYWRIGHT_PORT}")).env("FLOWORD_PARENT_PID", std::process::id().to_string()).env("FLOWORD_DONUT_RESOURCE_ROOT", &runtime_root);
     if cft_executable.is_file() {
       command.env("FLOWORD_CHROMIUM_EXECUTABLE", &cft_executable);
       command.env("FLOWORD_CHROMIUM_SOURCE_DIR", &cft_root);
@@ -281,10 +277,53 @@ pub fn start_runtime_supervisor(app: &AppHandle) {
   }
 }
 
-/// Starts the dev Playwright owner before Donut. Packaged builds may provide
-/// an explicit FLOWORD_PLAYWRIGHT_SIDECAR entrypoint; no duplicate is spawned
-/// when an authenticated Floword runtime already owns port 9223.
-pub fn start_playwright_runtime(app: &AppHandle) {
+/// Ensure the Donut Desktop manager exists before ArtCraft starts its
+/// attach-only Sidecar. This is the only browser-manager launch performed by
+/// ArtCraft; CFT and all page lifecycle remain owned by Donut.
+pub fn ensure_donut_desktop() -> bool {
+  if port_open_at(PORT) {
+    return true;
+  }
+  if let Ok(output) = Command::new("tasklist").args(["/FI", "IMAGENAME eq donutbrowser.exe", "/FO", "CSV", "/NH"]).output() {
+    if String::from_utf8_lossy(&output.stdout).to_ascii_lowercase().contains("donutbrowser.exe") {
+      return true;
+    }
+  }
+  let mut candidates = Vec::<PathBuf>::new();
+  if let Some(path) = std::env::var_os("FLOWORD_DONUT_DESKTOP_EXE") {
+    candidates.push(PathBuf::from(path));
+  }
+  if let Ok(exe) = std::env::current_exe() {
+    if let Some(dir) = exe.parent() {
+      candidates.push(dir.join("donutbrowser.exe"));
+      candidates.push(dir.join("resources/donutbrowser.exe"));
+    }
+  }
+  if let Ok(cwd) = std::env::current_dir() {
+    for ancestor in cwd.ancestors() {
+      candidates.push(ancestor.join("donutbrowser/src-tauri/target/debug/donutbrowser.exe"));
+      candidates.push(ancestor.join("donutbrowser/target/debug/donutbrowser.exe"));
+    }
+  }
+  let Some(executable) = candidates.into_iter().find(|path| path.is_file()) else {
+    warn!("DONUT_LOCAL_MANAGER_NOT_READY: Donut Desktop executable not found");
+    return false;
+  };
+  match Command::new(&executable).spawn() {
+    Ok(_) => {
+      info!("Donut Desktop manager started: {}", executable.display());
+      true
+    }
+    Err(error) => {
+      warn!("DONUT_LOCAL_MANAGER_START_FAILED: {error}");
+      false
+    }
+  }
+}
+
+/// Start only the attach-only Sidecar after Donut Desktop is already healthy.
+/// This function has no browser/process ownership responsibilities.
+pub fn start_attach_only_sidecar(app: &AppHandle) {
   if let Some(slot) = PLAYWRIGHT_CHILD.get() {
     if let Ok(mut guard) = slot.lock() {
       if let Some(child) = guard.as_mut() {
@@ -307,19 +346,22 @@ pub fn start_playwright_runtime(app: &AppHandle) {
     warn!("PORT_CONFLICT: 127.0.0.1:{PLAYWRIGHT_PORT} is occupied by an incompatible process");
     return;
   }
-  let resource_dir = app.path().resource_dir().ok();
+  let resource_dir = resolve_runtime_resource_root(app);
   if !runtime_manifest_ready(app) {
+    warn!("Playwright runtime not started: runtime manifest is not ready (resource_dir={:?})", resource_dir);
     return;
   }
-  let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| resource_dir.as_ref().map(|root| root.join("playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| {
+  let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| resource_dir.as_ref().map(|root| root.join("playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| resource_dir.as_ref().map(|root| root.join("resources/playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| std::env::current_exe().ok().and_then(|exe| exe.parent().map(|dir| dir.join("resources/playwright-sidecar/src/server.js"))).filter(|path| path.is_file())).or_else(|| {
     let cwd = std::env::current_dir().ok()?;
     [cwd.join("tools/playwright-sidecar/src/server.js"), cwd.join("resources/playwright-sidecar/server.js"), cwd.join("..\\..\\..\\tools\\playwright-sidecar\\src\\server.js")].into_iter().find(|path| path.is_file())
   });
-  let Some(sidecar) = sidecar.filter(|path| path.is_file()) else {
+  let Some(sidecar) = sidecar.filter(|path| path.is_file()).map(normalize_process_path) else {
     warn!("Playwright sidecar entrypoint not found; Floword will report PLAYWRIGHT_RUNTIME_OFFLINE");
     return;
   };
-  let node = resolve_playwright_node(app);
+  info!("Playwright sidecar entrypoint selected: {} (resource_dir={:?})", sidecar.display(), resource_dir);
+  let node = normalize_process_path(resolve_playwright_node(app));
+  info!("Playwright Node executable selected: {}", node.display());
   let log_dir = std::env::var_os("FLOWORD_LOG_DIR").map(PathBuf::from).unwrap_or_else(|| std::env::temp_dir().join("Floword"));
   if let Err(error) = std::fs::create_dir_all(&log_dir) {
     warn!("failed to create Playwright log directory: {error}");
@@ -403,7 +445,7 @@ fn resolve_playwright_node(app: &AppHandle) -> PathBuf {
   if let Some(path) = std::env::var_os("FLOWORD_PLAYWRIGHT_NODE") {
     return PathBuf::from(path);
   }
-  if let Ok(resources) = app.path().resource_dir() {
+  if let Some(resources) = resolve_runtime_resource_root(app) {
     for candidate in [resources.join("node/node.exe"), resources.join("node.exe")] {
       if candidate.is_file() {
         return candidate;
@@ -427,6 +469,22 @@ fn resolve_playwright_node(app: &AppHandle) -> PathBuf {
   {
     PathBuf::from("node.exe")
   }
+}
+
+/// Tauri's Windows resource APIs may return extended-length paths (`\\?\\D:\\…`).
+/// They are valid for filesystem APIs but Node treats the prefix as part of a
+/// malformed drive argument when launching a script. Strip only this prefix
+/// at the process boundary; all integrity and filesystem checks retain the
+/// original canonical path.
+fn normalize_process_path(path: PathBuf) -> PathBuf {
+  #[cfg(windows)]
+  {
+    let value = path.to_string_lossy();
+    if let Some(stripped) = value.strip_prefix(r"\\?\") {
+      return PathBuf::from(stripped);
+    }
+  }
+  path
 }
 
 fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
@@ -481,10 +539,31 @@ fn verify_runtime_manifest(root: &Path) -> Result<(), String> {
   Ok(())
 }
 
+/// Resolve the directory containing the integrity manifest and staged runtime
+/// tree. In a Tauri dev build `resource_dir()` points at `target/debug`, while
+/// the configured resources are copied to `target/debug/resources`; packaged
+/// builds generally point directly at the resources directory. Never fall back
+/// to an unverified source tree.
+fn resolve_runtime_resource_root(app: &AppHandle) -> Option<PathBuf> {
+  let mut candidates = Vec::new();
+  if let Ok(root) = app.path().resource_dir() {
+    candidates.push(root.clone());
+    candidates.push(root.join("resources"));
+  }
+  if let Ok(exe) = std::env::current_exe() {
+    if let Some(dir) = exe.parent() {
+      candidates.push(dir.join("resources"));
+      candidates.push(dir.to_path_buf());
+    }
+  }
+  candidates.into_iter().find(|root| root.join("runtime-manifest.sha256.json").is_file())
+}
+
 /// Release startup is fail-closed. Debug source runs may opt in explicitly
 /// when no staged binaries exist; this flag is never honored in release.
 pub fn runtime_manifest_ready(app: &AppHandle) -> bool {
-  let Some(root) = app.path().resource_dir().ok() else {
+  let Some(root) = resolve_runtime_resource_root(app) else {
+    warn!("RUNTIME_INTEGRITY_ERROR: runtime manifest not found in Tauri resource roots");
     return false;
   };
   if cfg!(debug_assertions) && std::env::var_os("FLOWORD_ALLOW_SOURCE_RUNTIME").is_some() {
@@ -534,7 +613,7 @@ fn resolve_runtime_executable(app: &AppHandle) -> Option<PathBuf> {
       candidates.push(dir.join("resources/donut-runtime/floword-donut-runtime.exe"));
     }
   }
-  if let Ok(resources) = app.path().resource_dir() {
+  if let Some(resources) = resolve_runtime_resource_root(app) {
     candidates.push(resources.join("donut-runtime/floword-donut-runtime.exe"));
     candidates.push(resources.join("floword-donut-runtime.exe"));
   }
@@ -629,13 +708,12 @@ mod tests {
   }
 
   #[test]
-  fn manifest_requires_fixed_donut_artifact() {
-    let root = fixture_root("missing-donut");
+  fn attach_only_manifest_does_not_require_donut_artifact() {
+    let root = fixture_root("attach-only");
     let mut include = REQUIRED_RUNTIME_ARTIFACTS.to_vec();
-    include.retain(|path| !path.starts_with("donut-runtime/"));
     include.push("playwright/chromium/chrome.exe");
     write_manifest(&root, &include);
-    assert!(verify_runtime_manifest(&root).is_err());
+    assert!(verify_runtime_manifest(&root).is_ok());
     let _ = std::fs::remove_dir_all(root);
   }
 
