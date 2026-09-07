@@ -663,6 +663,7 @@ dependencies = [
  "images",
  "indexmap 2.13.0",
  "log",
+ "md-5 0.10.6",
  "memory_store",
  "midjourney_client",
  "mimetypes",

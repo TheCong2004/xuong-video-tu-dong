@@ -2,6 +2,21 @@ use std::env;
 use std::path::PathBuf;
 
 pub fn main() {
+  // Development builds should not require a user-specific compile-time
+  // SQLite file when the workspace already carries SQLx's offline query
+  // metadata.  The runtime connection still creates/migrates its own
+  // database (see `connection.rs`); this only affects `query!` expansion.
+  let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+  let workspace_sqlx = manifest_dir.ancestors().nth(4).map(|root| root.join(".sqlx")).filter(|path| path.is_dir());
+
+  if let Some(sqlx_dir) = workspace_sqlx {
+    println!("cargo:rerun-if-changed={}", sqlx_dir.display());
+    if env::var_os("SQLX_OFFLINE").is_none() {
+      println!("cargo:rustc-env=SQLX_OFFLINE=true");
+      println!("cargo:warning=SQLx offline metadata detected; using workspace .sqlx query cache");
+    }
+  }
+
   // NB: This should help JetBrains' RustRover from highlighting failing query macros,
   // but we do not want to interfere with the following:
   //

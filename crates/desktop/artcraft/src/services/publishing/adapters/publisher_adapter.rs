@@ -1,5 +1,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use crate::services::publishing::facebook_binding::{FacebookPageSnapshot, FacebookRuntimeBinding};
+use crate::services::publishing::facebook_binding::LivePublishConfirmation;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicationExecutionContext {
@@ -15,6 +17,25 @@ pub struct PublicationExecutionContext {
   pub description: Option<String>,
   pub target_destination_id: String,
   pub target_destination_handle: Option<String>,
+  /// Exact Donut CDP target selected by the user; never inferred from tab order.
+  #[serde(default)]
+  pub managed_facebook_target_id: Option<String>,
+  #[serde(default)]
+  pub facebook_page_id: Option<String>,
+  #[serde(default)]
+  pub facebook_page_canonical_url: Option<String>,
+  #[serde(default)]
+  pub facebook_page_display_name: Option<String>,
+  #[serde(default)]
+  pub visible_link: Option<String>,
+  #[serde(default)]
+  pub facebook_runtime_binding: Option<FacebookRuntimeBinding>,
+  #[serde(default)]
+  pub facebook_page_snapshot: Option<FacebookPageSnapshot>,
+  #[serde(default)]
+  pub scheduled_occurrence_id: Option<String>,
+  #[serde(default)]
+  pub live_publish_confirmation: Option<LivePublishConfirmation>,
   pub idempotency_key: String,
   pub attempt_number: i32,
 }

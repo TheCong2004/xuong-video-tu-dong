@@ -69,10 +69,7 @@ struct PubAggregateRow {
   ready_count: i64,
 }
 
-pub async fn get_dashboard_summary(
-  db: &TaskDbConnection,
-  args: DashboardSummaryQueryArgs,
-) -> Result<DashboardSummary, SqliteTasksError> {
+pub async fn get_dashboard_summary(db: &TaskDbConnection, args: DashboardSummaryQueryArgs) -> Result<DashboardSummary, SqliteTasksError> {
   let pool = db.get_pool();
 
   // 1. Authoritative Job aggregation query based on business_status funnel and task terminal states
@@ -136,30 +133,7 @@ pub async fn get_dashboard_summary(
   .fetch_one(pool)
   .await?;
 
-  Ok(DashboardSummary {
-    total_jobs: job_row.total,
-    queued: job_row.queued,
-    waiting_worker: job_row.waiting_worker,
-    generating_image: job_row.generating_image,
-    converting_9_16: job_row.converting_9_16,
-    generating_video: job_row.generating_video,
-    downloading: job_row.downloading,
-    saving_local: job_row.saving_local,
-    ready_to_post: job_row.ready_to_post + pub_row.ready_count,
-    scheduled: pub_row.scheduled_count,
-    posting: pub_row.posting_count,
-    done: job_row.done,
-    error: job_row.error,
-    auth_required: job_row.auth_required,
-
-    publications_facebook: pub_row.facebook_count,
-    publications_tiktok: pub_row.tiktok_count,
-    publications_youtube: pub_row.youtube_count,
-    publications_posted: pub_row.posted_count,
-    publications_scheduled: pub_row.scheduled_count,
-    publications_waiting_approval: pub_row.waiting_approval_count,
-    publications_error: pub_row.error_count,
-  })
+  Ok(DashboardSummary { total_jobs: job_row.total, queued: job_row.queued, waiting_worker: job_row.waiting_worker, generating_image: job_row.generating_image, converting_9_16: job_row.converting_9_16, generating_video: job_row.generating_video, downloading: job_row.downloading, saving_local: job_row.saving_local, ready_to_post: job_row.ready_to_post + pub_row.ready_count, scheduled: pub_row.scheduled_count, posting: pub_row.posting_count, done: job_row.done, error: job_row.error, auth_required: job_row.auth_required, publications_facebook: pub_row.facebook_count, publications_tiktok: pub_row.tiktok_count, publications_youtube: pub_row.youtube_count, publications_posted: pub_row.posted_count, publications_scheduled: pub_row.scheduled_count, publications_waiting_approval: pub_row.waiting_approval_count, publications_error: pub_row.error_count })
 }
 
 #[cfg(test)]
@@ -175,9 +149,7 @@ mod tests {
     tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap().block_on(async {
       let temp = tempfile::tempdir().unwrap();
       let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
-      let summary = get_dashboard_summary(&db, DashboardSummaryQueryArgs::default())
-        .await
-        .unwrap();
+      let summary = get_dashboard_summary(&db, DashboardSummaryQueryArgs::default()).await.unwrap();
 
       assert_eq!(summary.total_jobs, 0);
       assert_eq!(summary.queued, 0);
@@ -193,59 +165,19 @@ mod tests {
       let db = TaskDbConnection::connect_and_migrate(temp.path().join("tasks.sqlite")).await.unwrap();
 
       // 1. status=started, business_status=GENERATING_IMAGE
-      create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::Started,
-        current_stage: PipelineStage::ScriptGenerating,
-        maybe_page_id: Some("page_1"),
-        maybe_input_payload: None,
-        maybe_page_snapshot: None,
-        maybe_business_status: Some("GENERATING_IMAGE"),
-      }).await.unwrap();
+      create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::Started, current_stage: PipelineStage::ScriptGenerating, maybe_page_id: Some("page_1"), maybe_input_payload: None, maybe_page_snapshot: None, maybe_business_status: Some("GENERATING_IMAGE") }).await.unwrap();
 
       // 2. status=started, business_status=WAITING_WORKER
-      create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::Started,
-        current_stage: PipelineStage::Queued,
-        maybe_page_id: Some("page_1"),
-        maybe_input_payload: None,
-        maybe_page_snapshot: None,
-        maybe_business_status: Some("WAITING_WORKER"),
-      }).await.unwrap();
+      create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::Started, current_stage: PipelineStage::Queued, maybe_page_id: Some("page_1"), maybe_input_payload: None, maybe_page_snapshot: None, maybe_business_status: Some("WAITING_WORKER") }).await.unwrap();
 
       // 3. status=started, business_status=READY_TO_POST
-      create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::Started,
-        current_stage: PipelineStage::Completed,
-        maybe_page_id: Some("page_1"),
-        maybe_input_payload: None,
-        maybe_page_snapshot: None,
-        maybe_business_status: Some("READY_TO_POST"),
-      }).await.unwrap();
+      create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::Started, current_stage: PipelineStage::Completed, maybe_page_id: Some("page_1"), maybe_input_payload: None, maybe_page_snapshot: None, maybe_business_status: Some("READY_TO_POST") }).await.unwrap();
 
       // 4. status=waiting_input, business_status=AUTH_REQUIRED
-      create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::WaitingInput,
-        current_stage: PipelineStage::ScriptGenerating,
-        maybe_page_id: Some("page_1"),
-        maybe_input_payload: None,
-        maybe_page_snapshot: None,
-        maybe_business_status: Some("AUTH_REQUIRED"),
-      }).await.unwrap();
+      create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::WaitingInput, current_stage: PipelineStage::ScriptGenerating, maybe_page_id: Some("page_1"), maybe_input_payload: None, maybe_page_snapshot: None, maybe_business_status: Some("AUTH_REQUIRED") }).await.unwrap();
 
       // 5. status=complete_failure, business_status=ERROR
-      create_pipeline_job(CreatePipelineJobArgs {
-        db: &db,
-        status: TaskStatus::CompleteFailure,
-        current_stage: PipelineStage::ScriptGenerating,
-        maybe_page_id: Some("page_1"),
-        maybe_input_payload: None,
-        maybe_page_snapshot: None,
-        maybe_business_status: Some("ERROR"),
-      }).await.unwrap();
+      create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::CompleteFailure, current_stage: PipelineStage::ScriptGenerating, maybe_page_id: Some("page_1"), maybe_input_payload: None, maybe_page_snapshot: None, maybe_business_status: Some("ERROR") }).await.unwrap();
 
       let summary = get_dashboard_summary(&db, DashboardSummaryQueryArgs::default()).await.unwrap();
 
@@ -258,5 +190,3 @@ mod tests {
     });
   }
 }
-
-

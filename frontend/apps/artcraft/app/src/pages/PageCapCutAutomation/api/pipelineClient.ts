@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+export type { UnlistenFn } from '@tauri-apps/api/event';
 
 export type PipelineStage = 'script_generation' | 'video_assembly' | 'done';
 
@@ -28,6 +29,213 @@ export interface ListPipelineJobsResponse {
 
 export interface CancelPipelineJobResponse {
   cancelled: boolean;
+}
+
+export interface LocalAutomationPreset {
+  schemaVersion: number;
+  /** Stable one-click workflow identifier shared with the Rust contract. */
+  presetId?: "QUICK_LOCALIZED_VERTICAL_V1";
+  name: string;
+  mirrorHorizontal: boolean;
+  playbackRate: number;
+  preserveAudioPitch: boolean;
+  color: { brightness: number; contrast: number; saturation: number; gamma: number; hue: number; temperature: number; highlights: number; shadows: number };
+  localization: { enabled: boolean; sourceLanguage: string; targetLanguage: string; transcriptionEngine: string; translate: boolean; burnSubtitles: boolean; subtitleStyle: { fontName: string; fontSize: number; marginV: number }; subtitlePath?: string | null; manualCues?: Array<{ startMs: number; endMs: number; text: string; enabled: boolean }> };
+  hook: { enabled: boolean; text: string; startMs: number; endMs: number; style: { fontName: string; fontSize: number; alignment: string; margin: number; outline: number } };
+  foreignText: { enabled: boolean; detectionMode: "MANUAL" | "OCR" | "OCR_WITH_MANUAL_REVIEW"; action: "BLUR" | "COVER" | "STICKER"; manualRegions: Array<{ startMs: number; endMs: number; x: number; y: number; width: number; height: number }>; stickerPath?: string | null; stickers?: Array<{ id: string; path: string; x: number; y: number; width: number; height: number; opacity: number; startMs: number; endMs: number; enabled: boolean }> };
+  output: { container: string; videoCodec: string; audioCodec: string; ratio: string; width: number; height: number; fps: string; scaleMode: string; qualityPreset: string };
+  audioPolicy: "KEEP_IF_RIGHTS_CONFIRMED" | "MUTE_ORIGINAL" | "REPLACE_WITH_LICENSED_AUDIO" | "REPLACE_WITH_USER_AUDIO";
+  publishSchedule?: { timezone: "Asia/Ho_Chi_Minh"; slots: string[] } | null;
+  autoTranscribe?: boolean;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  autoTranslate?: boolean;
+  autoOcr?: boolean;
+  ocrLanguages?: string[];
+  /** `rapidocr-onnxruntime` is multilingual; Tesseract codes are only valid
+   * when the selected engine explicitly supports language packs. */
+  ocrEngine?: string;
+  ocrSampleIntervalMs?: number;
+  autoDiarize?: boolean;
+  autoTts?: boolean;
+  ttsAudioMode?: "REPLACE" | "DUCK_ORIGINAL" | "MIX";
+  originalAudioGain?: number;
+  speakerVoiceAssignments?: Record<string, string>;
+}
+
+export interface LocalAutomationReceipt {
+  schemaVersion: number;
+  jobId: string;
+  requestId: string;
+  inputSha256: string;
+  outputSha256: string;
+  outputMd5: string;
+  outputPath: string;
+  durationMs: number;
+  width: number;
+  height: number;
+  videoCodec: string;
+  audioCodec: string;
+  playbackRate: number;
+  subtitleBurned: boolean;
+  subtitleMode?: string;
+  subtitleCueCount?: number;
+  hookApplied: boolean;
+  foreignTextRegionsApplied: number;
+  terminal: boolean;
+  state: string;
+  presetId?: string | null;
+  createdAt?: number | null;
+  startedAt?: number | null;
+  completedAt?: number | null;
+  inputPath?: string | null;
+  inputDurationMs?: number | null;
+  inputDimensions?: { width: number; height: number } | null;
+  outputDimensions?: { width: number; height: number } | null;
+  encoder?: string | null;
+  stageTimings?: Record<string, number> | null;
+  transcriptSegmentCount?: number;
+  translatedSegmentCount?: number;
+  ocrRegionCount?: number;
+  speakerCount?: number;
+  ttsSegmentCount?: number;
+  cancelCount?: number;
+  retryCount?: number;
+  restored?: boolean;
+  inputMd5?: string | null;
+  previewSha256?: string | null;
+  resourceVersions?: Record<string, string>;
+  warnings?: string[];
+  requestedSourceLanguage?: string | null;
+  effectiveSourceLanguage?: string | null;
+  ocrLanguages?: string[];
+  routeKind?: 'DIRECT' | 'PIVOT' | string | null;
+  translationHops?: string[];
+}
+
+export type NativeAutomationJobState = 'QUEUED' | 'PROBING' | 'PREPARING' | 'RENDERING' | 'VERIFYING' | 'COMPLETED' | 'CANCEL_REQUESTED' | 'FAILED' | 'CANCELLED';
+export interface NativeAutomationJob {
+  jobId: string; requestId: string; attempt: number; attemptId?: string; dispatchCount?: number; retryCount?: number; lastWorkerInvocationAt?: number | null; inputPath: string; outputRoot?: string | null; pageName: string;
+  state: NativeAutomationJobState; progress: number; stageProgress?: number; overallProgress?: number; elapsedMs?: number; estimatedRemainingMs?: number | null; message?: string | null; stage: string; createdAt: number; startedAt?: number | null; finishedAt?: number | null; processedMs?: number | null; expectedDurationMs?: number | null; ffmpegPid?: number | null; errorCode?: string | null; errorMessage?: string | null; error?: string | null; receipt?: LocalAutomationReceipt | null;
+}
+export interface NativeAutomationProgressPayload extends NativeAutomationJob {}
+
+export const NATIVE_AUTOMATION_PROGRESS_EVENT = 'capcut://automation_progress';
+
+/** Start the legacy provider only after the user explicitly selects Legacy. */
+export async function ensureLegacyCapCutMate(): Promise<void> {
+  if (!isTauriAvailable()) return;
+  await invoke<void>('ensure_legacy_capcut_mate');
+}
+
+export async function startNativeAutomationJob(request: RunLocalAutomationRequest): Promise<NativeAutomationJob> {
+  if (!isTauriAvailable()) throw new Error('Native Automation chỉ hoạt động trong ArtCraft Desktop');
+  return invoke<NativeAutomationJob>('start_capcut_automation_job', { request });
+}
+export async function listNativeAutomationJobs(): Promise<NativeAutomationJob[]> {
+  if (!isTauriAvailable()) return [];
+  return invoke<NativeAutomationJob[]>('list_capcut_automation_jobs');
+}
+export async function getNativeAutomationJob(jobId: string): Promise<NativeAutomationJob> {
+  return invoke<NativeAutomationJob>('get_capcut_automation_job', { request: { job_id: jobId } });
+}
+export async function cancelNativeJob(jobId: string): Promise<NativeAutomationJob> {
+  return invoke<NativeAutomationJob>('cancel_capcut_automation_job', { request: { job_id: jobId } });
+}
+export async function retryNativeJob(jobId: string): Promise<NativeAutomationJob> {
+  return invoke<NativeAutomationJob>('retry_capcut_automation_job', { request: { job_id: jobId } });
+}
+export async function removeNativeJob(jobId: string): Promise<void> {
+  return invoke<void>('remove_capcut_automation_job', { request: { job_id: jobId } });
+}
+export async function previewNativeAutomation(inputPath: string, preset: LocalAutomationPreset, startMs = 0, durationMs = 5000): Promise<{ path: string; cacheKey: string }> {
+  return invoke<{ path: string; cacheKey: string }>('preview_capcut_automation', { request: { inputPath, preset, startMs, durationMs } });
+}
+
+export interface LocalTranscriptSegment {
+  id: string;
+  start_ms: number;
+  end_ms: number;
+  text: string;
+  language?: string | null;
+  confidence?: number | null;
+  speaker_id?: string | null;
+}
+
+export interface LocalTranscriptionResponse {
+  engine: string;
+  model_sha256: string;
+  executable_sha256: string;
+  segments: LocalTranscriptSegment[];
+}
+
+export async function transcribeCapCutAutomationLocal(inputPath: string, language?: string): Promise<LocalTranscriptionResponse> {
+  return invoke<LocalTranscriptionResponse>('transcribe_capcut_automation_local', { request: { input_path: inputPath, language: language ?? null } });
+}
+
+export interface LocalTranslationSegment extends LocalTranscriptSegment {
+  translated_text?: string | null;
+}
+
+export interface LocalTranslationResponse {
+  provider: string;
+  model: string;
+  segments: LocalTranslationSegment[];
+}
+
+export async function translateCapCutAutomationLocal(segments: LocalTranslationSegment[], sourceLanguage = 'en', targetLanguage = 'vi'): Promise<LocalTranslationResponse> {
+  return invoke<LocalTranslationResponse>('translate_capcut_automation_local', { request: { segments, source_language: sourceLanguage, target_language: targetLanguage } });
+}
+
+export interface LocalOcrRegion {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  confidence?: number | null;
+}
+
+export interface LocalOcrResponse { engine: string; language: string; regions: LocalOcrRegion[]; }
+
+export async function ocrCapCutAutomationLocal(inputPath: string, imageWidth: number, imageHeight: number, language = 'eng'): Promise<LocalOcrResponse> {
+  return invoke<LocalOcrResponse>('ocr_capcut_automation_local', { request: { image_path: inputPath, image_width: imageWidth, image_height: imageHeight, language } });
+}
+
+export interface LocalOcrTranslatedRegion extends LocalOcrRegion { translated_text: string; }
+export interface LocalOcrTranslationResponse { provider: string; model: string; regions: LocalOcrTranslatedRegion[]; }
+
+export async function translateOcrCapCutAutomationLocal(regions: LocalOcrRegion[], sourceLanguage = 'en', targetLanguage = 'vi'): Promise<LocalOcrTranslationResponse> {
+  return invoke<LocalOcrTranslationResponse>('translate_ocr_capcut_automation_local', { request: { regions, source_language: sourceLanguage, target_language: targetLanguage } });
+}
+
+export interface LocalSpeakerTurn { speakerId: string; startMs: number; endMs: number; confidence?: number | null; }
+export interface LocalSpeakerResponse { engine: string; sampleRate: number; turns: LocalSpeakerTurn[]; }
+
+/** Detect speaker turns with the ArtCraft-owned offline diarization engine. */
+export async function detectSpeakersCapCutAutomationLocal(audioPath: string, numSpeakers = 0): Promise<LocalSpeakerResponse> {
+  return invoke<LocalSpeakerResponse>('detect_speakers_capcut_automation_local', { request: { audio_path: audioPath, num_speakers: numSpeakers } });
+}
+export async function listenNativeAutomationProgress(cb: (payload: NativeAutomationProgressPayload) => void): Promise<UnlistenFn> {
+  if (!isTauriAvailable()) return NOOP_UNLISTEN;
+  return listen<NativeAutomationProgressPayload>(NATIVE_AUTOMATION_PROGRESS_EVENT, (event) => cb(event.payload));
+}
+
+export interface RunLocalAutomationRequest {
+  inputPath: string;
+  outputRoot?: string;
+  pageName?: string;
+  jobId?: string;
+  requestId?: string;
+  preset?: LocalAutomationPreset;
+}
+
+/** Render locally with ArtCraft's packaged FFmpeg; no CapCut Mate server is used. */
+export async function runLocalAutomation(request: RunLocalAutomationRequest): Promise<LocalAutomationReceipt> {
+  if (!isTauriAvailable()) throw new Error('Local ArtCraft render chỉ hoạt động trong ứng dụng Desktop');
+  const response = await invoke<{ receipt: LocalAutomationReceipt }>('run_capcut_automation_command', { request });
+  return response.receipt;
 }
 
 export interface StageCompletePayload {

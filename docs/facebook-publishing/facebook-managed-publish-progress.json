@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-05T08:20:00Z",
+  "phase": "PHASE_B_C_IMPLEMENTATION",
+  "status": "SOURCE_READY_DRY_RUN_PENDING",
+  "sourceChangedThisTurn": true,
+  "buildStageRestartSmoke": "NOT_RUN",
+  "endpointCalls": [],
+  "liveGate": {
+    "status": "AWAITING_USER_DONUT_PROFILE_SELECTION",
+    "reason": "No exact Facebook Donut profile/target/page snapshot was supplied; no profile or target was selected automatically",
+    "availableProfiles": [
+      {
+        "profileId": "633a118f-14fb-48c7-a764-07541b1fcb8b",
+        "name": "floword-free-live-20260903",
+        "browser": "chromium"
+      },
+      {
+        "profileId": "6fb66828-b77f-4fdf-a0c2-ab99d8f088dd",
+        "name": "d",
+        "browser": "chromium"
+      }
+    ],
+    "dryRun": "NOT_RUN",
+    "livePublish": "NOT_RUN",
+    "scheduler": "NOT_RUN"
+  },
+  "cleanup": {
+    "deleted": [
+      {
+        "path": "C:/Users/thecong/AppData/Local/Temp/floword-artcraft-e2e-target",
+        "artifactType": "REBUILDABLE_CARGO_TARGET",
+        "status": "DELETED"
+      },
+      {
+        "path": "C:/Users/thecong/AppData/Local/Temp/floword-facebook-donut-target",
+        "artifactType": "REBUILDABLE_CARGO_TARGET",
+        "status": "DELETED"
+      }
+    ],
+    "leanTarget": "C:/Users/thecong/AppData/Local/Temp/floword-facebook-artcraft-target",
+    "leanTargetStatus": "RETAINED_UNTIL_USER_TEST",
+    "cFreeGbAfter": 6.68
+  },
+  "runtimeEvidence": {
+    "donut": "NOT_AVAILABLE_RUNTIME_NOT_RUNNING",
+    "sidecar": "NOT_AVAILABLE_RUNTIME_NOT_RUNNING",
+    "artcraft": "NOT_AVAILABLE_RUNTIME_NOT_RUNNING",
+    "portsChecked": [10108, 9223],
+    "browserPid": null,
+    "cdpPort": null,
+    "launchGeneration": null,
+    "managedTargetId": null,
+    "authState": "UNKNOWN_NOT_OBSERVED"
+  },
+  "priorCheckpoint": {
+    "path": "D:/capcutpolot/artcraft/docs/capcut-automation/capcap-migration-progress.json",
+    "sha256": "D9B3FF1322142FD53A74B541DB9D09B1F67A814D3AE0BC1CA728C7599C406D5B"
+  },
+  "architecture": {
+    "browserOwner": "DONUT_LOCAL_RUNTIME",
+    "automationOwner": "PLAYWRIGHT_SIDECAR_ATTACH_ONLY",
+    "artcraftBrowserLaunches": 0,
+    "chromexInScope": false,
+    "cookieOrTokenExport": "NOT_PRESENT_IN_AUDITED_PATH",
+    "hiddenLinkOrAutoLogin": "NOT_PRESENT_IN_AUDITED_PATH"
+  },
+  "donutAudit": {
+    "repo": "D:/capcutpolot/donutbrowser",
+    "routes": [
+      "GET /v1/local/browser/profiles",
+      "POST /v1/local/browser/profiles/{profileId}/run",
+      "POST /v1/local/browser/profiles/{profileId}/stop",
+      "GET /v1/local/browser/profiles/{profileId}/pages",
+      "POST /v1/local/browser/profiles/{profileId}/pages/claim",
+      "POST /v1/local/browser/profiles/{profileId}/pages/{targetId}/release",
+      "DELETE /v1/local/browser/profiles/{profileId}/pages/{targetId}",
+      "GET /v1/runtime/health"
+    ],
+    "identityResponse": [
+      "profileId",
+      "browserPid",
+      "remoteDebuggingPort",
+      "cdpEndpoint",
+      "launchGeneration",
+      "browserEngine",
+      "grokTargetId",
+      "grokPageUrl",
+      "reused",
+      "targetKind",
+      "managedTargetId",
+      "managedPageUrl"
+    ],
+    "pageResponse": ["targetId", "pageType", "url", "title", "purpose", "managed", "state", "browserPid", "launchGeneration", "pageLeaseId"],
+    "selection": "FACEBOOK exact targetId validates active Facebook hostname; no ID requires one unique Facebook page; zero/multiple return explicit errors; no new tab is created",
+    "entitlement": "local routes use machine-local bearer auth; legacy /v1/profiles/{id}/run still enforces cloud entitlement",
+    "fileSymbols": [
+      "src/api_server.rs::local_browser_run",
+      "src/api_server.rs::local_browser_stop",
+      "src/api_server.rs::local_browser_list_pages",
+      "src/api_server.rs::local_browser_claim_page",
+      "src/browser_runner.rs::launch_browser_profile_impl_with_policy_result",
+      "src/browser_runner.rs::ensure_grok_target"
+    ]
+  },
+  "artcraftAudit": {
+    "repo": "D:/capcutpolot/artcraft",
+    "browserFacade": "BrowserRuntimeBackend::DonutDesktopLocalManager",
+    "identityConstraint": "BrowserIdentity::validate is target-kind aware; FACEBOOK requires managedTargetId + facebook hostname and does not require Grok fields",
+    "sidecarPayload": "start_worker sends profileId/browserPid/launchGeneration/browserEngine/targetKind/managedTargetId/managedPageUrl plus Grok compatibility fields",
+    "facebookAdapter": {
+      "file": "crates/desktop/artcraft/src/services/publishing/adapters/facebook_adapter.rs",
+      "implementation": "runs Donut local browser, lists/claims exact Facebook target, attaches Sidecar and dispatches DOM publisher without legacy cloud worker route",
+      "verification": "requires authoritative postId or postUrl from Sidecar response",
+      "leaseNote": "page lease is released after dispatch; browser remains Donut-owned"
+    },
+    "scheduler": {
+      "worker": "services/publishing/threads/publishing_worker_thread.rs polls every 2s, atomically claims READY_TO_POST or due SCHEDULED",
+      "persistence": "job_publications stores profile/page/platform/idempotency/status/schedule/post evidence",
+      "requestedTimezone": "Asia/Ho_Chi_Minh is present in Native UI preset",
+      "currentDefaultSlots": ["11:30", "19:30", "20:30"],
+      "requestedWindows": ["11:30-12:30", "19:30-21:00"],
+    "liveScheduling": "NOT_RUN"
+    }
+  },
+  "sidecarAudit": {
+    "repo": "D:/capcutpolot/artcraft/tools/playwright-sidecar",
+    "attach": "chromium.connectOverCDP",
+    "routes": [
+      "GET /health",
+      "POST /v1/profiles/{profileId}/start",
+      "POST /v1/profiles/{profileId}/stop",
+      "GET /v1/profiles/{profileId}/status",
+      "GET /v1/profiles/{profileId}/pages",
+      "POST /v1/profiles/{profileId}/dispatch",
+      "POST /v1/jobs/{jobId}/cancel"
+    ],
+    "targetSelection": "session-manager.js::ensureManagedPage requires exact Facebook targetId or a unique Facebook page; ambiguity is fail-closed",
+    "auth": "Facebook DOM tri-state AUTHENTICATED/UNAUTHENTICATED/UNKNOWN",
+    "contentContract": "Grok uses __flowordProductionContent; Facebook uses direct Sidecar dispatchFacebook DOM publisher",
+    "pageLifecycle": "DonutSession open/close forbidden; Sidecar disconnects only and never browser.close",
+    "testInventory": "targeted unit/server fixtures: Facebook hostname strict, auth tri-state, Page identity match/mismatch/unknown, BUSY health; live Facebook attach not run"
+  },
+  "tests": {
+    "donutCargoCheck": "PASS",
+    "donutTargetedUnit": "PASS (api_server::tests::facebook_target_kind_and_hostname_are_strict)",
+    "artcraftCargoCheck": "PASS",
+    "artcraftFacebookIdentityUnit": "PASS",
+    "artcraftFacebookPersistenceUnit": "9/9_PASS",
+    "artcraftReelsSlotUnit": "PASS",
+    "sidecarTargetedUnit": "6/6_PASS",
+    "nodeSyntax": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "persistence": {
+    "store": "floword_system_settings (existing SQLite store)",
+    "runtimeBindingKey": "facebook_publishing.runtime_binding.<bindingId>",
+    "pageSnapshotKey": "facebook_publishing.page_snapshot.<bindingId>",
+    "confirmationKey": "facebook_publishing.confirmation.<publicationId>",
+    "runtimeBinding": "durable binding plus ephemeral PID/generation/CDP/exact target identity; PID, generation, endpoint, target or live-page mismatch is stale",
+    "pageSnapshot": "profile plus Page ID or canonical URL, display name and DOM evidence; name alone is never a key",
+    "confirmation": "publication/occurrence/profile/Page/video SHA/caption SHA/link, expiry and confirmedByUser; no global boolean",
+    "commands": [
+      "get_facebook_runtime_binding_command",
+      "upsert_facebook_runtime_binding_command",
+      "get_facebook_page_snapshot_command",
+      "upsert_facebook_page_snapshot_command",
+      "get_live_publish_confirmation_command",
+      "upsert_live_publish_confirmation_command"
+    ],
+    "secretHandling": "loopback CDP without credentials/query and evidence rejects bearer/cookie/token/ws markers"
+  },
+  "sourceReadyGates": {
+    "targetBindingPersistence": "PASS",
+    "facebookPageSnapshotPersistence": "PASS (SQLite settings commands + validation)",
+    "confirmationContract": "PASS (exact hash/snapshot validation; no global boolean)",
+    "donutTargetedTest": "PASS",
+    "artcraftTargetedTests": "PASS",
+    "sidecarTargetedTests": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "missingImplementation": [
+    "Live Facebook Page selection evidence and dry-run",
+    "Scheduler 3/4/5 occurrence persistence and idempotency tests",
+    "Build and runtime activation validation",
+    "Explicit user confirmation before any live post"
+  ],
+  "decision": {
+    "branch": "B_C_SOURCE_READY_DRY_RUN_PENDING",
+    "rootCause": "FACEBOOK_MANAGED_TARGET_CONTRACT_MISSING",
+    "nextPhase": "USER_PROFILE_TARGET_SELECTION_THEN_DRY_RUN",
+    "livePostAttempt": "NOT_RUN",
+    "implementationReadyForLiveConfirmation": true,
+    "retryPolicy": "NO_RETRY_OR_UNCERTAIN_POST_ACTION_TAKEN"
+  },
+  "git": {
+    "artcraft": "DIRTY_PRE_EXISTING_BASELINE",
+    "donutbrowser": "DIRTY (Facebook HTTPS validation fix plus prior local-runtime changes)",
+    "chromex": "CLEAN",
+    "commitPush": "NOT_DONE"
+  }
+}

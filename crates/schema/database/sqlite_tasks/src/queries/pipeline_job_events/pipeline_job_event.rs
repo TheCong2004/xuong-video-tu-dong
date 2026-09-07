@@ -31,17 +31,5 @@ pub struct RawPipelineJobEvent {
 }
 
 pub(crate) fn raw_into_pipeline_job_event(raw: RawPipelineJobEvent) -> PipelineJobEvent {
-  PipelineJobEvent {
-    id: raw.id,
-    job_id: raw.job_id,
-    sequence: raw.sequence,
-    stage_id: raw.stage_id,
-    business_status: raw.business_status,
-    event_type: raw.event_type,
-    level: raw.level,
-    message: raw.message,
-    error_code: raw.error_code,
-    metadata_json: raw.metadata_json,
-    created_at: raw.created_at,
-  }
+  PipelineJobEvent { id: raw.id, job_id: raw.job_id, sequence: raw.sequence, stage_id: raw.stage_id, business_status: raw.business_status, event_type: raw.event_type, level: raw.level, message: raw.message, error_code: raw.error_code, metadata_json: raw.metadata_json, created_at: raw.created_at }
 }

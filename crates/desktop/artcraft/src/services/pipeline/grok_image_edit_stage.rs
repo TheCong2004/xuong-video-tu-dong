@@ -80,17 +80,7 @@ impl Drop for LeaseGuard {
 }
 
 fn is_post_submit_reconciliation_error(error: &str) -> bool {
-  [
-    "POST_ROOT_AMBIGUOUS",
-    "CURRENT_DOM_NOT_CORRELATED",
-    "POST_CORRELATION_CONFLICT",
-    "GROK_RESULT_AMBIGUOUS",
-    "GROK_GENERATION_TIMEOUT",
-    "RESULT_SCANNER_ZERO_CANDIDATES",
-    "RESULT_HASH_UNVERIFIED",
-    "SOURCE_ARTIFACT_ECHO",
-    "RESULT_RECONCILE_EXHAUSTED",
-  ].iter().any(|code| error.starts_with(code) || error.contains(code))
+  ["POST_ROOT_AMBIGUOUS", "CURRENT_DOM_NOT_CORRELATED", "POST_CORRELATION_CONFLICT", "GROK_RESULT_AMBIGUOUS", "GROK_GENERATION_TIMEOUT", "RESULT_SCANNER_ZERO_CANDIDATES", "RESULT_HASH_UNVERIFIED", "SOURCE_ARTIFACT_ECHO", "RESULT_RECONCILE_EXHAUSTED"].iter().any(|code| error.starts_with(code) || error.contains(code))
 }
 
 fn persist_orphan_receipt(root: &std::path::Path, request_id: &str, job_id: &str, step_id: &str, attempt_id: &str, lease_id: &str, profile_id: &str, error: &str) -> Result<(), String> {
@@ -112,12 +102,10 @@ fn persist_orphan_receipt(root: &std::path::Path, request_id: &str, job_id: &str
     "errorCode": error.split(':').next().unwrap_or("POST_SUBMIT_RECONCILIATION"),
     "artifactPersisted": false,
   });
-  std::fs::write(&part, serde_json::to_vec_pretty(&payload).map_err(|e| format!("ORPHAN_RECEIPT_PERSIST_FAILED: {e}"))?)
-    .map_err(|e| format!("ORPHAN_RECEIPT_PERSIST_FAILED: {e}"))?;
+  std::fs::write(&part, serde_json::to_vec_pretty(&payload).map_err(|e| format!("ORPHAN_RECEIPT_PERSIST_FAILED: {e}"))?).map_err(|e| format!("ORPHAN_RECEIPT_PERSIST_FAILED: {e}"))?;
   let written = std::fs::read(&part).map_err(|e| format!("ORPHAN_RECEIPT_PERSIST_FAILED: {e}"))?;
   let verified: serde_json::Value = serde_json::from_slice(&written).map_err(|e| format!("ORPHAN_RECEIPT_PERSIST_FAILED: {e}"))?;
-  if verified.get("requestId").and_then(|v| v.as_str()) != Some(request_id)
-    || verified.get("resolutionState").and_then(|v| v.as_str()) != Some("ORPHANED") {
+  if verified.get("requestId").and_then(|v| v.as_str()) != Some(request_id) || verified.get("resolutionState").and_then(|v| v.as_str()) != Some("ORPHANED") {
     let _ = std::fs::remove_file(&part);
     return Err("ORPHAN_RECEIPT_PERSIST_FAILED: receipt verification mismatch".to_string());
   }
@@ -406,11 +394,16 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
       // is rejected by the CDN with HTTP 403.
       #[derive(Deserialize)]
       #[serde(rename_all = "camelCase")]
-      struct BrowserArtifactResponse { data_base64: String, mime_type: Option<String> }
+      struct BrowserArtifactResponse {
+        data_base64: String,
+        mime_type: Option<String>,
+      }
       let sidecar_base = std::env::var("FLOWORD_PLAYWRIGHT_RUNTIME_URL").unwrap_or_else(|_| "http://127.0.0.1:9223".to_string()).trim_end_matches('/').to_string();
       let fetch_url = format!("{sidecar_base}/v1/profiles/{profile_id}/artifacts/fetch");
       let mut fetch_req = client.post(fetch_url).json(&serde_json::json!({ "locator": media.locator }));
-      if let Ok(token) = std::env::var("FLOWORD_SIDECAR_TOKEN") { fetch_req = fetch_req.bearer_auth(token); }
+      if let Ok(token) = std::env::var("FLOWORD_SIDECAR_TOKEN") {
+        fetch_req = fetch_req.bearer_auth(token);
+      }
       let fetch_resp = fetch_req.send().await.map_err(|e| format!("ARTIFACT_FETCH_FAILED: {e}"))?;
       if !fetch_resp.status().is_success() {
         let status = fetch_resp.status();
@@ -440,8 +433,14 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
     let part_path = file_path.with_extension(format!("{ext}.part"));
     std::fs::write(&part_path, &raw_bytes).map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?;
     let persisted_sha = compute_sha256(&std::fs::read(&part_path).map_err(|e| format!("ARTIFACT_MATERIALIZATION_FAILED: {e}"))?);
-    if persisted_sha != gen_sha256 { let _ = std::fs::remove_file(&part_path); return Err("ARTIFACT_MATERIALIZATION_FAILED: persisted SHA mismatch".to_string()); }
-    std::fs::rename(&part_path, &file_path).map_err(|e| { let _ = std::fs::remove_file(&part_path); format!("ARTIFACT_MATERIALIZATION_FAILED: {e}") })?;
+    if persisted_sha != gen_sha256 {
+      let _ = std::fs::remove_file(&part_path);
+      return Err("ARTIFACT_MATERIALIZATION_FAILED: persisted SHA mismatch".to_string());
+    }
+    std::fs::rename(&part_path, &file_path).map_err(|e| {
+      let _ = std::fs::remove_file(&part_path);
+      format!("ARTIFACT_MATERIALIZATION_FAILED: {e}")
+    })?;
 
     // Canonical ArtifactStore registration as GeneratedImage
     let stored = ArtifactStore::register_typed_artifact(
@@ -498,7 +497,7 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
         error!("[GrokImageEdit] {receipt_error}");
         orphan_receipt_failure = Some(receipt_error);
         lease_guard.abandon_to_reaper_without_release();
-      }
+      },
     }
   } else {
     lease_guard.release().await;

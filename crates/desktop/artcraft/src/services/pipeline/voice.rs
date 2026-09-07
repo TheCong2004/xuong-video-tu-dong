@@ -8,7 +8,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+use tokio::io::AsyncWriteExt;
+use tokio::process::Command as TokioCommand;
+use std::process::Stdio;
 use vynaro_detect::Ffmpeg;
 
 const DEFAULT_OMNIROUTE_URL: &str = "http://127.0.0.1:20128";
@@ -21,6 +24,8 @@ pub struct VoiceInput {
   pub voice: String,
   pub language: String,
   pub model: String,
+  pub piper_executable: Option<PathBuf>,
+  pub piper_model: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -84,9 +89,9 @@ pub fn prepare_voice(context: &PipelineContext) -> Result<VoiceInput, PipelineCo
   let script = serde_json::from_slice::<StructuredScript>(&bytes).map_err(|error| PipelineContractError::InvalidArtifact { artifact_id: artifact.artifact_id.clone(), message: error.to_string() })?;
   let requested_voice = context.voice_id.as_deref().map(str::trim).filter(|value| !value.is_empty()).map(str::to_string);
   let named_voice = requested_voice.clone().unwrap_or_else(|| default_voice(&context.language).to_string());
-  let model = env::var("FLOWORD_TTS_MODEL").ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty()).unwrap_or_else(|| requested_voice.as_ref().map(|voice| format!("edgetts/{voice}")).unwrap_or_else(|| "gtts/default".to_string()));
+  let model = env::var("FLOWORD_TTS_MODEL").ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty()).unwrap_or_else(|| "piper".to_string());
   let voice = if model.starts_with("gtts/") { context.language.clone() } else { named_voice };
-  Ok(VoiceInput { script_artifact_id: script_id.clone(), script, voice, language: context.language.clone(), model })
+  Ok(VoiceInput { script_artifact_id: script_id.clone(), script, voice, language: context.language.clone(), model, piper_executable: None, piper_model: None })
 }
 
 pub async fn synthesize_voice(input: &VoiceInput, work_dir: &Path, cancel_flag: Arc<AtomicBool>) -> Result<VoiceRuntimeOutput, VoiceError> {
@@ -99,7 +104,14 @@ pub async fn synthesize_voice(input: &VoiceInput, work_dir: &Path, cancel_flag: 
 pub async fn synthesize_voice_with_runtime(app: &AppHandle, input: &VoiceInput, work_dir: &Path, cancel_flag: Arc<AtomicBool>) -> Result<VoiceRuntimeOutput, VoiceError> {
   let runtime = app_lib::services::resolve_ffmpeg_runtime(app).await.map_err(|error| VoiceError::new(error.code(), error.to_string(), false))?;
   let ffmpeg = Ffmpeg::with_bins(runtime.ffmpeg_path, runtime.ffprobe_path);
-  synthesize_voice_with_ffmpeg(input, work_dir, cancel_flag, ffmpeg).await
+  let mut local_input = input.clone();
+  if input.model == "piper" {
+    let manager = app.state::<crate::services::pipeline::capcut_automation_engine_manager::CapcutAutomationEngineManager>();
+    let engine = manager.inner().resolve_first(crate::services::pipeline::capcut_automation_engine_manager::CapcutEngineKind::TextToSpeech).map_err(|error| VoiceError::new("VOICE_LOCAL_ENGINE_NOT_READY", error, false))?;
+    local_input.piper_executable = engine.executable_path;
+    local_input.piper_model = Some(engine.resource_path);
+  }
+  synthesize_voice_with_ffmpeg(&local_input, work_dir, cancel_flag, ffmpeg).await
 }
 
 async fn synthesize_voice_with_ffmpeg(input: &VoiceInput, work_dir: &Path, cancel_flag: Arc<AtomicBool>, ffmpeg: Ffmpeg) -> Result<VoiceRuntimeOutput, VoiceError> {
@@ -169,6 +181,9 @@ struct SpeechAudio {
 }
 
 async fn request_speech(client: &Client, input: &VoiceInput, text: &str, cancel_flag: &Arc<AtomicBool>) -> Result<SpeechAudio, VoiceError> {
+  if input.model == "piper" {
+    return request_piper_speech(input, text, cancel_flag).await;
+  }
   let base_url = env::var("LLM_BASE_URL").unwrap_or_else(|_| DEFAULT_OMNIROUTE_URL.to_string());
   let url = format!("{}/v1/audio/speech", base_url.trim_end_matches('/'));
   let provider_voice = provider_voice(input);
@@ -209,6 +224,44 @@ async fn request_speech(client: &Client, input: &VoiceInput, text: &str, cancel_
     return Err(VoiceError::new("VOICE_AUDIO_INVALID", "OmniRoute returned an empty audio body", false));
   }
   Ok(SpeechAudio { bytes: bytes.to_vec(), extension })
+}
+
+async fn request_piper_speech(input: &VoiceInput, text: &str, cancel_flag: &Arc<AtomicBool>) -> Result<SpeechAudio, VoiceError> {
+  let executable = input.piper_executable.as_ref().ok_or_else(|| VoiceError::new("VOICE_LOCAL_ENGINE_NOT_READY", "Piper executable is not resolved", false))?;
+  let model = input.piper_model.as_ref().ok_or_else(|| VoiceError::new("VOICE_LOCAL_ENGINE_NOT_READY", "Piper voice model is not resolved", false))?;
+  let suffix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|value| value.as_nanos()).unwrap_or_default();
+  let output_path = env::temp_dir().join(format!("artcraft-piper-{}-{suffix}.wav", std::process::id()));
+  let mut child = TokioCommand::new(executable)
+    .current_dir(executable.parent().unwrap_or_else(|| Path::new(".")))
+    .arg("--model").arg(model)
+    .arg("--output_file").arg(&output_path)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::null())
+    .stderr(Stdio::piped())
+    .spawn()
+    .map_err(|error| VoiceError::new("VOICE_PIPER_START_FAILED", error.to_string(), false))?;
+  if let Some(mut stdin) = child.stdin.take() {
+    stdin.write_all(text.as_bytes()).await.map_err(|error| VoiceError::new("VOICE_PIPER_WRITE_FAILED", error.to_string(), false))?;
+    drop(stdin);
+  }
+  let status = tokio::select! {
+    result = child.wait() => result.map_err(|error| VoiceError::new("VOICE_PIPER_WAIT_FAILED", error.to_string(), false))?,
+    _ = wait_for_cancel(cancel_flag) => {
+      let _ = child.kill().await;
+      let _ = tokio::fs::remove_file(&output_path).await;
+      return Err(VoiceError::cancelled());
+    }
+  };
+  if !status.success() {
+    let _ = tokio::fs::remove_file(&output_path).await;
+    return Err(VoiceError::new("VOICE_PIPER_FAILED", format!("Piper exited with status {status}"), false));
+  }
+  let bytes = tokio::fs::read(&output_path).await.map_err(|error| VoiceError::new("VOICE_PIPER_OUTPUT_MISSING", error.to_string(), false))?;
+  let _ = tokio::fs::remove_file(&output_path).await;
+  if bytes.is_empty() {
+    return Err(VoiceError::new("VOICE_AUDIO_INVALID", "Piper returned empty audio", false));
+  }
+  Ok(SpeechAudio { bytes, extension: "wav" })
 }
 
 fn provider_voice(input: &VoiceInput) -> &str {
@@ -306,7 +359,7 @@ mod tests {
   #[test]
   fn gtts_uses_language_while_named_voice_engines_use_voice() {
     let script = StructuredScript { title: "t".into(), hook: "h".into(), cta: "c".into(), language: "vi".into(), target_duration_seconds: 1, scenes: vec![] };
-    let mut input = VoiceInput { script_artifact_id: "script".into(), script, voice: "vi-VN-HoaiMyNeural".into(), language: "vi".into(), model: "gtts/default".into() };
+    let mut input = VoiceInput { script_artifact_id: "script".into(), script, voice: "vi-VN-HoaiMyNeural".into(), language: "vi".into(), model: "gtts/default".into(), piper_executable: None, piper_model: None };
     assert_eq!(provider_voice(&input), "vi");
     input.model = "edgetts/vi-VN-HoaiMyNeural".into();
     assert_eq!(provider_voice(&input), "vi-VN-HoaiMyNeural");
@@ -318,7 +371,7 @@ mod tests {
     let root = PathBuf::from(env::var("FLOWORD_PHASE4_RUNTIME_ROOT").expect("FLOWORD_PHASE4_RUNTIME_ROOT is required"));
     std::fs::create_dir_all(&root).unwrap();
     let script = StructuredScript { title: "Floword Phase 4 runtime".into(), hook: "Runtime TTS".into(), cta: "Verified".into(), language: "vi".into(), target_duration_seconds: 10, scenes: vec![crate::services::pipeline::clients::omniroute_client::ScriptScene { id: "scene-1".into(), index: 0, narration: "Xin chào. Đây là kiểm tra giọng nói thật.".into(), caption: "Xin chào".into(), visual_instruction: String::new(), search_keywords: vec![], emotion: String::new(), duration_ms: 0 }, crate::services::pipeline::clients::omniroute_client::ScriptScene { id: "scene-2".into(), index: 1, narration: "Thời lượng được đo trực tiếp bằng ffprobe.".into(), caption: "Đo bằng ffprobe".into(), visual_instruction: String::new(), search_keywords: vec![], emotion: String::new(), duration_ms: 0 }] };
-    let input = VoiceInput { script_artifact_id: "runtime-script-artifact".into(), script, voice: "vi".into(), language: "vi".into(), model: "gtts/default".into() };
+    let input = VoiceInput { script_artifact_id: "runtime-script-artifact".into(), script, voice: "vi".into(), language: "vi".into(), model: "gtts/default".into(), piper_executable: None, piper_model: None };
     let output = synthesize_voice(&input, &root, Arc::new(AtomicBool::new(false))).await.unwrap();
     let audio = ArtifactStore::register_typed_artifact(&root, "phase4-runtime", StageId::Voice, "omniroute_tts", ArtifactKind::VoiceAudio, &output.audio_path, json!({ "duration_seconds": output.timing.duration_seconds })).unwrap();
     let timing = ArtifactStore::register_typed_artifact(&root, "phase4-runtime", StageId::Voice, "vynaro_ffprobe", ArtifactKind::VoiceTiming, &output.timing_path, json!({ "source": "ffprobe" })).unwrap();

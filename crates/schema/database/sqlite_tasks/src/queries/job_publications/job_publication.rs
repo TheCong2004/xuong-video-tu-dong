@@ -58,30 +58,5 @@ pub struct RawJobPublication {
 }
 
 pub(crate) fn raw_into_job_publication(raw: RawJobPublication) -> Result<JobPublication, SqliteTasksError> {
-  Ok(JobPublication {
-    id: raw.id,
-    job_id: raw.job_id,
-    page_id: raw.page_id,
-    platform: raw.platform,
-    target_config_id: raw.target_config_id,
-    browser_profile_id: raw.browser_profile_id,
-    status: raw.status,
-    scheduled_at: raw.scheduled_at,
-    approved_at: raw.approved_at,
-    started_at: raw.started_at,
-    posted_at: raw.posted_at,
-    attempt_count: raw.attempt_count,
-    idempotency_key: raw.idempotency_key,
-    platform_post_id: raw.platform_post_id,
-    post_url: raw.post_url,
-    title: raw.title,
-    caption: raw.caption,
-    hashtags_json: raw.hashtags_json,
-    description: raw.description,
-    video_path: raw.video_path,
-    last_error_code: raw.last_error_code,
-    last_error_message: raw.last_error_message,
-    created_at: raw.created_at,
-    updated_at: raw.updated_at,
-  })
+  Ok(JobPublication { id: raw.id, job_id: raw.job_id, page_id: raw.page_id, platform: raw.platform, target_config_id: raw.target_config_id, browser_profile_id: raw.browser_profile_id, status: raw.status, scheduled_at: raw.scheduled_at, approved_at: raw.approved_at, started_at: raw.started_at, posted_at: raw.posted_at, attempt_count: raw.attempt_count, idempotency_key: raw.idempotency_key, platform_post_id: raw.platform_post_id, post_url: raw.post_url, title: raw.title, caption: raw.caption, hashtags_json: raw.hashtags_json, description: raw.description, video_path: raw.video_path, last_error_code: raw.last_error_code, last_error_message: raw.last_error_message, created_at: raw.created_at, updated_at: raw.updated_at })
 }

@@ -1,0 +1,8 @@
+{
+  "ocrEngine": "rapidocr-onnxruntime",
+  "translationEngine": "argos-translate",
+  "inputRegionId": "ocr-1",
+  "recognizedText": "Good morning friend",
+  "translatedText": "Chào buổi sáng, người bạn",
+  "result": "PASS_REAL_OFFLINE_PIPELINE"
+}

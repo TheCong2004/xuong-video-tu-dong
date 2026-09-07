@@ -14,7 +14,6 @@ export type SideNavId =
   | "adjustment"
   | "media"
   | "keyframe"
-  | "workflow"
   | "auto-render"
   | "ai-generate"
   | "extension";
@@ -36,7 +35,7 @@ export interface SideNavItem {
   id: SideNavId;
   label: string;
   icon: IconDefinition;
-  badge?: "Vip" | "Beta" | "Soon";
+  badge?: "Beta" | "Soon";
 }
 
 export interface SyncTabItem {

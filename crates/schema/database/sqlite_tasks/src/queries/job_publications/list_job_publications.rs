@@ -10,10 +10,7 @@ pub struct ListJobPublicationsArgs {
   pub limit: Option<i64>,
 }
 
-pub async fn list_job_publications(
-  db: &TaskDbConnection,
-  args: ListJobPublicationsArgs,
-) -> Result<Vec<JobPublication>, SqliteTasksError> {
+pub async fn list_job_publications(db: &TaskDbConnection, args: ListJobPublicationsArgs) -> Result<Vec<JobPublication>, SqliteTasksError> {
   let limit = args.limit.unwrap_or(100);
 
   let rows: Vec<RawJobPublication> = sqlx::query_as(

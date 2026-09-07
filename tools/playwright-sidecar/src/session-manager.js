@@ -31,8 +31,8 @@ class SessionManager {
   resolveSession(profileId, targetId = null) {
     const candidates = this.sessionsForProfile(profileId);
     if (targetId) {
-      const exact = candidates.find((session) => session.managedGrokTabId === targetId);
-      if (!exact) throw new Error('GROK_MANAGED_TARGET_STALE: requested target is not attached');
+      const exact = candidates.find((session) => (session.managedTargetId || session.managedGrokTabId) === targetId);
+      if (!exact) throw new Error('MANAGED_TARGET_STALE: requested target is not attached');
       return exact;
     }
     if (candidates.length > 1) throw new Error('AMBIGUOUS_MANAGED_SESSION: targetId is required when a profile has multiple sessions');
@@ -123,17 +123,20 @@ class SessionManager {
     const identity = this.validateAndNormalizeIdentity(id, options);
     // A STARTING session is not authoritative yet. Always join the existing
     // attach flight before consulting the published session map.
-    const flightKey = `${id}|${identity.fingerprint}|${options.grokTargetId || ''}`;
+    // One attach flight per profile/target kind.  Keep the identity in the
+    // flight value (rather than the key) so a concurrent generation change is
+    // rejected as stale instead of starting a second CDP attach.
+    const flightKey = `${id}|${options.managedTargetId || options.grokTargetId || ''}|${options.targetKind || 'GROK'}`;
     const flight = this.startFlights.get(flightKey);
     if (flight) {
       if (flight.fingerprint !== identity.fingerprint) throw new Error('CDP_SESSION_STALE: another attach is already starting for this profile');
       return flight.promise;
     }
-    const requestedTargetId = options.grokTargetId || null;
+    const requestedTargetId = options.managedTargetId || options.grokTargetId || null;
     const existingSessions = this.sessionsForProfile(id);
     const existing = existingSessions.find((session) => {
       const sameIdentity = `${id}|${session.cdpEndpoint}|${session.browserPid}|${session.launchGeneration}` === identity.fingerprint;
-      return sameIdentity && (!requestedTargetId || session.managedGrokTabId === requestedTargetId);
+      return sameIdentity && (!requestedTargetId || (session.managedTargetId || session.managedGrokTabId) === requestedTargetId);
     });
     if (existing) {
       const s = existing;
@@ -143,8 +146,8 @@ class SessionManager {
         await s.browser.disconnect?.().catch(() => {});
         this.sessions.delete(this.sessionKey(s.profileId, s.launchGeneration, s.managedGrokTabId));
       } else {
-        const page = await this.ensureGrokPage(s, options.url, options.grokTargetId);
-        await this.ensureSessionFacade(s, page);
+        const page = await this.ensureManagedPage(s, options.url, requestedTargetId, options.targetKind || 'GROK');
+        if (s.targetKind !== 'FACEBOOK') await this.ensureSessionFacade(s, page);
         return this.describe(s, page);
       }
     }
@@ -160,17 +163,22 @@ class SessionManager {
     const browser = await chromium.connectOverCDP(identity.cdpEndpoint, { timeout: options.timeoutMs || 15000 });
     const context = browser.contexts()[0];
     if (!context) { throw new Error('CDP_CONTEXT_NOT_FOUND: Donut browser exposed no browser context'); }
-    const s = { profileId: id, cdpEndpoint: identity.cdpEndpoint, browserPid: identity.browserPid, launchGeneration: identity.launchGeneration, browserEngine: options.browserEngine || 'WAYFERN', browser, userDataDir: null, extensionPath: null, context, worker: null, cdpSession: null, contentContextId: null, contentFrameId: null, contentOrigin: null, grokPage: null, managedGrokTabId: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now(), navigationDiagnostics: [] };
+    const targetKind = String(options.targetKind || 'GROK').toUpperCase();
+    const s = { profileId: id, cdpEndpoint: identity.cdpEndpoint, browserPid: identity.browserPid, launchGeneration: identity.launchGeneration, browserEngine: options.browserEngine || 'CHROME_FOR_TESTING', targetKind, browser, userDataDir: null, extensionPath: null, context, worker: null, cdpSession: null, contentContextId: null, contentFrameId: null, contentOrigin: null, grokPage: null, managedGrokTabId: null, managedTargetId: null, managedPageUrl: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now(), navigationDiagnostics: [] };
     try {
-      const page = await this.ensureGrokPage(s, options.url, options.grokTargetId);
+      const page = await this.ensureManagedPage(s, options.url, requestedTargetId, targetKind);
       this.attachNavigationDiagnostics(s, page);
       await this.preflightCdpAutomation(page, s);
       s.state = 'BROWSER_READY';
-      await this.bindContentContract(s, page, options.timeoutMs || 15000);
-      await this.bindProfile(s);
-      await this.ensureSessionFacade(s, page);
-      s.state = 'EXTENSION_READY';
-      s.sessionKey = this.sessionKey(s.profileId, s.launchGeneration, s.managedGrokTabId);
+      if (targetKind !== 'FACEBOOK') {
+        await this.bindContentContract(s, page, options.timeoutMs || 15000);
+        await this.bindProfile(s);
+        await this.ensureSessionFacade(s, page);
+        s.state = 'EXTENSION_READY';
+      } else {
+        s.state = 'READY';
+      }
+      s.sessionKey = this.sessionKey(s.profileId, s.launchGeneration, s.managedTargetId || s.managedGrokTabId);
       this.sessions.set(s.sessionKey, s);
       return this.describe(s, page);
     // This browser is owned by Donut.  A failed attach/wake must never close
@@ -391,6 +399,60 @@ class SessionManager {
       return info?.targetInfo?.targetId || null;
     } finally { await cdp.detach?.().catch(() => {}); }
   }
+  isFacebookPageUrl(value) {
+    try { const parsed = new URL(String(value)); const host = parsed.hostname.toLowerCase(); return parsed.protocol === 'https:' && (host === 'facebook.com' || host.endsWith('.facebook.com')); } catch (_) { return false; }
+  }
+  async validateFacebookPageIdentity(page, expected = {}) {
+    const expectedId = String(expected.targetPageId || '').trim();
+    const expectedUrl = String(expected.facebookPageCanonicalUrl || '').trim();
+    const expectedName = String(expected.facebookPageDisplayName || '').trim();
+    if (!expectedId && !expectedUrl || !expectedName) throw new Error('FACEBOOK_PAGE_IDENTITY_UNKNOWN: persisted Page identity is incomplete');
+    let observed;
+    try {
+      observed = await page.evaluate(() => {
+        const text = String(document.body?.innerText || '').slice(0, 20000);
+        const urls = [...document.querySelectorAll('link[rel="canonical"],meta[property="og:url"]')]
+          .map((node) => node.href || node.content || '').filter(Boolean);
+        const ids = [...document.querySelectorAll('[data-page-id],[data-pageid],[aria-label*="page" i]')]
+          .map((node) => node.getAttribute('data-page-id') || node.getAttribute('data-pageid') || '').filter(Boolean);
+        return { text, urls, ids };
+      });
+    } catch (_) { throw new Error('FACEBOOK_PAGE_IDENTITY_UNKNOWN: current publishing identity could not be inspected'); }
+    const normalize = (value) => { try { const u = new URL(value); u.search = ''; u.hash = ''; return u.toString().replace(/\/$/, '').toLowerCase(); } catch (_) { return ''; } };
+    if (!observed || !observed.text || !observed.text.toLocaleLowerCase().includes(expectedName.toLocaleLowerCase())) throw new Error('FACEBOOK_PAGE_IDENTITY_UNKNOWN: current Page display name evidence is missing');
+    const normalizedUrls = observed.urls.map(normalize);
+    const pageIdEvidence = expectedId && observed.ids.includes(expectedId);
+    const urlEvidence = expectedUrl && normalizedUrls.includes(normalize(expectedUrl));
+    if (expectedId && observed.ids.length > 0 && !pageIdEvidence) throw new Error('FACEBOOK_PAGE_MISMATCH: current Page id does not match the persisted snapshot');
+    if (expectedUrl && observed.urls.length > 0 && !urlEvidence) throw new Error('FACEBOOK_PAGE_MISMATCH: current canonical Page URL does not match the persisted snapshot');
+    if (!(pageIdEvidence || urlEvidence)) throw new Error('FACEBOOK_PAGE_IDENTITY_UNKNOWN: no stable Page identity evidence was found');
+    return { verified: true, evidence: { displayName: true, pageId: Boolean(pageIdEvidence), canonicalUrl: Boolean(urlEvidence) } };
+  }
+  async ensureManagedPage(s, url = null, requestedTargetId = null, targetKind = 'GROK') {
+    const kind = String(targetKind || 'GROK').toUpperCase();
+    if (kind === 'GROK') return this.ensureGrokPage(s, url || 'https://grok.com/imagine', requestedTargetId);
+    if (kind !== 'FACEBOOK') throw new Error('TARGET_KIND_UNSUPPORTED');
+    const pages = s.context.pages();
+    let page = null;
+    if (requestedTargetId) {
+      for (const candidate of pages) {
+        if (candidate.isClosed?.()) continue;
+        try { if (await this.targetIdForPage(s, candidate) === requestedTargetId) { page = candidate; break; } } catch (_) {}
+      }
+      if (!page || !this.isFacebookPageUrl(page.url())) throw new Error('FACEBOOK_MANAGED_TARGET_STALE: requested target is not an active Facebook page');
+    } else {
+      const facebookPages = pages.filter((candidate) => !candidate.isClosed?.() && this.isFacebookPageUrl(candidate.url()));
+      if (facebookPages.length === 0) throw new Error('FACEBOOK_TAB_NOT_FOUND: open Facebook in the selected Donut profile first');
+      if (facebookPages.length > 1) throw new Error('AMBIGUOUS_FACEBOOK_TAB: provide exact managedTargetId');
+      page = facebookPages[0];
+    }
+    await page.bringToFront().catch(() => {}); await page.waitForLoadState('domcontentloaded').catch(() => {});
+    s.managedTargetId = requestedTargetId || await this.targetIdForPage(s, page);
+    s.managedPageUrl = this.navigationUrl(page.url());
+    s.grokPage = page;
+    s.lastHeartbeat = Date.now();
+    return page;
+  }
   async ensureGrokPage(s, url = 'https://grok.com/imagine', requestedTargetId = null) {
     let page = null;
     const pages = s.context.pages();
@@ -422,6 +484,8 @@ class SessionManager {
     await page.bringToFront().catch(() => {}); await page.waitForLoadState('domcontentloaded').catch(() => {});
     s.grokPage = page;
     s.managedGrokTabId = requestedTargetId || await this.targetIdForPage(s, page);
+    s.managedTargetId = s.managedGrokTabId;
+    s.managedPageUrl = this.navigationUrl(page.url());
     s.lastHeartbeat = Date.now();
     return page;
   }
@@ -445,10 +509,35 @@ class SessionManager {
     return s.cdpSession;
   }
   async ensureWorker(s) { return this.ensureContentContract(s); }
-  describe(s, page) { return { profileId: s.profileId, userDataDir: s.userDataDir, extensionId: s.contentOrigin?.match(/^chrome-extension:\/\/([^/]+)/)?.[1] || null, serviceWorkerUrl: null, grokTargetId: s.managedGrokTabId || null, grokPageUrl: this.navigationUrl(page?.url?.()), grokUrl: page?.url() || null, browserOpen: true, state: s.state, activeRequest: s.activeRequest }; }
+  describe(s, page) { return { profileId: s.profileId, userDataDir: s.userDataDir, extensionId: s.contentOrigin?.match(/^chrome-extension:\/\/([^/]+)/)?.[1] || null, serviceWorkerUrl: null, targetKind: s.targetKind || 'GROK', managedTargetId: s.managedTargetId || s.managedGrokTabId || null, managedPageUrl: this.navigationUrl(page?.url?.()), grokTargetId: s.managedGrokTabId || null, grokPageUrl: this.navigationUrl(page?.url?.()), grokUrl: page?.url?.() || null, browserOpen: true, state: s.state, activeRequest: s.activeRequest }; }
+  async facebookAuthState(page) {
+    if (!page || page.isClosed?.()) return 'UNKNOWN';
+    try {
+      const evidence = await page.evaluate(() => {
+        const text = (document.body?.innerText || '').toLowerCase();
+        const loginForm = !!document.querySelector('input[type="password"], form[action*="login" i]');
+        const checkpoint = /checkpoint|confirm your identity|security check/.test(text);
+        const loggedIn = !!document.querySelector('[aria-label*="account" i], [aria-label*="profile" i], a[href*="/me"], [data-pagelet*="profile" i]') && !/log in|login|create new account/.test(text);
+        return { loginForm, checkpoint, loggedIn };
+      });
+      if (evidence.checkpoint || evidence.loginForm) return 'UNAUTHENTICATED';
+      if (evidence.loggedIn) return 'AUTHENTICATED';
+      return 'UNKNOWN';
+    } catch (_) { return 'UNKNOWN'; }
+  }
   async health(id, targetId = null) {
     const s = this.resolveSession(id, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
-    const managedPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : s.context.pages().find((candidate) => this.isGrokAuthUrl(candidate.url()));
+    if (s.activeRequest) {
+      s.state = 'BUSY';
+      return { protocol: 'floword-production', protocolVersion: 1, ok: true, result: { profileId: id, status: 'BUSY', workerState: 'BUSY', targetKind: s.targetKind || 'GROK', managedTargetId: s.managedTargetId || s.managedGrokTabId || null } };
+    }
+    if (s.targetKind === 'FACEBOOK') {
+      const page = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : null;
+      const authState = await this.facebookAuthState(page);
+      s.state = authState === 'AUTHENTICATED' ? (s.activeRequest ? 'BUSY' : 'READY') : authState === 'UNAUTHENTICATED' ? 'LOGIN_REQUIRED' : 'RECONCILING';
+      return { protocol: 'floword-production', protocolVersion: 1, ok: true, result: { profileId: id, status: s.state === 'READY' ? 'READY' : s.state, workerState: s.state, loggedIn: authState === 'AUTHENTICATED', authState, capabilities: ['social.facebook.publish'], targetKind: 'FACEBOOK', managedTargetId: s.managedTargetId, managedPageUrl: s.managedPageUrl } };
+    }
+    const managedPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : (typeof s.context?.pages === 'function' ? s.context.pages().find((candidate) => this.isGrokAuthUrl(candidate.url())) : null);
     if (managedPage && this.isGrokAuthUrl(managedPage.url())) throw this.grokAuthRequired(s, managedPage, managedPage.url());
     await this.ensureContentContract(s); const result = await this.cdpEvaluate(s, 'globalThis.__flowordProductionContent.health()');
     if (!result) throw new Error('EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: health bridge returned no result');
@@ -530,6 +619,49 @@ class SessionManager {
     entry.reconciliationTimer = setTimeout(() => this.orphanReconciliation(s, requestId, dispatchPromise, request, fingerprint), quarantineMs);
     entry.reconciliationTimer.unref?.();
   }
+  async dispatchFacebook(request, s, fingerprint) {
+    const page = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : null;
+    if (!page) throw new Error('FACEBOOK_MANAGED_TARGET_STALE: managed page is closed');
+    const authState = await this.facebookAuthState(page);
+    if (authState === 'UNAUTHENTICATED') throw new Error('FACEBOOK_LOGIN_REQUIRED: sign in to Facebook in the Donut window');
+    if (authState !== 'AUTHENTICATED') throw new Error('FACEBOOK_AUTH_UNKNOWN: Facebook login could not be verified');
+    const params = request.params || {};
+    await this.validateFacebookPageIdentity(page, params);
+    const videoPath = String(params.videoPath || '');
+    if (!videoPath || !path.isAbsolute(videoPath) || !fs.existsSync(videoPath)) throw new Error('FACEBOOK_VIDEO_REQUIRED: verified absolute videoPath is required');
+    const caption = String(params.caption || '');
+    const visibleLink = params.visibleLink == null ? null : String(params.visibleLink);
+    const finalCaption = visibleLink ? `${caption}${caption ? '\\n' : ''}${visibleLink}` : caption;
+    s.activeRequest = { ...request }; s.state = 'BUSY';
+    this.journalStage(request, 'FACEBOOK_UPLOAD_STARTED', { submissionState: 'NOT_SUBMITTED', targetKind: 'FACEBOOK' });
+    try {
+      const fileInput = page.locator('input[type="file"]').first();
+      await fileInput.waitFor({ state: 'attached', timeout: 15000 });
+      await fileInput.setInputFiles(videoPath);
+      await page.waitForTimeout(1000);
+      if (finalCaption) {
+        const editor = page.locator('[contenteditable="true"], textarea').first();
+        await editor.waitFor({ state: 'visible', timeout: 15000 });
+        await editor.fill(finalCaption);
+      }
+      this.journalStage(request, 'PRE_SUBMIT_VERIFICATION', { submissionState: 'SUBMIT_INTENT', targetKind: 'FACEBOOK', videoPathHash: crypto.createHash('sha256').update(fs.readFileSync(videoPath)).digest('hex') });
+      if (params.dryRun === true) return { protocol: 'floword-production', protocolVersion: 1, requestId: request.requestId, jobId: request.jobId, stepId: request.stepId, attemptId: request.attemptId, leaseId: request.leaseId, profileId: request.profileId, ok: true, result: { dryRun: true, targetKind: 'FACEBOOK', managedTargetId: s.managedTargetId } };
+      const submit = page.getByRole('button', { name: /publish|post|share|đăng/i }).last();
+      await submit.waitFor({ state: 'visible', timeout: 15000 });
+      await submit.click();
+      this.journalStage(request, 'SUBMITTED', { submissionState: 'SUBMITTED', targetKind: 'FACEBOOK' });
+      await page.waitForTimeout(1500);
+      const postUrl = await page.evaluate(() => [...document.querySelectorAll('a[href]')].map((a) => a.href).find((href) => /facebook\.com\/(?:reel|reels|[^/?#]+\/posts\/|posts\/)/i.test(href)) || null);
+      if (!postUrl) throw new Error('FACEBOOK_POST_UNVERIFIED: submit completed without authoritative post URL');
+      const result = { protocol: 'floword-production', protocolVersion: 1, requestId: request.requestId, jobId: request.jobId, stepId: request.stepId, attemptId: request.attemptId, leaseId: request.leaseId, profileId: request.profileId, ok: true, result: { postUrl, targetKind: 'FACEBOOK', managedTargetId: s.managedTargetId } };
+      this.completedRequests.set(request.requestId, { fingerprint, result, expiresAt: Date.now() + this.completedTtlMs });
+      return result;
+    } catch (error) {
+      const message = String(error?.message || error);
+      if (message.includes('SUBMITTED') || message.includes('POST_UNVERIFIED')) { s.state = 'RECONCILING'; throw new Error(`FACEBOOK_POST_UNKNOWN: ${message}`); }
+      throw error;
+    } finally { s.activeRequest = null; if (s.state === 'BUSY') s.state = 'READY'; }
+  }
   async dispatch(request) {
     const { profileId, requestId, jobId } = request; if (!profileId || !requestId || !jobId) throw new Error('INVALID_REQUEST: profileId, requestId and jobId are required');
     this.journalStage(request, 'DISPATCH_RECEIVED');
@@ -543,6 +675,15 @@ class SessionManager {
     const targetId = request.targetId || request.pageId || request.params?.targetId || null;
     const s = this.resolveSession(profileId, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
     const currentPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : null;
+    if (s.targetKind === 'FACEBOOK') {
+      if (s.activeRequest) throw new Error('JOB_ALREADY_RUNNING: profile has an active request');
+      const dispatchPromise = this.dispatchFacebook(request, s, fingerprint);
+      this.activeRequests.set(requestId, { session: s, request, fingerprint, dispatchPromise, reconciliationTimer: null });
+      return dispatchPromise.finally(() => {
+        const current = this.activeRequests.get(requestId);
+        if (current?.dispatchPromise === dispatchPromise) this.activeRequests.delete(requestId);
+      });
+    }
     if (s.state === 'AUTH_REQUIRED' || (currentPage && this.isGrokAuthUrl(currentPage.url()))) throw this.grokAuthRequired(s, currentPage, currentPage?.url() || '');
     try { await this.ensureContentContract(s); } catch (error) {
       this.journalStage(request, 'DISPATCH_FAILED', { submissionState: 'NOT_SUBMITTED', errorCode: String(error?.message || error).split(':')[0], retryable: false });
@@ -764,11 +905,25 @@ class SessionManager {
     const sessions = targetId ? [this.resolveSession(id, targetId)].filter(Boolean) : this.sessionsForProfile(id);
     if (!sessions.length) return { stopped: false, profileId: id };
     await Promise.all(sessions.map(async (s) => { await s.browser.disconnect?.().catch(() => {}); this.sessions.delete(s.sessionKey || this.sessionKey(s.profileId, s.launchGeneration, s.managedGrokTabId)); }));
-    return { stopped: true, profileId: id, targetId: targetId || null, browserOwnedBy: 'artcraft-local-runtime' };
+    return { stopped: true, profileId: id, targetId: targetId || null, browserOwnedBy: 'donut-local-runtime' };
   }
   async getPages(id, targetId = null) {
     const s = this.resolveSession(id, targetId); if (!s) return [];
-    return Promise.all(s.context.pages().map(async (p, index) => ({ index, targetId: await this.targetIdForPage(s, p).catch(() => null), url: p.url(), title: await p.title().catch(() => ''), managed: p === s.grokPage, purpose: p === s.grokPage ? 'GROK_AUTOMATION' : 'USER' })));
+    return Promise.all(s.context.pages().map(async (p, index) => {
+      const pageTargetId = await this.targetIdForPage(s, p).catch(() => null);
+      const managed = p === s.grokPage;
+      return {
+        index,
+        targetId: pageTargetId,
+        url: p.url(),
+        title: await p.title().catch(() => ''),
+        managed,
+        targetKind: managed ? (s.targetKind || 'GROK') : 'USER',
+        managedTargetId: managed ? (s.managedTargetId || s.managedGrokTabId || null) : null,
+        managedPageUrl: managed ? (s.managedPageUrl || this.navigationUrl(p.url())) : null,
+        purpose: managed ? ((s.targetKind || 'GROK') === 'FACEBOOK' ? 'FACEBOOK_AUTOMATION' : 'GROK_AUTOMATION') : 'USER',
+      };
+    }));
   }
   async fetchArtifact(id, locator) {
     const s = this.resolveSession(id);

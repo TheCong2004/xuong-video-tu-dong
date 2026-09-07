@@ -15,15 +15,10 @@ pub struct CreatePublishTargetArgs {
   pub default_slots_json: Option<String>,
 }
 
-pub async fn create_publish_target(
-  db: &TaskDbConnection,
-  args: CreatePublishTargetArgs,
-) -> Result<ContentPagePublishTarget, SqliteTasksError> {
+pub async fn create_publish_target(db: &TaskDbConnection, args: CreatePublishTargetArgs) -> Result<ContentPagePublishTarget, SqliteTasksError> {
   let id = format!("pt_{}", Uuid::new_v4());
   let post_mode = args.post_mode.unwrap_or_else(|| "review".to_string());
-  let default_slots = args.default_slots_json.unwrap_or_else(|| {
-    "[\"08:30\", \"10:00\", \"17:00\", \"22:00\"]".to_string()
-  });
+  let default_slots = args.default_slots_json.unwrap_or_else(|| "[\"08:30\", \"10:00\", \"17:00\", \"22:00\"]".to_string());
 
   let raw: RawContentPagePublishTarget = sqlx::query_as(
     r#"

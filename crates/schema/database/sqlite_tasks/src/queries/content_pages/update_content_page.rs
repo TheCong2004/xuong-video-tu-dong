@@ -22,9 +22,7 @@ pub struct UpdateContentPageArgs<'a> {
 }
 
 pub async fn update_content_page(args: UpdateContentPageArgs<'_>) -> Result<ContentPage, SqliteTasksError> {
-  let slug = args.slug.map(|s| s.to_string()).unwrap_or_else(|| {
-    args.name.to_lowercase().replace(' ', "-").replace(|c: char| !c.is_alphanumeric() && c != '-', "")
-  });
+  let slug = args.slug.map(|s| s.to_string()).unwrap_or_else(|| args.name.to_lowercase().replace(' ', "-").replace(|c: char| !c.is_alphanumeric() && c != '-', ""));
 
   sqlx::query(
     r#"
@@ -65,12 +63,7 @@ pub async fn update_content_page(args: UpdateContentPageArgs<'_>) -> Result<Cont
   .execute(args.db.get_pool())
   .await?;
 
-  let raw = sqlx::query_as::<_, RawContentPage>(
-    "SELECT id, name, slug, output_root, target_platform, default_model_id, default_workflow_id, default_language, default_tone, default_aspect_ratio, browser_profile_id, worker_pool_id, default_image_prompt, default_expand_9_16_prompt, default_video_prompt, is_archived, created_at, updated_at FROM content_pages WHERE id = ?1 LIMIT 1"
-  )
-  .bind(args.id)
-  .fetch_one(args.db.get_pool())
-  .await?;
+  let raw = sqlx::query_as::<_, RawContentPage>("SELECT id, name, slug, output_root, target_platform, default_model_id, default_workflow_id, default_language, default_tone, default_aspect_ratio, browser_profile_id, worker_pool_id, default_image_prompt, default_expand_9_16_prompt, default_video_prompt, is_archived, created_at, updated_at FROM content_pages WHERE id = ?1 LIMIT 1").bind(args.id).fetch_one(args.db.get_pool()).await?;
 
   raw_into_content_page(raw)
 }

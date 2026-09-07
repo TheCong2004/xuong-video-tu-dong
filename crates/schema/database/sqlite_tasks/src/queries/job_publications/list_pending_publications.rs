@@ -2,10 +2,7 @@ use super::job_publication::{raw_into_job_publication, JobPublication, RawJobPub
 use crate::connection::TaskDbConnection;
 use crate::error::SqliteTasksError;
 
-pub async fn list_pending_publications(
-  db: &TaskDbConnection,
-  limit: i64,
-) -> Result<Vec<JobPublication>, SqliteTasksError> {
+pub async fn list_pending_publications(db: &TaskDbConnection, limit: i64) -> Result<Vec<JobPublication>, SqliteTasksError> {
   let rows: Vec<RawJobPublication> = sqlx::query_as(
     r#"
     SELECT id, job_id, page_id, platform, target_config_id, browser_profile_id, status,

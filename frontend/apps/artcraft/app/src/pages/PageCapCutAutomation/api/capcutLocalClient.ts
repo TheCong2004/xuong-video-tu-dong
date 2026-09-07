@@ -203,6 +203,7 @@ export interface LocalInfoResult {
 }
 
 export interface LocalTracksResult {
+  ok?: boolean;
   path?: string;
   tracks?: unknown[];
   code?: number;
@@ -210,6 +211,7 @@ export interface LocalTracksResult {
 }
 
 export interface LocalSegmentsResult {
+  ok?: boolean;
   path?: string;
   segments?: unknown[];
   code?: number;

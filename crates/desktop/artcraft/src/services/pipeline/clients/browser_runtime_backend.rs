@@ -29,9 +29,17 @@ pub struct BrowserIdentity {
   #[serde(alias = "browser_engine")]
   pub browser_engine: String,
   #[serde(alias = "grok_target_id")]
+  #[serde(default)]
   pub grok_target_id: String,
   #[serde(alias = "grok_page_url")]
+  #[serde(default)]
   pub grok_page_url: String,
+  #[serde(default = "default_target_kind")]
+  pub target_kind: String,
+  #[serde(default)]
+  pub managed_target_id: Option<String>,
+  #[serde(default)]
+  pub managed_page_url: Option<String>,
   pub reused: bool,
 }
 
@@ -56,8 +64,16 @@ pub struct BrowserSession {
   pub grok_target_id: Option<String>,
   #[serde(alias = "grok_page_url")]
   pub grok_page_url: Option<String>,
+  #[serde(default)]
+  pub target_kind: Option<String>,
+  #[serde(default)]
+  pub managed_target_id: Option<String>,
+  #[serde(default)]
+  pub managed_page_url: Option<String>,
   pub reused: bool,
 }
+
+fn default_target_kind() -> String { "GROK".to_string() }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -98,6 +114,8 @@ pub struct PageLease {
   pub page_lease_id: String,
   pub page_reused: bool,
   pub purpose: String,
+  #[serde(default)]
+  pub target_kind: String,
 }
 
 impl BrowserIdentity {
@@ -117,10 +135,6 @@ impl BrowserIdentity {
     if self.browser_engine != "CHROME_FOR_TESTING" {
       return Err("BROWSER_ENGINE_UNSUPPORTED".to_string());
     }
-    if self.grok_target_id.trim().is_empty() {
-      return Err("GROK_TARGET_ID_REQUIRED".to_string());
-    }
-
     let cdp = Url::parse(&self.cdp_endpoint).map_err(|_| "CDP_ENDPOINT_INVALID".to_string())?;
     if cdp.scheme() != "http" || cdp.username() != "" || cdp.password().is_some() || cdp.query().is_some() || cdp.fragment().is_some() || cdp.port() != Some(self.remote_debugging_port) {
       return Err("CDP_ENDPOINT_NOT_LOOPBACK_HTTP".to_string());
@@ -130,14 +144,19 @@ impl BrowserIdentity {
       return Err("CDP_ENDPOINT_NOT_LOOPBACK_HTTP".to_string());
     }
 
-    let grok = Url::parse(&self.grok_page_url).map_err(|_| "GROK_PAGE_URL_INVALID".to_string())?;
-    let grok_host = grok.host_str().unwrap_or_default().to_ascii_lowercase();
-    if grok.scheme() != "https" || !(grok_host == "grok.com" || grok_host.ends_with(".grok.com")) {
-      return Err("GROK_PAGE_URL_NOT_ALLOWED".to_string());
-    }
-    if self.grok_page_url.contains("[https://") || self.grok_page_url.contains("](") {
-      return Err("GROK_PAGE_URL_MARKDOWN_CORRUPTED".to_string());
-    }
+    let kind = self.target_kind.to_ascii_uppercase();
+    let managed_id = self.managed_target_id.as_deref().unwrap_or_else(|| self.grok_target_id.as_str());
+    let managed_url = self.managed_page_url.as_deref().unwrap_or_else(|| self.grok_page_url.as_str());
+    if managed_id.trim().is_empty() { return Err(format!("{kind}_TARGET_ID_REQUIRED")); }
+    let page = Url::parse(managed_url).map_err(|_| format!("{kind}_PAGE_URL_INVALID"))?;
+    let host = page.host_str().unwrap_or_default().to_ascii_lowercase();
+    let allowed = match kind.as_str() {
+      "GROK" => host == "grok.com" || host.ends_with(".grok.com"),
+      "FACEBOOK" => host == "facebook.com" || host.ends_with(".facebook.com"),
+      _ => false,
+    };
+    if page.scheme() != "https" || !allowed { return Err(format!("{kind}_PAGE_URL_NOT_ALLOWED")); }
+    if managed_url.contains("[https://") || managed_url.contains("](") { return Err("MANAGED_PAGE_URL_MARKDOWN_CORRUPTED".to_string()); }
     Ok(())
   }
 }
@@ -233,21 +252,31 @@ impl BrowserRuntimeBackend {
   /// Start/reuse only the browser process. Page creation is an explicit
   /// operation through `ensure_page`, so one profile can own many targets.
   pub async fn run_browser(&self, profile_id: &str, configuration: BrowserRuntimeConfiguration) -> Result<BrowserSession, String> {
-    if self.kind != BrowserRuntimeKind::DonutDesktopLocalManager { return Err("RUNTIME_PROVIDER_UNAVAILABLE".to_string()); }
+    if self.kind != BrowserRuntimeKind::DonutDesktopLocalManager {
+      return Err("RUNTIME_PROVIDER_UNAVAILABLE".to_string());
+    }
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
     let response = client.post(format!("{}/v1/local/browser/profiles/{}/run", runtime_api_base_url(), profile_id)).json(&configuration).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
-    let status = response.status(); let body = response.text().await.unwrap_or_default();
-    if !status.is_success() { return Err(format!("RUNTIME_RUN_FAILED:{}", status)); }
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+      return Err(format!("RUNTIME_RUN_FAILED:{}", status));
+    }
     let session: BrowserSession = serde_json::from_str(&body).map_err(|_| "LOCAL_BROWSER_RUNTIME_CONTRACT_INVALID".to_string())?;
-    if session.profile_id != profile_id || session.browser_pid == 0 || session.remote_debugging_port == 0 || session.launch_generation == 0 || session.browser_engine != "CHROME_FOR_TESTING" { return Err("LOCAL_BROWSER_RUNTIME_CONTRACT_INVALID".to_string()); }
+    if session.profile_id != profile_id || session.browser_pid == 0 || session.remote_debugging_port == 0 || session.launch_generation == 0 || session.browser_engine != "CHROME_FOR_TESTING" {
+      return Err("LOCAL_BROWSER_RUNTIME_CONTRACT_INVALID".to_string());
+    }
     Ok(session)
   }
 
   pub async fn list_pages(&self, profile_id: &str) -> Result<BrowserPagesResponse, String> {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
     let response = client.get(format!("{}/v1/local/browser/profiles/{}/pages", runtime_api_base_url(), profile_id)).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
-    let status = response.status(); let body = response.text().await.unwrap_or_default();
-    if !status.is_success() { return Err(format!("RUNTIME_PAGES_FAILED:{}", status)); }
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+    if !status.is_success() {
+      return Err(format!("RUNTIME_PAGES_FAILED:{}", status));
+    }
     serde_json::from_str(&body).map_err(|_| "LOCAL_BROWSER_RUNTIME_CONTRACT_INVALID".to_string())
   }
 
@@ -255,25 +284,41 @@ impl BrowserRuntimeBackend {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
     let body = serde_json::json!({ "url": url, "purpose": purpose, "reuseExisting": reuse_existing });
     let response = client.post(format!("{}/v1/local/browser/profiles/{}/pages", runtime_api_base_url(), profile_id)).json(&body).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
-    let status = response.status(); let value: serde_json::Value = response.json().await.map_err(|_| "RUNTIME_RESPONSE_INVALID".to_string())?;
-    if !status.is_success() { return Err(value.get("error").and_then(|v| v.get("code")).and_then(|v| v.as_str()).unwrap_or("RUNTIME_PAGE_FAILED").to_string()); }
+    let status = response.status();
+    let value: serde_json::Value = response.json().await.map_err(|_| "RUNTIME_RESPONSE_INVALID".to_string())?;
+    if !status.is_success() {
+      return Err(value.get("error").and_then(|v| v.get("code")).and_then(|v| v.as_str()).unwrap_or("RUNTIME_PAGE_FAILED").to_string());
+    }
     serde_json::from_value(value.get("page").cloned().ok_or_else(|| "RUNTIME_PAGE_RESPONSE_INVALID".to_string())?).map_err(|_| "RUNTIME_PAGE_RESPONSE_INVALID".to_string())
   }
 
   /// Atomically claim an idle managed page, or create one when capacity is
   /// available. The local runtime owns the browser and target lifecycle.
-  pub async fn claim_page(&self, profile_id: &str, job_id: &str, request_id: &str, purpose: &str, max_pages: usize) -> Result<PageLease, String> {
+  pub async fn claim_page(&self, profile_id: &str, job_id: &str, request_id: &str, purpose: &str, max_pages: usize, target_kind: &str) -> Result<PageLease, String> {
     if profile_id.trim().is_empty() || job_id.trim().is_empty() || request_id.trim().is_empty() {
       return Err("PAGE_CLAIM_CORRELATION_REQUIRED".to_string());
     }
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
-    let body = serde_json::json!({ "jobId": job_id, "requestId": request_id, "purpose": purpose, "maxPages": max_pages });
+    let body = serde_json::json!({ "jobId": job_id, "requestId": request_id, "purpose": purpose, "maxPages": max_pages, "targetKind": target_kind });
     let response = client.post(format!("{}/v1/local/browser/profiles/{}/pages/claim", runtime_api_base_url(), profile_id)).json(&body).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
     let status = response.status();
     let value: serde_json::Value = response.json().await.map_err(|_| "RUNTIME_RESPONSE_INVALID".to_string())?;
     if !status.is_success() {
       return Err(value.get("error").and_then(|v| v.get("code")).and_then(|v| v.as_str()).unwrap_or("RUNTIME_PAGE_CLAIM_FAILED").to_string());
     }
+    serde_json::from_value(value).map_err(|_| "RUNTIME_PAGE_CLAIM_RESPONSE_INVALID".to_string())
+  }
+
+  /// Claim a caller-selected target without allowing the runtime to invent a
+  /// tab.  Facebook publishing always uses this exact-target variant.
+  pub async fn claim_page_exact(&self, profile_id: &str, job_id: &str, request_id: &str, purpose: &str, target_kind: &str, target_id: &str) -> Result<PageLease, String> {
+    if target_id.trim().is_empty() { return Err("PAGE_TARGET_ID_REQUIRED".to_string()); }
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
+    let body = serde_json::json!({ "jobId": job_id, "requestId": request_id, "purpose": purpose, "maxPages": 1, "targetKind": target_kind, "targetId": target_id });
+    let response = client.post(format!("{}/v1/local/browser/profiles/{}/pages/claim", runtime_api_base_url(), profile_id)).json(&body).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
+    let status = response.status();
+    let value: serde_json::Value = response.json().await.map_err(|_| "RUNTIME_RESPONSE_INVALID".to_string())?;
+    if !status.is_success() { return Err(value.get("error").and_then(|v| v.get("code")).and_then(|v| v.as_str()).unwrap_or("RUNTIME_PAGE_CLAIM_FAILED").to_string()); }
     serde_json::from_value(value).map_err(|_| "RUNTIME_PAGE_CLAIM_RESPONSE_INVALID".to_string())
   }
 
@@ -284,14 +329,24 @@ impl BrowserRuntimeBackend {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
     let body = serde_json::json!({ "pageLeaseId": page_lease_id, "jobId": job_id, "requestId": request_id });
     let response = client.post(format!("{}/v1/local/browser/profiles/{}/pages/{}/release", runtime_api_base_url(), profile_id, target_id)).json(&body).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
-    if response.status().is_success() { Ok(()) } else { Err(format!("RUNTIME_PAGE_RELEASE_FAILED:{}", response.status())) }
+    if response.status().is_success() {
+      Ok(())
+    } else {
+      Err(format!("RUNTIME_PAGE_RELEASE_FAILED:{}", response.status()))
+    }
   }
 
   pub async fn delete_page(&self, profile_id: &str, target_id: &str) -> Result<(), String> {
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(15)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
-    if target_id.trim().is_empty() || !target_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') { return Err("TARGET_ID_INVALID".to_string()); }
+    if target_id.trim().is_empty() || !target_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+      return Err("TARGET_ID_INVALID".to_string());
+    }
     let response = client.delete(format!("{}/v1/local/browser/profiles/{}/pages/{}", runtime_api_base_url(), profile_id, target_id)).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
-    if response.status().is_success() { Ok(()) } else { Err(format!("RUNTIME_PAGE_DELETE_FAILED:{}", response.status())) }
+    if response.status().is_success() {
+      Ok(())
+    } else {
+      Err(format!("RUNTIME_PAGE_DELETE_FAILED:{}", response.status()))
+    }
   }
 
   pub async fn stop_profile(&self, profile_id: &str) -> Result<(), String> {
@@ -312,6 +367,9 @@ impl BrowserRuntimeBackend {
       "browserPid": identity.browser_pid,
       "launchGeneration": identity.launch_generation,
       "browserEngine": identity.browser_engine,
+      "targetKind": identity.target_kind,
+      "managedTargetId": identity.managed_target_id,
+      "managedPageUrl": identity.managed_page_url,
       "grokTargetId": identity.grok_target_id,
       "grokPageUrl": identity.grok_page_url
     });
@@ -322,6 +380,21 @@ impl BrowserRuntimeBackend {
       return Err(value.get("error").and_then(|e| e.get("code")).and_then(|v| v.as_str()).unwrap_or("SIDECAR_UNAVAILABLE").to_string());
     }
     worker_info_from_value(profile_id, value)
+  }
+
+  /// Dispatch a publisher request directly to the attach-only Sidecar.  This
+  /// is intentionally separate from Donut's legacy worker/lease dispatch so a
+  /// Facebook DOM publisher cannot fall back to a cloud or extension route.
+  pub async fn dispatch_sidecar(&self, profile_id: &str, request: serde_json::Value) -> Result<serde_json::Value, String> {
+    if profile_id.trim().is_empty() { return Err("PROFILE_ID_REQUIRED".to_string()); }
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(180)).build().map_err(|e| format!("SIDECAR_CLIENT_INIT_FAILED:{e}"))?;
+    let response = client.post(format!("{}/v1/profiles/{}/dispatch", extension_bridge_base_url(), profile_id)).json(&request).send().await.map_err(|e| format!("SIDECAR_UNAVAILABLE:{e}"))?;
+    let status = response.status();
+    let value: serde_json::Value = response.json().await.map_err(|_| "SIDECAR_RESPONSE_INVALID".to_string())?;
+    if !status.is_success() {
+      return Err(value.get("error").and_then(|e| e.get("code")).and_then(|v| v.as_str()).unwrap_or("SIDECAR_DISPATCH_FAILED").to_string());
+    }
+    Ok(value)
   }
 
   pub async fn status(&self, profile_id: &str) -> Result<BrowserWorkerInfo, String> {
@@ -427,12 +500,23 @@ mod tests {
   use super::*;
 
   fn valid_identity() -> BrowserIdentity {
-    BrowserIdentity { profile_id: "profile-1".into(), browser_pid: 42, remote_debugging_port: 9222, cdp_endpoint: "http://127.0.0.1:9222".into(), launch_generation: 1, browser_engine: "CHROME_FOR_TESTING".into(), grok_target_id: "target-1".into(), grok_page_url: "https://grok.com/imagine".into(), reused: false }
+    BrowserIdentity { profile_id: "profile-1".into(), browser_pid: 42, remote_debugging_port: 9222, cdp_endpoint: "http://127.0.0.1:9222".into(), launch_generation: 1, browser_engine: "CHROME_FOR_TESTING".into(), grok_target_id: "target-1".into(), grok_page_url: "https://grok.com/imagine".into(), target_kind: "GROK".into(), managed_target_id: None, managed_page_url: None, reused: false }
   }
 
   #[test]
   fn canonical_identity_accepts_valid_values() {
     assert!(valid_identity().validate().is_ok());
+  }
+
+  #[test]
+  fn facebook_identity_does_not_require_grok_fields() {
+    let mut identity = valid_identity();
+    identity.target_kind = "FACEBOOK".into();
+    identity.grok_target_id.clear();
+    identity.grok_page_url.clear();
+    identity.managed_target_id = Some("cdp-facebook-1".into());
+    identity.managed_page_url = Some("https://www.facebook.com/reel/123".into());
+    assert!(identity.validate().is_ok());
   }
 
   #[test]
@@ -506,7 +590,8 @@ mod tests {
       "pageLeaseId": "lease-1",
       "pageReused": true,
       "purpose": "GROK_AUTOMATION"
-    })).expect("page lease contract");
+    }))
+    .expect("page lease contract");
     assert_eq!(lease.target_id, "target-exact");
     assert_eq!(lease.launch_generation, 9);
     assert!(lease.page_reused);

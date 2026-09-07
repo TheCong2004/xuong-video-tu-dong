@@ -176,15 +176,9 @@ impl RuntimeBackend for RealRuntimeBackend {
     // Sidecar health contract reports `ok`. Normalize both to the supervisor
     // state without changing either service's public endpoint.
     let raw_status = value.get("status").and_then(|v| v.as_str()).unwrap_or_default();
-    let status = if raw_status == "READY" || (spec.kind == RuntimeComponentKind::ArtCraftPlaywrightSidecar && raw_status == "ok") {
-      "READY".to_string()
-    } else {
-      raw_status.to_string()
-    };
+    let status = if raw_status == "READY" || (spec.kind == RuntimeComponentKind::ArtCraftPlaywrightSidecar && raw_status == "ok") { "READY".to_string() } else { raw_status.to_string() };
     let pid = value.get("pid").and_then(|v| v.as_u64()).unwrap_or_default() as u32;
-    let runtime_instance_id = value.get("instanceId").or_else(|| value.get("runtimeInstanceId")).and_then(|v| v.as_str()).map(str::to_string).or_else(|| {
-      (spec.kind == RuntimeComponentKind::ArtCraftPlaywrightSidecar && value.get("service").and_then(|v| v.as_str()) == Some("floword-playwright-runtime")).then(|| format!("sidecar-{}", pid))
-    }).unwrap_or_default();
+    let runtime_instance_id = value.get("instanceId").or_else(|| value.get("runtimeInstanceId")).and_then(|v| v.as_str()).map(str::to_string).or_else(|| (spec.kind == RuntimeComponentKind::ArtCraftPlaywrightSidecar && value.get("service").and_then(|v| v.as_str()) == Some("floword-playwright-runtime")).then(|| format!("sidecar-{}", pid))).unwrap_or_default();
     Ok(RuntimeHealth { protocol_version: value.get("protocolVersion").and_then(|v| v.as_u64()).unwrap_or_default() as u32, component: spec.kind, status, pid, runtime_instance_id })
   }
 

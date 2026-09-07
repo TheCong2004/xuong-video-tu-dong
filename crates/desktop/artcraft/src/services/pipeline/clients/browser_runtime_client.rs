@@ -123,12 +123,7 @@ pub async fn launch_donut_profile(profile_id: &str, target_url: Option<&str>) ->
   let url = format!("{base_url}/v1/local/browser/profiles/{profile_id}/run");
   info!("[LocalBrowser] Requesting Donut Desktop to launch profile: {profile_id} (target_url={:?})", target_url);
 
-  let req_body = RunProfileRequest {
-    url: target_url.map(|u| u.to_string()),
-    headless: Some(false),
-    cold_start_only: Some(true),
-    browser_engine: Some("chromium".to_string()),
-  };
+  let req_body = RunProfileRequest { url: target_url.map(|u| u.to_string()), headless: Some(false), cold_start_only: Some(true), browser_engine: Some("chromium".to_string()) };
 
   let resp = client.post(&url).json(&req_body).send().await.map_err(|e| format!("Local browser launch request failed: {e}"))?;
   if resp.status().is_success() {
@@ -172,7 +167,9 @@ pub fn resolve_runtime_executable_candidates() -> Vec<std::path::PathBuf> {
 /// this compatibility helper must never spawn a runtime or browser.
 pub async fn ensure_runtime_alive() {
   let base_url = get_donut_browser_api_base_url();
-  let Ok(client) = Client::builder().timeout(Duration::from_millis(600)).build() else { return; };
+  let Ok(client) = Client::builder().timeout(Duration::from_millis(600)).build() else {
+    return;
+  };
   if let Ok(response) = client.get(format!("{base_url}/v1/runtime/health")).send().await {
     if response.status().is_success() {
       info!("[BrowserRuntime] Donut Desktop local manager is online");

@@ -7,10 +7,7 @@ pub struct UpsertFlowordSettingArgs {
   pub value_json: String,
 }
 
-pub async fn upsert_floword_setting(
-  db: &TaskDbConnection,
-  args: UpsertFlowordSettingArgs,
-) -> Result<FlowordSetting, SqliteTasksError> {
+pub async fn upsert_floword_setting(db: &TaskDbConnection, args: UpsertFlowordSettingArgs) -> Result<FlowordSetting, SqliteTasksError> {
   let setting: FlowordSetting = sqlx::query_as(
     r#"
     INSERT INTO floword_system_settings (key, value_json, updated_at)

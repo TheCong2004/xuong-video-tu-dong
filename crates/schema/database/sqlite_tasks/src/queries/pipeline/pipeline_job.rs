@@ -44,21 +44,5 @@ pub struct RawPipelineJob {
 }
 
 pub(crate) fn raw_into_pipeline_job(raw: RawPipelineJob) -> Result<PipelineJob, SqliteTasksError> {
-  Ok(PipelineJob {
-    id: PipelineJobId::new_from_str(&raw.id),
-    status: TaskStatus::from_str(&raw.status)?,
-    current_stage: PipelineStage::from_str(&raw.current_stage)?,
-    maybe_page_id: raw.page_id,
-    maybe_input_payload: raw.input_payload,
-    maybe_stage_outputs: raw.stage_outputs,
-    maybe_on_failure_message: raw.on_failure_message,
-    maybe_page_snapshot: raw.page_snapshot,
-    maybe_business_status: raw.business_status,
-    maybe_started_at: raw.started_at,
-    maybe_failure_code: raw.failure_code,
-    maybe_failure_stage: raw.failure_stage,
-    created_at: raw.created_at,
-    updated_at: raw.updated_at,
-    maybe_completed_at: raw.completed_at,
-  })
+  Ok(PipelineJob { id: PipelineJobId::new_from_str(&raw.id), status: TaskStatus::from_str(&raw.status)?, current_stage: PipelineStage::from_str(&raw.current_stage)?, maybe_page_id: raw.page_id, maybe_input_payload: raw.input_payload, maybe_stage_outputs: raw.stage_outputs, maybe_on_failure_message: raw.on_failure_message, maybe_page_snapshot: raw.page_snapshot, maybe_business_status: raw.business_status, maybe_started_at: raw.started_at, maybe_failure_code: raw.failure_code, maybe_failure_stage: raw.failure_stage, created_at: raw.created_at, updated_at: raw.updated_at, maybe_completed_at: raw.completed_at })
 }

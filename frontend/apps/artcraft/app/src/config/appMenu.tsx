@@ -36,9 +36,9 @@ export const APP_DESCRIPTORS: AppDescriptor[] = [
   },
   {
     id: "CAPCUT_AUTOMATION",
-    label: "CapCut Studio",
+    label: "CapCut Automation",
     icon: faClapperboardPlay,
-    description: "CapCut draft management, sticker injection, and timeline automation.",
+    description: "Local CapCut automation for drafts, subtitles, effects, and rendering.",
     large: true,
   },
   {
@@ -56,6 +56,18 @@ export const APP_DESCRIPTORS: AppDescriptor[] = [
     large: false,
   },
 ];
+
+// The desktop product exposes only the two supported automation workspaces.
+// Other app routes remain available to legacy/internal callers, but are not
+// advertised in the Home catalog or the top navigation.
+export const VISIBLE_APP_IDS: ReadonlySet<AppId> = new Set([
+  "FLOWORD_STUDIO",
+  "CAPCUT_AUTOMATION",
+]);
+
+export const VISIBLE_APP_DESCRIPTORS = APP_DESCRIPTORS.filter((app) =>
+  VISIBLE_APP_IDS.has(app.id),
+);
 
 export interface FullAppItem {
   id: string;
@@ -129,8 +141,8 @@ export const ALL_APPS: FullAppItem[] = [
   },
   {
     id: "capcut-automation",
-    label: "CapCut Studio",
-    description: "Auto-sync footage, audio, and subtitles directly to CapCut Drafts",
+    label: "CapCut Automation",
+    description: "Local automation for CapCut drafts, subtitles, effects, and rendering",
     icon: faClapperboardPlay,
     category: "edit",
     action: "CAPCUT_AUTOMATION",
@@ -180,7 +192,13 @@ export const ALL_APPS: FullAppItem[] = [
 ];
 
 export const useVisibleApps = (): FullAppItem[] => {
-  return useMemo(() => ALL_APPS, []);
+  return useMemo(
+    () =>
+      ALL_APPS.filter((app) =>
+        app.action ? VISIBLE_APP_IDS.has(app.action) : false,
+      ),
+    [],
+  );
 };
 
 export const useGenerateApps = (): FullAppItem[] => {

@@ -64,6 +64,7 @@ futures = "0.3"
 image = "0.25.5"
 indexmap.workspace = true
 log.workspace = true
+md-5.workspace = true
 once_cell.workspace = true
 os_info = { version = "3.12.0", default-features = false }
 rand.workspace = true
@@ -83,7 +84,7 @@ tauri-plugin-updater = "2.10.1"
 tauri.workspace = true
 tempdir.workspace = true
 tempfile.workspace = true
-tokio = { version = "1.42", features = ["rt", "rt-multi-thread", "fs"] }
+tokio = { version = "1.42", features = ["rt", "rt-multi-thread", "fs", "process", "io-util"] }
 tokio-util.workspace = true
 url.workspace = true
 uuid = { workspace = true, features = ["v4"] }

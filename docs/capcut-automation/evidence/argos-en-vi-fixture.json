@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "engine": "Argos Translate / OPUS-MT",
+  "engineVersion": "1.9",
+  "fixture": "inline-segment-fixture",
+  "runtime": "development-only Python 3.14 with ArtCraft-owned dependencies; not packaged",
+  "model": {
+    "relativePath": "capcut-automation/models/argos/translate-en_vi-1_9.argosmodel",
+    "size": 67770159,
+    "sha256": "86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16"
+  },
+  "result": {
+    "provider": "argos-translate",
+    "segmentIdPreserved": true,
+    "nonEmptyTranslation": true,
+    "offline": true,
+    "packagedEnginePass": false
+  }
+}

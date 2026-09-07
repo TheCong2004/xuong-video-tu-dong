@@ -34,18 +34,5 @@ pub struct RawContentPagePublishTarget {
 }
 
 pub(crate) fn raw_into_publish_target(raw: RawContentPagePublishTarget) -> Result<ContentPagePublishTarget, SqliteTasksError> {
-  Ok(ContentPagePublishTarget {
-    id: raw.id,
-    page_id: raw.page_id,
-    platform: raw.platform,
-    enabled: raw.enabled != 0,
-    account_label: raw.account_label,
-    destination_id: raw.destination_id,
-    destination_handle: raw.destination_handle,
-    browser_profile_id: raw.browser_profile_id,
-    post_mode: raw.post_mode,
-    default_slots_json: raw.default_slots_json,
-    created_at: raw.created_at,
-    updated_at: raw.updated_at,
-  })
+  Ok(ContentPagePublishTarget { id: raw.id, page_id: raw.page_id, platform: raw.platform, enabled: raw.enabled != 0, account_label: raw.account_label, destination_id: raw.destination_id, destination_handle: raw.destination_handle, browser_profile_id: raw.browser_profile_id, post_mode: raw.post_mode, default_slots_json: raw.default_slots_json, created_at: raw.created_at, updated_at: raw.updated_at })
 }

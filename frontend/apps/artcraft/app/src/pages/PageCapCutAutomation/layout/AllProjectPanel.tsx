@@ -317,7 +317,7 @@ export function AllProjectPanel() {
           className="mt-3 origin-center rotate-90 whitespace-nowrap text-[10px] tracking-wide text-white/35"
           style={{ writingMode: "vertical-rl" }}
         >
-          All Projects
+          Tất cả dự án
         </span>
         {projects.length > 0 && (
           <span className="mt-2 rounded bg-emerald-500/20 px-1 text-[9px] text-emerald-300">
@@ -559,7 +559,7 @@ export function AllProjectPanel() {
                         className="text-[12px] text-white/25"
                       />
                       <span className="text-[8px] font-medium uppercase tracking-wide text-white/30">
-                        {isEmpty ? "empty" : "no cover"}
+                        {isEmpty ? "trống" : "không có ảnh bìa"}
                       </span>
                     </div>
                   )}
@@ -571,7 +571,7 @@ export function AllProjectPanel() {
                     </span>
                     {isActive && (
                       <span className="shrink-0 rounded bg-emerald-500/25 px-1 text-[8px] font-bold uppercase text-emerald-200">
-                        active
+                        đang dùng
                       </span>
                     )}
                     {isEmpty && (
@@ -656,7 +656,7 @@ export function AllProjectPanel() {
           <FontAwesomeIcon icon={faBars} className="text-[11px]" />
           <FontAwesomeIcon icon={faFolderOpen} className="text-[11px]" />
           <span className="ml-auto text-[10px] text-white/25">
-            {loading ? "scanning…" : `${Math.round(width)}px`}
+            {loading ? "đang quét…" : `${Math.round(width)}px`}
           </span>
         </div>
       </div>
@@ -685,8 +685,8 @@ function ResizeHandle({
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label="Resize All Projects panel"
-      title="Drag to resize · Double-click to collapse"
+      aria-label="Đổi kích thước bảng dự án"
+      title="Kéo để đổi kích thước · Nhấp đúp để thu gọn"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

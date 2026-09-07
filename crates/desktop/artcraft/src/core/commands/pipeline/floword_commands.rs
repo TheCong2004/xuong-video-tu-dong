@@ -685,11 +685,7 @@ pub async fn get_floword_readiness(app: AppHandle, task_database: State<'_, Task
 fn check_browser_runtime(app: &AppHandle) -> FlowordServiceHealth {
   let started = Instant::now();
   let _ = app;
-  let ready = std::net::TcpStream::connect_timeout(
-    &"127.0.0.1:10108".parse().expect("loopback address"),
-    std::time::Duration::from_millis(250),
-  )
-  .is_ok();
+  let ready = std::net::TcpStream::connect_timeout(&"127.0.0.1:10108".parse().expect("loopback address"), std::time::Duration::from_millis(250)).is_ok();
   FlowordServiceHealth { id: "browser-runtime".to_string(), status: if ready { "ready" } else { "unavailable" }.to_string(), latency_ms: started.elapsed().as_millis() as u64, error_code: if ready { None } else { Some("DONUT_LOCAL_MANAGER_NOT_READY".to_string()) }, message: if ready { None } else { Some("Start Donut Desktop to manage the local browser".to_string()) } }
 }
 
@@ -1076,7 +1072,7 @@ pub async fn list_donut_profiles_command() -> ResponseOrError<ListDonutProfilesC
     Err(error) => {
       warn!("[Floword] local browser profile catalog unavailable: {error}");
       Ok(ListDonutProfilesCommandResponse { profiles: Vec::new() }.into())
-    }
+    },
   }
 }
 
@@ -1095,10 +1091,7 @@ pub async fn open_donut_browser_gui_command() -> ResponseOrError<OpenDonutBrowse
 
   // ArtCraft may open the Donut Desktop manager, but never launches CFT or a
   // browser runtime itself. Treat an already-running manager as idempotent.
-  if std::net::TcpStream::connect_timeout(
-    &std::net::SocketAddr::from(([127, 0, 0, 1], 10108)),
-    std::time::Duration::from_millis(250),
-  ).is_ok() {
+  if std::net::TcpStream::connect_timeout(&std::net::SocketAddr::from(([127, 0, 0, 1], 10108)), std::time::Duration::from_millis(250)).is_ok() {
     return Ok(OpenDonutBrowserGuiResponse { success: true }.into());
   }
 
@@ -1138,7 +1131,7 @@ pub async fn open_donut_browser_gui_command() -> ResponseOrError<OpenDonutBrowse
     Err(error) => {
       warn!("[Floword] failed to open Donut Desktop ({}): {error}", executable.display());
       Ok(OpenDonutBrowserGuiResponse { success: false }.into())
-    }
+    },
   }
 }
 
@@ -1354,7 +1347,7 @@ pub async fn schedule_publication_command(task_database: State<'_, TaskDatabase>
 
   let scheduled_timestamp = if request.use_page_default_slot.unwrap_or(false) {
     let targets = list_publish_targets_for_page(db, &pub_record.page_id).await.unwrap_or_default();
-    let default_slots = targets.iter().find(|t| t.platform == pub_record.platform).map(|t| t.default_slots_json.as_str()).unwrap_or("[\"08:30\", \"10:00\", \"17:00\", \"22:00\"]");
+    let default_slots = targets.iter().find(|t| t.platform == pub_record.platform).map(|t| t.default_slots_json.as_str()).unwrap_or("[\"11:30\", \"19:30\", \"20:30\"]");
 
     crate::services::publishing::slot_allocator::allocate_next_available_slot(db, &pub_record.page_id, default_slots).await
   } else {

@@ -1,5 +1,4 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faArrowUpFromBracket } from "@fortawesome/pro-solid-svg-icons";
 import { twMerge } from "tailwind-merge";
 import { SIDE_NAV } from "../constants";
 import type { SideNavId } from "../types";
@@ -79,11 +78,6 @@ const NAV_ACCENT: Record<
     active: "bg-cyan-500/15 text-cyan-100",
     bar: "bg-cyan-400",
   },
-  workflow: {
-    icon: "text-violet-300",
-    active: "bg-violet-500/15 text-violet-200",
-    bar: "bg-violet-400",
-  },
   "auto-render": {
     icon: "text-rose-300",
     active: "bg-rose-500/15 text-rose-100",
@@ -103,7 +97,7 @@ const NAV_ACCENT: Record<
 
 export function CapCutSideNav({ activeId, onSelect }: CapCutSideNavProps) {
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-r border-white/8 bg-[#141518]">
+    <aside className="flex h-full min-h-0 w-56 shrink-0 flex-col border-r border-slate-800/80 bg-[#111820]">
       <div className="flex items-center gap-2.5 px-4 py-4 border-b border-white/5">
         <img
           src="/resources/images/services/artcraft.svg"
@@ -132,7 +126,7 @@ export function CapCutSideNav({ activeId, onSelect }: CapCutSideNavProps) {
               className={twMerge(
                 "relative flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition-colors",
                 active
-                  ? accent.active
+                  ? "border border-rose-500/30 bg-rose-500/10 text-white shadow-md shadow-rose-500/5"
                   : "text-white/65 hover:bg-white/5 hover:text-white",
               )}
             >
@@ -140,39 +134,26 @@ export function CapCutSideNav({ activeId, onSelect }: CapCutSideNavProps) {
                 <span
                   className={twMerge(
                     "absolute top-1/2 left-0 h-8 w-0.5 -translate-y-1/2 rounded-r",
-                    accent.bar,
+                    "bg-rose-400",
                   )}
                 />
               )}
               <span
                 className={twMerge(
                   "flex h-7 w-7 items-center justify-center rounded-md",
-                  active ? "bg-black/20" : "bg-white/5",
-                  !active && accent.icon,
+                  active ? "bg-rose-500/10" : "bg-white/5",
+                  active ? "text-rose-300" : accent.icon,
                 )}
               >
                 <FontAwesomeIcon
                   icon={item.icon}
-                  className={twMerge("text-[12px]", active && accent.icon)}
+                  className={twMerge("text-[12px]", active && "text-rose-300")}
                 />
               </span>
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
-              {item.badge && (
-                <span
-                  className={twMerge(
-                    "shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide",
-                    item.badge === "Vip"
-                      ? "bg-violet-600 text-white"
-                      : item.badge === "Soon"
-                        ? "bg-white/15 text-white/55"
-                        : "bg-emerald-600 text-white",
-                  )}
-                >
-                  {item.badge === "Soon"
-                    ? "Sắp có"
-                    : item.badge === "Vip"
-                      ? "Vip"
-                      : item.badge}
+              {item.badge === "Soon" && (
+                <span className="shrink-0 rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white/45">
+                  Sắp có
                 </span>
               )}
             </button>
@@ -181,22 +162,14 @@ export function CapCutSideNav({ activeId, onSelect }: CapCutSideNavProps) {
       </nav>
 
       <div className="border-t border-white/8 p-3">
-        <div className="rounded-xl bg-[#1e2026] p-3">
-          <div className="mb-1 flex items-center justify-between text-[11px] text-white/50">
-            <span>Current plan</span>
-            <span aria-hidden>🇺🇸</span>
+        <div className="rounded-xl border border-slate-700/45 bg-slate-900/55 px-3 py-2.5">
+          <div className="flex items-center gap-2 text-[11px] font-semibold text-emerald-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            Không gian làm việc nội bộ
           </div>
-          <div className="text-sm font-semibold">Free</div>
-          <div className="mt-0.5 text-[11px] text-white/40">
-            Expires: 2026-07-21
+          <div className="mt-1 text-[10px] leading-relaxed text-white/40">
+            Công cụ tự động hóa chạy trên máy này.
           </div>
-          <button
-            type="button"
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[#2b7cff] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#3a88ff]"
-          >
-            <FontAwesomeIcon icon={faArrowUpFromBracket} />
-            Upgrade Plan
-          </button>
         </div>
         <div className="mt-3 flex items-center gap-2 px-1 text-[11px] text-white/55">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600/80 text-[10px] font-bold">

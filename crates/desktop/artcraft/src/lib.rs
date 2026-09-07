@@ -40,6 +40,13 @@ use crate::core::commands::pipeline::floword_commands::{
   retry_floword_job_from_start, retry_floword_step, retry_publication_command, schedule_publication_command, skip_floword_research, test_floword_visual_provider, update_content_page_command, update_floword_settings_command, update_floword_system_setting_command, upsert_content_page_publish_target_command, upsert_prompt_template_command, validate_bulk_import_command,
 };
 use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
+use crate::core::commands::pipeline::run_capcut_automation_command::run_capcut_automation_command;
+use crate::core::commands::pipeline::capcut_automation_job_commands::{start_capcut_automation_job, list_capcut_automation_jobs, get_capcut_automation_job, cancel_capcut_automation_job, retry_capcut_automation_job, remove_capcut_automation_job, preview_capcut_automation};
+use crate::core::commands::pipeline::capcut_automation_engine_commands::{cancel_capcut_ai_model_download, check_capcut_automation_engine, detect_speakers_capcut_automation_local, download_capcut_ai_model, get_capcut_ai_model_status, list_capcut_ai_models, list_capcut_automation_engines, ocr_capcut_automation_local, remove_capcut_ai_model, transcribe_capcut_automation_local, translate_capcut_automation_local, translate_ocr_capcut_automation_local, verify_capcut_ai_model};
+use crate::core::commands::pipeline::facebook_publishing_commands::{get_facebook_page_snapshot_command, get_facebook_runtime_binding_command, get_live_publish_confirmation_command, upsert_facebook_page_snapshot_command, upsert_facebook_runtime_binding_command, upsert_live_publish_confirmation_command};
+use crate::core::commands::pipeline::capcut_mate_commands::ensure_legacy_capcut_mate;
+use crate::services::pipeline::capcut_automation_job_manager::CapcutAutomationJobManager;
+use crate::services::pipeline::capcut_automation_engine_manager::CapcutAutomationEngineManager;
 use crate::core::commands::vynaro_command::{vynaro_open_command, vynaro_start_command, vynaro_status_command, vynaro_stop_command, VynaroProcessManager};
 use crate::core::commands::inkos_command::{inkos_start_command, inkos_status_command, inkos_stop_command, InkosProcessManager};
 use crate::services::pipeline::state::command_dispatcher::CommandDispatcher;
@@ -89,11 +96,59 @@ use crate::services::worldlabs::state::worldlabs_bearer_bridge::WorldlabsBearerB
 use crate::services::worldlabs::state::worldlabs_credential_manager::WorldlabsCredentialManager;
 use log::error;
 
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::core::state::artcraft_usage_tracker::artcraft_usage_tracker::ArtcraftUsageTracker;
 use tauri_plugin_dialog;
 use tauri_plugin_http;
 use tauri_plugin_log::Target;
 use tauri_plugin_log::TargetKind;
+
+#[cfg(debug_assertions)]
+static CAPCUT_E2E_REQUEST_CONSUMED: AtomicBool = AtomicBool::new(false);
+
+/// Debug-only production-path smoke hook.  It is intentionally inert unless
+/// ARTCRAFT_CAPCUT_E2E_REQUEST points at an explicit JSON request.  The hook
+/// goes through the same JobManager/resource resolver used by the UI rather
+/// than calling individual local engines, and is compiled out of release
+/// builds.
+#[cfg(debug_assertions)]
+fn maybe_enqueue_capcut_e2e_request(app: &tauri::AppHandle, root: &AppDataRoot) {
+  if CAPCUT_E2E_REQUEST_CONSUMED.swap(true, Ordering::SeqCst) {
+    return;
+  }
+  let Ok(path) = std::env::var("ARTCRAFT_CAPCUT_E2E_REQUEST") else {
+    return;
+  };
+  let path = std::path::PathBuf::from(path.trim());
+  if !path.is_absolute() {
+    error!("Ignoring ARTCRAFT_CAPCUT_E2E_REQUEST because path is not absolute");
+    return;
+  }
+  let bytes = match std::fs::read(&path) {
+    Ok(bytes) => bytes,
+    Err(err) => {
+      error!("Failed to read CapCut E2E request: {err}");
+      return;
+    }
+  };
+  let request: crate::services::pipeline::capcut_automation_job_manager::StartCapcutAutomationRequest = match serde_json::from_slice(&bytes) {
+    Ok(request) => request,
+    Err(err) => {
+      error!("Invalid CapCut E2E request JSON: {err}");
+      return;
+    }
+  };
+  let Some(manager) = app.try_state::<CapcutAutomationJobManager>() else {
+    error!("CapCut E2E request ignored because JobManager is unavailable");
+    return;
+  };
+  match manager.start(app.clone(), root.clone(), request) {
+    Ok(job) => log::info!("CapCut E2E request enqueued once: {}", job.job_id),
+    Err(err) => error!("CapCut E2E request enqueue failed: {err}"),
+  }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -102,6 +157,9 @@ pub fn run() {
   println!("Loading config...");
   let app_data_root = AppDataRoot::create_default().expect("data directory should be created");
   let app_data_root_2 = app_data_root.clone();
+  let packaged_resources = std::env::current_exe().ok().and_then(|path| path.parent().map(|parent| parent.join("resources").join("capcut-automation")));
+  let development_resources = Some(std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources").join("capcut-automation"));
+  let capcut_engine_manager = CapcutAutomationEngineManager::new(packaged_resources, development_resources, app_data_root.path().to_path_buf());
 
   println!("Getting platform info...");
   let artcraft_platform_info = ArtcraftPlatformInfo::get();
@@ -197,12 +255,22 @@ pub fn run() {
       tauri::async_runtime::block_on(async move {
         let _setup_result = setup_main_window(&app).await;
 
-        let result = handle_tauri_startup(handle, root, env_config, artcraft_platform_info_2, artcraft_usage_tracker_2, storyteller_creds, sora_creds, sora_tasks, midjourney_creds_manager_2, grok_creds_manager_2, grok_prompt_queue_2, worldlabs_bearer_bridge_2, worldlabs_creds_manager_2, provider_credential_cache_2, dispatcher).await;
+        // Restore native automation jobs before the UI mounts. The list
+        // command remains idempotent, but startup restoration ensures queued
+        // work survives an app restart instead of waiting for a page visit.
+        if let Some(manager) = app.try_state::<CapcutAutomationJobManager>() {
+          let _ = manager.restore(app.clone(), root.clone());
+        }
+
+        let result = handle_tauri_startup(handle, root.clone(), env_config, artcraft_platform_info_2, artcraft_usage_tracker_2, storyteller_creds, sora_creds, sora_tasks, midjourney_creds_manager_2, grok_creds_manager_2, grok_prompt_queue_2, worldlabs_bearer_bridge_2, worldlabs_creds_manager_2, provider_credential_cache_2, dispatcher).await;
 
         if let Err(err) = result {
           error!("Failed to handle Tauri startup: {:?}", err);
           panic!("Failed to handle Tauri startup: {:?}", err);
         }
+
+        #[cfg(debug_assertions)]
+        maybe_enqueue_capcut_e2e_request(&app, &root);
       });
 
       Ok(())
@@ -221,6 +289,8 @@ pub fn run() {
     .manage(worldlabs_bearer_bridge)
     .manage(provider_credential_cache)
     .manage(command_dispatcher)
+    .manage(CapcutAutomationJobManager::new())
+    .manage(capcut_engine_manager)
     .manage(worldlabs_creds_manager)
     .manage(VynaroProcessManager::default())
     .manage(InkosProcessManager::default());
@@ -284,6 +354,34 @@ pub fn run() {
     enqueue_pipeline_job_command,
     list_pipeline_jobs_command,
     cancel_pipeline_job_command,
+    run_capcut_automation_command,
+    start_capcut_automation_job,
+    list_capcut_automation_jobs,
+    get_capcut_automation_job,
+    cancel_capcut_automation_job,
+    retry_capcut_automation_job,
+    remove_capcut_automation_job,
+    preview_capcut_automation,
+    list_capcut_automation_engines,
+    check_capcut_automation_engine,
+    transcribe_capcut_automation_local,
+    translate_capcut_automation_local,
+    ocr_capcut_automation_local,
+    translate_ocr_capcut_automation_local,
+    detect_speakers_capcut_automation_local,
+    list_capcut_ai_models,
+    get_capcut_ai_model_status,
+    download_capcut_ai_model,
+    cancel_capcut_ai_model_download,
+    verify_capcut_ai_model,
+    get_facebook_runtime_binding_command,
+    upsert_facebook_runtime_binding_command,
+    get_facebook_page_snapshot_command,
+    upsert_facebook_page_snapshot_command,
+    get_live_publish_confirmation_command,
+    upsert_live_publish_confirmation_command,
+    remove_capcut_ai_model,
+    ensure_legacy_capcut_mate,
     enqueue_floword_workflow,
     get_floword_workflow,
     list_floword_workflows,

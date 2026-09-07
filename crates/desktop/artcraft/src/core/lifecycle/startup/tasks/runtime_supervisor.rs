@@ -19,13 +19,7 @@ const READY_DEADLINE: Duration = Duration::from_secs(45);
 const POLL_INTERVAL: Duration = Duration::from_millis(400);
 const PLAYWRIGHT_PORT: u16 = 9223;
 static PLAYWRIGHT_CHILD: OnceLock<Arc<Mutex<Option<Child>>>> = OnceLock::new();
-const REQUIRED_RUNTIME_ARTIFACTS: &[&str] = &[
-  "node/node.exe",
-  "playwright-sidecar/src/server.js",
-  "playwright-sidecar/package.json",
-  "playwright-sidecar/node_modules/express/package.json",
-  "playwright-sidecar/node_modules/playwright/package.json",
-];
+const REQUIRED_RUNTIME_ARTIFACTS: &[&str] = &["node/node.exe", "playwright-sidecar/src/server.js", "playwright-sidecar/package.json", "playwright-sidecar/node_modules/express/package.json", "playwright-sidecar/node_modules/playwright/package.json"];
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -313,11 +307,11 @@ pub fn ensure_donut_desktop() -> bool {
     Ok(_) => {
       info!("Donut Desktop manager started: {}", executable.display());
       true
-    }
+    },
     Err(error) => {
       warn!("DONUT_LOCAL_MANAGER_START_FAILED: {error}");
       false
-    }
+    },
   }
 }
 

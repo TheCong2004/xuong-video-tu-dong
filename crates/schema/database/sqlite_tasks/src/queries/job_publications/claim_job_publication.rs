@@ -2,10 +2,7 @@ use super::job_publication::{raw_into_job_publication, JobPublication, RawJobPub
 use crate::connection::TaskDbConnection;
 use crate::error::SqliteTasksError;
 
-pub async fn claim_job_publication(
-  db: &TaskDbConnection,
-  id: &str,
-) -> Result<Option<JobPublication>, SqliteTasksError> {
+pub async fn claim_job_publication(db: &TaskDbConnection, id: &str) -> Result<Option<JobPublication>, SqliteTasksError> {
   let maybe_raw: Option<RawJobPublication> = sqlx::query_as(
     r#"
     UPDATE job_publications

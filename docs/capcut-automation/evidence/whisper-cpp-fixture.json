@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "engine": "whisper.cpp",
+  "engineVersion": "v1.9.1",
+  "fixture": "capcut-automation/fixtures/jfk.wav",
+  "model": {
+    "relativePath": "capcut-automation/models/whisper/ggml-tiny.bin",
+    "size": 77691713,
+    "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21"
+  },
+  "executable": {
+    "relativePath": "capcut-automation/bin/whisper-cli.exe",
+    "size": 489984,
+    "sha256": "31513eef3a9721d377544e10edfb7b27f4533ca84b71c8b87764da4cdf36da18"
+  },
+  "result": {
+    "exitCode": 0,
+    "segmentCount": 1,
+    "timestampsValid": true,
+    "nonEmptyText": true
+  }
+}

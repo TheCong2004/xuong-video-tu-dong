@@ -2,10 +2,7 @@ use super::content_page_publish_target::{raw_into_publish_target, ContentPagePub
 use crate::connection::TaskDbConnection;
 use crate::error::SqliteTasksError;
 
-pub async fn list_publish_targets_for_page(
-  db: &TaskDbConnection,
-  page_id: &str,
-) -> Result<Vec<ContentPagePublishTarget>, SqliteTasksError> {
+pub async fn list_publish_targets_for_page(db: &TaskDbConnection, page_id: &str) -> Result<Vec<ContentPagePublishTarget>, SqliteTasksError> {
   let rows: Vec<RawContentPagePublishTarget> = sqlx::query_as(
     r#"
     SELECT id, page_id, platform, enabled, account_label, destination_id, destination_handle,

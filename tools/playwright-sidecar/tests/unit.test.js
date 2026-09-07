@@ -100,6 +100,37 @@ test('worker without Floword bind and health is not accepted as wake success', a
   await assert.rejects(sessionManager.wakeServiceWorker(page, 1000, { context: { serviceWorkers: () => [worker] } }), /EXTENSION_PRODUCTION_CONTRACT_MISSING/);
 });
 
+test('facebook managed target validation is hostname strict', () => {
+  assert.equal(sessionManager.isFacebookPageUrl('https://www.facebook.com/reel/123'), true);
+  assert.equal(sessionManager.isFacebookPageUrl('https://business.facebook.com/page'), true);
+  assert.equal(sessionManager.isFacebookPageUrl('https://example.com/facebook/page'), false);
+  assert.equal(sessionManager.isFacebookPageUrl('http://facebook.com/page'), false);
+});
+
+test('facebook auth detector preserves tri-state', async () => {
+  assert.equal(await sessionManager.facebookAuthState({ evaluate: async () => ({ loginForm: false, checkpoint: false, loggedIn: true }) }), 'AUTHENTICATED');
+  assert.equal(await sessionManager.facebookAuthState({ evaluate: async () => ({ loginForm: true, checkpoint: false, loggedIn: false }) }), 'UNAUTHENTICATED');
+  assert.equal(await sessionManager.facebookAuthState({ evaluate: async () => ({ loginForm: false, checkpoint: false, loggedIn: false }) }), 'UNKNOWN');
+});
+
+test('facebook Page identity requires stable evidence and matching display name', async () => {
+  const page = { evaluate: async () => ({ text: 'Example Page composer', urls: ['https://www.facebook.com/example'], ids: ['page-1'] }) };
+  const result = await sessionManager.validateFacebookPageIdentity(page, { targetPageId: 'page-1', facebookPageCanonicalUrl: 'https://www.facebook.com/example', facebookPageDisplayName: 'Example Page' });
+  assert.equal(result.verified, true);
+  assert.equal(result.evidence.pageId, true);
+  assert.equal(result.evidence.canonicalUrl, true);
+});
+
+test('facebook Page identity rejects a changed Page id before upload', async () => {
+  const page = { evaluate: async () => ({ text: 'Example Page composer', urls: ['https://www.facebook.com/example'], ids: ['page-2'] }) };
+  await assert.rejects(sessionManager.validateFacebookPageIdentity(page, { targetPageId: 'page-1', facebookPageCanonicalUrl: 'https://www.facebook.com/example', facebookPageDisplayName: 'Example Page' }), /FACEBOOK_PAGE_MISMATCH/);
+});
+
+test('facebook Page identity stays unknown without DOM evidence', async () => {
+  const page = { evaluate: async () => ({ text: '', urls: [], ids: [] }) };
+  await assert.rejects(sessionManager.validateFacebookPageIdentity(page, { targetPageId: 'page-1', facebookPageCanonicalUrl: 'https://www.facebook.com/example', facebookPageDisplayName: 'Example Page' }), /FACEBOOK_PAGE_IDENTITY_UNKNOWN/);
+});
+
 test('wake does not change the authoritative Donut CDP identity', async () => {
   const identity = { browserPid: 33952, cdpEndpoint: 'http://127.0.0.1:56741', launchGeneration: 1787632881 };
   const before = { ...identity };

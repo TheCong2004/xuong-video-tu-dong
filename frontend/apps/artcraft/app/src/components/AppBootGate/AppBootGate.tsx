@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { pingBackend } from "~/pages/PageCapCutAutomation/api/capcutBeClient";
+import { useTabStore } from "~/pages/Stores/TabState";
 
 // Startup gate: the WebView boots before the capcut-mate backend (:30000) is
 // ready, which can surface as a runtime script error / black screen. This gate
@@ -22,13 +23,19 @@ type ErrorPayload = { message: string };
 type Status = "waiting" | "ready" | "error" | "timeout";
 
 export function AppBootGate({ children }: { children: ReactNode }) {
+  const activeTabId = useTabStore((state) => state.activeTabId);
+  const nativeAutomationActive = activeTabId === "CAPCUT_AUTOMATION";
   // Non-Tauri (browser dev) never receives backend events — enter directly.
-  const [status, setStatus] = useState<Status>(isTauri ? "waiting" : "ready");
+  const [status, setStatus] = useState<Status>(isTauri && !nativeAutomationActive ? "waiting" : "ready");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isTauri || nativeAutomationActive) {
+      setStatus("ready");
+      setErrorMessage(null);
+      return;
+    }
 
     setStatus("waiting");
     setErrorMessage(null);
@@ -66,18 +73,18 @@ export function AppBootGate({ children }: { children: ReactNode }) {
       if (unlistenReady) unlistenReady.then((f) => f && f()).catch(() => {});
       if (unlistenError) unlistenError.then((f) => f && f()).catch(() => {});
     };
-  }, [attempt]);
+  }, [attempt, nativeAutomationActive]);
 
   // When in timeout/degraded mode, periodically probe backend to auto-clear banner
   useEffect(() => {
-    if (status !== "timeout") return;
+    if (status !== "timeout" || nativeAutomationActive) return;
     const interval = setInterval(() => {
       void pingBackend({ retries: 0 }).then((online) => {
         if (online) setStatus("ready");
       });
     }, 3000);
     return () => clearInterval(interval);
-  }, [status]);
+  }, [status, nativeAutomationActive]);
 
   return (
     <>

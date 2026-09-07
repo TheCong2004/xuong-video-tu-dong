@@ -16,10 +16,7 @@ pub struct UpdateJobPublicationArgs {
   pub last_error_message: Option<String>,
 }
 
-pub async fn update_job_publication(
-  db: &TaskDbConnection,
-  args: UpdateJobPublicationArgs,
-) -> Result<JobPublication, SqliteTasksError> {
+pub async fn update_job_publication(db: &TaskDbConnection, args: UpdateJobPublicationArgs) -> Result<JobPublication, SqliteTasksError> {
   let existing: RawJobPublication = sqlx::query_as(
     "SELECT id, job_id, page_id, platform, target_config_id, browser_profile_id, status,
             scheduled_at, approved_at, started_at, posted_at, attempt_count, idempotency_key,

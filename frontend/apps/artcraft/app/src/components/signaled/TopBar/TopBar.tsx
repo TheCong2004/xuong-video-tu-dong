@@ -23,7 +23,6 @@ import {
 import { Button } from "@storyteller/ui-button";
 import {
   GalleryModal,
-  galleryModalLightboxVisible,
   galleryModalVisibleDuringDrag,
   galleryModalVisibleViewMode,
 } from "@storyteller/ui-gallery-modal";
@@ -33,8 +32,8 @@ import {
 } from "@storyteller/ui-menu-icon-selector";
 import { SettingsModal } from "@storyteller/ui-settings-modal";
 import { Tooltip } from "@storyteller/ui-tooltip";
-import { useEffect, useRef, useState } from "react";
-import { APP_DESCRIPTORS } from "~/config/appMenu";
+import { useRef, useState } from "react";
+import { VISIBLE_APP_DESCRIPTORS } from "~/config/appMenu";
 import {
   downloadMediaFileToDisk,
 } from "~/components/generation-feed/desktopMediaActions";
@@ -73,7 +72,7 @@ const appMenuTabs: MenuIconItem[] = [
     tooltipInteractive: true,
     tooltipPosition: "bottom",
   },
-  ...APP_DESCRIPTORS.map((d) => ({
+  ...VISIBLE_APP_DESCRIPTORS.map((d) => ({
     id: d.id,
     label: d.label,
     icon: <FontAwesomeIcon icon={d.icon} />,
@@ -116,7 +115,7 @@ export const TopBar = ({ pageName }: Props) => {
       case "FLOWORD_STUDIO":
         return "Floword Studio";
       case "CAPCUT_AUTOMATION":
-        return "CapCut Studio Automation";
+        return "CapCut Automation";
       case "OMNI_ROUTE":
         return "OmniRoute AI Router";
       case "YOUWEE":

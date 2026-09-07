@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "sourceReference": "external-reference-only",
+  "sourceLicense": "Apache-2.0",
+  "resources": [
+    {
+      "id": "whisper-cpp-ggml-tiny",
+      "relativePath": "capcut-automation/models/whisper/ggml-tiny.bin",
+      "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+      "size": 77691713,
+      "required": false,
+      "license": "OpenAI Whisper model card terms",
+      "source": "https://huggingface.co/ggerganov/whisper.cpp",
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "whisper-cpp-cli",
+      "relativePath": "capcut-automation/bin/whisper-cli.exe",
+      "sha256": "31513eef3a9721d377544e10edfb7b27f4533ca84b71c8b87764da4cdf36da18",
+      "size": 489984,
+      "required": false,
+      "license": "MIT",
+      "source": "https://github.com/ggml-org/whisper.cpp/releases/tag/v1.9.1",
+      "status": "READY_BUILT_FROM_OFFICIAL_SOURCE"
+    },
+    {
+      "id": "argos-en-vi-1-9",
+      "relativePath": "capcut-automation/models/argos/translate-en_vi-1_9.argosmodel",
+      "sha256": "86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16",
+      "size": 67770159,
+      "required": false,
+      "license": "OPUS-MT model CC-BY 4.0",
+      "source": "https://argos-net.com/v1/translate-en_vi-1_9.argosmodel",
+      "status": "READY_VERIFIED_MODEL_AND_DEVELOPMENT_ENGINE"
+    },
+    {
+      "id": "python314-embedded-runtime",
+      "relativePath": "capcut-automation/runtime/python314/python.exe",
+      "sha256": "03168c01b7b7491423350e82c26fee71f35b43694d1319d3c668bda6903a0c38",
+      "size": 106208,
+      "required": false,
+      "license": "Python PSF-2.0",
+      "source": "https://www.python.org/downloads/windows/",
+      "status": "READY_VERIFIED_DEVELOPMENT_RUNTIME"
+    },
+    {
+      "id": "tesseract-eng-fast",
+      "relativePath": "capcut-automation/models/tesseract/eng.traineddata",
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "size": 4113088,
+      "required": false,
+      "license": "Apache-2.0 + language data terms",
+      "source": "https://github.com/tesseract-ocr/tessdata_fast/raw/main/eng.traineddata",
+      "status": "READY_VERIFIED_MODEL_EXECUTABLE_PENDING"
+    },
+    {
+      "id": "argos-translation-worker",
+      "relativePath": "capcut-automation/scripts/translation_worker.py",
+      "sha256": "aaabd15d6d4d01f93a9623b817b5ecd5ced96091c06b43c155a1af5b1b04eec4",
+      "size": 8152,
+      "required": false,
+      "license": "Apache-2.0 (ArtCraft adapter)",
+      "source": "ArtCraft tools/capcut-automation/translation_worker.py (staged to resources/capcut-automation/scripts/translation_worker.py)",
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "sensevoice-model",
+      "relativePath": "capcut-automation/models/sensevoice",
+      "sha256": null,
+      "size": null,
+      "required": false,
+      "license": "SenseVoice/model-specific",
+      "source": "CapCap/app/sensevoice_processor.py",
+      "status": "BLOCKED_BY_LICENSE"
+    },
+    {
+      "id": "rapidocr-det-model",
+      "relativePath": "capcut-automation/python/rapidocr_onnxruntime/models/ch_PP-OCRv3_det_infer.onnx",
+      "sha256": "3439588c030faea393a54515f51e983d8e155b19a2e8aba7891934c1cf0de526",
+      "size": 2432880,
+      "required": false,
+      "license": "Apache-2.0",
+      "source": "RapidOCR 1.2.3 wheel model bundle",
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "rapidocr-rec-model",
+      "relativePath": "capcut-automation/python/rapidocr_onnxruntime/models/ch_PP-OCRv3_rec_infer.onnx",
+      "sha256": "897a3ededb38fee0dae2c1ccee38241f37df202c9509e3abca02e9217c5ee615",
+      "size": 10690752,
+      "required": false,
+      "license": "Apache-2.0",
+      "source": "RapidOCR 1.2.3 wheel model bundle",
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "rapidocr-cls-model",
+      "relativePath": "capcut-automation/python/rapidocr_onnxruntime/models/ch_ppocr_mobile_v2.0_cls_infer.onnx",
+      "sha256": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+      "size": 585532,
+      "required": false,
+      "license": "Apache-2.0",
+      "source": "RapidOCR 1.2.3 wheel model bundle",
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "rapidocr-worker",
+      "relativePath": "capcut-automation/scripts/ocr_rapid_worker.py",
+      "sha256": "8eba11e3ad060bf5f6b4f33fb4c88a8a334534289cba2ae8d0f9a65b9ea43e0b",
+      "size": 1647,
+      "required": false,
+      "license": "Apache-2.0 (ArtCraft adapter)",
+      "source": "ArtCraft resources/capcut-automation/ocr_rapid_worker.py",
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "sherpa-speaker-worker",
+      "relativePath": "capcut-automation/scripts/speaker_diarization_worker.py",
+      "sha256": "94ea11fb192cea7300faaf4bef91edd6f3891ef97eef2d05bdf88b4f33c5dbfd5",
+      "size": 2481,
+      "required": false,
+      "license": "Apache-2.0 (ArtCraft adapter)",
+      "source": "ArtCraft resources/capcut-automation/speaker_diarization_worker.py",
+      "status": "READY_VERIFIED_MODEL_PENDING"
+    },
+    {
+      "id": "sherpa-pyannote-segmentation",
+      "relativePath": "capcut-automation/models/diarization/segmentation/model.onnx",
+      "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+      "size": 5992913,
+      "required": false,
+      "license": "Sherpa-ONNX model-specific terms",
+      "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-segmentation-models",
+      "status": "READY_VERIFIED_REAL_DIARIZATION_FIXTURE_PASS"
+    },
+    {
+      "id": "sherpa-wespeaker-embedding",
+      "relativePath": "capcut-automation/models/diarization/embedding.onnx",
+      "sha256": "5ef208a9da1453335308a6b6f4e6dfbd7e183a38b604de0a57664f45d257fe94",
+      "size": 26534365,
+      "required": false,
+      "license": "Sherpa-ONNX Apache-2.0; WeSpeaker/model-specific terms",
+      "source": "https://github.com/k2-fsa/sherpa-onnx/releases/tag/speaker-recongition-models",
+      "status": "READY_VERIFIED_REAL_DIARIZATION_FIXTURE_PASS"
+    },
+    {
+      "id": "piper-windows-binary",
+      "relativePath": "capcut-automation/bin/piper.exe",
+      "sha256": "96f3da3811151580073e40bb4dd20eb0fb8115f5f5f76e2fb54282b3edfa5c1f",
+      "size": 509952,
+      "required": false,
+      "license": "MIT",
+      "source": "https://github.com/rhasspy/piper/releases/tag/2023.11.14-2",
+      "status": "READY_VERIFIED_OFFICIAL_RELEASE"
+    },
+    {
+      "id": "piper-voice-vi-vivos-x-low",
+      "relativePath": "capcut-automation/voices/piper/vi_VN-vivos-x_low/vi_VN-vivos-x_low.onnx",
+      "sha256": "6ab13374eb0862021a545befe7727aef59e16117f1c075aa9e0362237ecc98ae",
+      "size": 27789413,
+      "required": false,
+      "license": "Piper voice model terms",
+      "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/vi/vi_VN/vivos/x_low",
+      "status": "READY_VERIFIED_VIETNAMESE_VOICE_FIXTURE_PASS"
+    },
+    {
+      "id": "piper-voice-vi-vivos-x-low-config",
+      "relativePath": "capcut-automation/voices/piper/vi_VN-vivos-x_low/vi_VN-vivos-x_low.onnx.json",
+      "sha256": "9dc373d69b0e4f39d864cb8ac9fe42cee49817a0f02d831e57a9ce6e944e234a",
+      "size": 5592,
+      "required": false,
+      "license": "Piper voice model terms",
+      "source": "https://huggingface.co/rhasspy/piper-voices/tree/main/vi/vi_VN/vivos/x_low",
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "speaker-diarization-models",
+      "relativePath": "capcut-automation/models/diarization",
+      "sha256": null,
+      "size": null,
+      "required": false,
+      "license": "Sherpa-ONNX/model-specific",
+      "source": "CapCap/app/services/speaker_diarization_service.py",
+      "status": "READY_VERIFIED_REAL_DIARIZATION_FIXTURE_PASS"
+    }
+  ]
+}

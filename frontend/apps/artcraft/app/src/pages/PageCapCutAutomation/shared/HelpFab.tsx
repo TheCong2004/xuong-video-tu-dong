@@ -25,8 +25,8 @@ export function HelpFab() {
       }
       toast(
         online
-          ? `BE online ${mate.baseUrl}${doctorNote}. Draft mate: thanh trên. Draft local: panel phải / menu Draft local. Docs: :30000/docs`
-          : `BE offline — chạy capcut-mate (uv run main.py) tại ${mate.baseUrl}`,
+          ? `BE đang hoạt động ${mate.baseUrl}${doctorNote}. Draft Mate: thanh trên. Draft local: bảng bên phải / menu Draft local. Tài liệu: :30000/docs`
+          : `BE ngoại tuyến — chạy capcut-mate (uv run main.py) tại ${mate.baseUrl}`,
         { duration: 6000 },
       );
     } catch (e) {

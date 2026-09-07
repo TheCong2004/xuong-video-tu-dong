@@ -1,0 +1,20 @@
+{
+  "engine": "rapidocr-onnxruntime",
+  "runtime": "ArtCraft-owned Python 3.14",
+  "fixture": "synthetic-white-card-800x240.png",
+  "fixtureSha256": "generated-locally-not-user-data",
+  "imageWidth": 800,
+  "imageHeight": 240,
+  "regions": [
+    {
+      "id": "ocr-1",
+      "text": "ARTCRAFTFREEOCR",
+      "x": 0.07375,
+      "y": 0.3791666667,
+      "width": 0.12375,
+      "height": 0.0458333333,
+      "confidence": 0.9257141054
+    }
+  ],
+  "result": "PASS_REAL_OFFLINE_FIXTURE"
+}

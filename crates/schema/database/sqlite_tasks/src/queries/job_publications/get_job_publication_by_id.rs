@@ -2,10 +2,7 @@ use super::job_publication::{raw_into_job_publication, JobPublication, RawJobPub
 use crate::connection::TaskDbConnection;
 use crate::error::SqliteTasksError;
 
-pub async fn get_job_publication_by_id(
-  db: &TaskDbConnection,
-  id: &str,
-) -> Result<Option<JobPublication>, SqliteTasksError> {
+pub async fn get_job_publication_by_id(db: &TaskDbConnection, id: &str) -> Result<Option<JobPublication>, SqliteTasksError> {
   let maybe_raw: Option<RawJobPublication> = sqlx::query_as(
     r#"
     SELECT id, job_id, page_id, platform, target_config_id, browser_profile_id, status,
@@ -26,10 +23,7 @@ pub async fn get_job_publication_by_id(
   }
 }
 
-pub async fn get_job_publication_by_idempotency_key(
-  db: &TaskDbConnection,
-  key: &str,
-) -> Result<Option<JobPublication>, SqliteTasksError> {
+pub async fn get_job_publication_by_idempotency_key(db: &TaskDbConnection, key: &str) -> Result<Option<JobPublication>, SqliteTasksError> {
   let maybe_raw: Option<RawJobPublication> = sqlx::query_as(
     r#"
     SELECT id, job_id, page_id, platform, target_config_id, browser_profile_id, status,

@@ -16,6 +16,7 @@ import { ResizableSplit } from "../../shared/ResizableSplit";
 
 export function EffectsPanel() {
   const mate = useCapCutMate();
+  const { localProject, setTimelineEndUs } = mate;
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<EffectsCategoryId>("all");
   const [library, setLibrary] = useState<EffectItem[]>([]);
@@ -116,7 +117,8 @@ export function EffectsPanel() {
       if (mate.localProject && !mate.draftUrl) {
         try {
           const info = await local.localInfo(mate.localProject);
-          const rawDur = (info as any)?.duration ?? (info as any)?.duration_us;
+          const infoRecord = info as Record<string, unknown>;
+          const rawDur = infoRecord.duration ?? infoRecord.duration_us;
           if (typeof rawDur === "number" && rawDur > 0) {
             end = rawDur;
             mate.setTimelineEndUs(rawDur);
@@ -154,7 +156,7 @@ export function EffectsPanel() {
                 }
                 for (let i = 0; i < segs.length; i++) {
                   const s = segs[i];
-                  const range = s.target_timerange || {};
+                  const range = s && typeof s === "object" && "target_timerange" in s && s.target_timerange && typeof s.target_timerange === "object" ? s.target_timerange as { start?: unknown; duration?: unknown } : {};
                   const segStart =
                     typeof range.start === "number" ? range.start : 0;
                   const segDur =
@@ -267,15 +269,15 @@ export function EffectsPanel() {
   };
 
   useEffect(() => {
-    if (!mate.localProject) return;
+    if (!localProject) return;
     let cancelled = false;
     (async () => {
       try {
-        const info = await local.localInfo(mate.localProject);
+        const info = await local.localInfo(localProject);
         if (!cancelled && info && typeof info.duration === "number" && info.duration > 0) {
-          mate.setTimelineEndUs(info.duration);
+          setTimelineEndUs(info.duration);
         }
-        const res = await local.localGetProjectEffects(mate.localProject);
+        const res = await local.localGetProjectEffects(localProject);
         if (cancelled) return;
         if (res && res.ok && Array.isArray(res.effects)) {
           const existingItems: EffectItem[] = res.effects
@@ -284,6 +286,7 @@ export function EffectsPanel() {
               id: String(fx.id || Math.random()),
               name: String(fx.name || "Effect"),
               category: "video" as const,
+              thumb: "",
             }));
           setSelected(existingItems);
         }
@@ -294,7 +297,7 @@ export function EffectsPanel() {
     return () => {
       cancelled = true;
     };
-  }, [mate.localProject]);
+  }, [localProject, setTimelineEndUs]);
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">

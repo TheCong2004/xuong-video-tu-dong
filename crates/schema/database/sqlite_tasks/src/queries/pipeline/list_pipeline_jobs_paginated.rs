@@ -22,10 +22,7 @@ pub struct PaginatedPipelineJobsResult {
   pub offset: i64,
 }
 
-pub async fn list_pipeline_jobs_paginated(
-  db: &TaskDbConnection,
-  args: ListPipelineJobsPaginatedArgs,
-) -> Result<PaginatedPipelineJobsResult, SqliteTasksError> {
+pub async fn list_pipeline_jobs_paginated(db: &TaskDbConnection, args: ListPipelineJobsPaginatedArgs) -> Result<PaginatedPipelineJobsResult, SqliteTasksError> {
   let pool = db.get_pool();
   let limit = args.limit.unwrap_or(20).clamp(1, 100);
   let offset = args.offset.unwrap_or(0).max(0);
@@ -86,12 +83,7 @@ pub async fn list_pipeline_jobs_paginated(
     jobs.push(raw_into_pipeline_job(r)?);
   }
 
-  Ok(PaginatedPipelineJobsResult {
-    jobs,
-    total_count,
-    limit,
-    offset,
-  })
+  Ok(PaginatedPipelineJobsResult { jobs, total_count, limit, offset })
 }
 
 #[cfg(test)]
@@ -111,36 +103,20 @@ mod tests {
       // Create 5 dummy jobs
       for i in 0..5 {
         let payload = format!(r#"{{"prompt":"cyberpunk_test_item_{i}"}}"#);
-        create_pipeline_job(CreatePipelineJobArgs {
-          db: &db,
-          status: TaskStatus::Pending,
-          current_stage: PipelineStage::Queued,
-          maybe_page_id: Some("page_demo"),
-          maybe_input_payload: Some(&payload),
-          maybe_page_snapshot: None,
-          maybe_business_status: Some("QUEUED"),
-        }).await.unwrap();
+        create_pipeline_job(CreatePipelineJobArgs { db: &db, status: TaskStatus::Pending, current_stage: PipelineStage::Queued, maybe_page_id: Some("page_demo"), maybe_input_payload: Some(&payload), maybe_page_snapshot: None, maybe_business_status: Some("QUEUED") }).await.unwrap();
       }
 
       // Test page 1 with limit 2
-      let res1 = list_pipeline_jobs_paginated(&db, ListPipelineJobsPaginatedArgs {
-        limit: Some(2),
-        offset: Some(0),
-        ..Default::default()
-      }).await.unwrap();
+      let res1 = list_pipeline_jobs_paginated(&db, ListPipelineJobsPaginatedArgs { limit: Some(2), offset: Some(0), ..Default::default() }).await.unwrap();
 
       assert_eq!(res1.total_count, 5);
       assert_eq!(res1.jobs.len(), 2);
 
       // Test search filter
-      let res_search = list_pipeline_jobs_paginated(&db, ListPipelineJobsPaginatedArgs {
-        search_query: Some("cyberpunk_test_item_3".to_string()),
-        ..Default::default()
-      }).await.unwrap();
+      let res_search = list_pipeline_jobs_paginated(&db, ListPipelineJobsPaginatedArgs { search_query: Some("cyberpunk_test_item_3".to_string()), ..Default::default() }).await.unwrap();
 
       assert_eq!(res_search.total_count, 1);
       assert_eq!(res_search.jobs.len(), 1);
     });
   }
 }
-

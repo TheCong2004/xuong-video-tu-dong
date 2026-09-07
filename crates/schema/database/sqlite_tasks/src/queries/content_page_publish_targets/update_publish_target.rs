@@ -13,10 +13,7 @@ pub struct UpdatePublishTargetArgs {
   pub default_slots_json: Option<String>,
 }
 
-pub async fn update_publish_target(
-  db: &TaskDbConnection,
-  args: UpdatePublishTargetArgs,
-) -> Result<ContentPagePublishTarget, SqliteTasksError> {
+pub async fn update_publish_target(db: &TaskDbConnection, args: UpdatePublishTargetArgs) -> Result<ContentPagePublishTarget, SqliteTasksError> {
   let existing: RawContentPagePublishTarget = sqlx::query_as(
     "SELECT id, page_id, platform, enabled, account_label, destination_id, destination_handle,
             browser_profile_id, post_mode, default_slots_json, created_at, updated_at

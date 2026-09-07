@@ -10,17 +10,8 @@ pub struct UpdatePromptTemplateArgs {
   pub video_prompt: Option<String>,
 }
 
-pub async fn update_prompt_template(
-  db: &TaskDbConnection,
-  args: UpdatePromptTemplateArgs,
-) -> Result<PromptTemplate, SqliteTasksError> {
-  let existing: PromptTemplate = sqlx::query_as(
-    "SELECT id, name, image_prompt, expand_prompt, video_prompt, created_at, updated_at FROM floword_prompt_templates WHERE id = $1",
-  )
-  .bind(&args.id)
-  .fetch_optional(db.get_pool())
-  .await?
-  .ok_or_else(|| SqliteTasksError::Custom(format!("Prompt template {} not found", args.id)))?;
+pub async fn update_prompt_template(db: &TaskDbConnection, args: UpdatePromptTemplateArgs) -> Result<PromptTemplate, SqliteTasksError> {
+  let existing: PromptTemplate = sqlx::query_as("SELECT id, name, image_prompt, expand_prompt, video_prompt, created_at, updated_at FROM floword_prompt_templates WHERE id = $1").bind(&args.id).fetch_optional(db.get_pool()).await?.ok_or_else(|| SqliteTasksError::Custom(format!("Prompt template {} not found", args.id)))?;
 
   let name = args.name.unwrap_or(existing.name);
   let image_prompt = args.image_prompt.unwrap_or(existing.image_prompt);

@@ -52,7 +52,6 @@ export const cc = {
   status: {
     synced: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
     before: "bg-white/10 text-amber-400/90",
-    vip: "bg-violet-600 text-white",
     beta: "bg-emerald-600 text-white",
     empty: "bg-white/10 text-white/40",
     active: "bg-sky-600 text-white",

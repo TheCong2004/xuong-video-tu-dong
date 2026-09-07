@@ -10,10 +10,7 @@ pub struct CreatePromptTemplateArgs {
   pub video_prompt: String,
 }
 
-pub async fn create_prompt_template(
-  db: &TaskDbConnection,
-  args: CreatePromptTemplateArgs,
-) -> Result<PromptTemplate, SqliteTasksError> {
+pub async fn create_prompt_template(db: &TaskDbConnection, args: CreatePromptTemplateArgs) -> Result<PromptTemplate, SqliteTasksError> {
   let id = args.id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
 
   let template: PromptTemplate = sqlx::query_as(

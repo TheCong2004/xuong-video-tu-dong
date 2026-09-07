@@ -1,10 +1,10 @@
 {
     "schemaVersion":  1,
-    "generatedAt":  "2026-09-03T11:32:21.4548588Z",
+    "generatedAt":  "2026-09-03T17:07:23.7630713Z",
     "sourceCommits":  {
-                          "donutbrowser":  "a37c8078ae01363884f4db3621b8ffff2e1f154f",
-                          "chromex":  "7101d37800542ef8a4fd46a0c7c91ecb26775990",
-                          "artcraft":  "8554f2992fb277da2052dc9935dc3ee86368047a"
+                          "donutbrowser":  "786de8d4706d5f35055615f127bdf109210bbace",
+                          "chromex":  "9d8978f06807a96707f44b7fe14272d62b9183ed",
+                          "artcraft":  "935edb405a988827147b057cbab94a8fcae0f218"
                       },
     "requiredArtifacts":  [
                               "artcraft-browser-runtime/src/server.js",

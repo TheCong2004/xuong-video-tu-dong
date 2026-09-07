@@ -166,6 +166,7 @@
       "resources/playwright-sidecar",
       "resources/chromex",
       "resources/chromex-extension",
+      "resources/capcut-automation",
       "resources/runtime-manifest.sha256.json"
     ]
   }

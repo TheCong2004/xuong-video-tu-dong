@@ -20,10 +20,7 @@ pub struct CreateJobPublicationArgs {
   pub video_path: Option<String>,
 }
 
-pub async fn create_job_publication(
-  db: &TaskDbConnection,
-  args: CreateJobPublicationArgs,
-) -> Result<JobPublication, SqliteTasksError> {
+pub async fn create_job_publication(db: &TaskDbConnection, args: CreateJobPublicationArgs) -> Result<JobPublication, SqliteTasksError> {
   let id = format!("pub_{}", Uuid::new_v4());
 
   let raw: RawJobPublication = sqlx::query_as(

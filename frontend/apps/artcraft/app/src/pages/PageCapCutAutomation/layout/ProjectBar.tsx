@@ -52,10 +52,10 @@ export function ProjectBar() {
             {mate.checking
               ? "Đang kiểm tra…"
               : mate.online
-                ? "BE online"
+              ? "BE đang hoạt động"
                 : mate.online === false
-                  ? "BE offline"
-                  : "BE ?"}
+                  ? "BE ngoại tuyến"
+                  : "BE chưa rõ"}
           </span>
           <FontAwesomeIcon icon={faRotate} className="text-[10px] opacity-50" />
         </button>
@@ -130,7 +130,7 @@ export function ProjectBar() {
       {showSettings && (
         <div className="flex items-center gap-2 border-t border-white/6 px-3 py-2">
           <span className="shrink-0 text-[11px] text-white/45">
-            URL capcut-mate
+            Địa chỉ CapCut Mate
           </span>
           <input
             value={urlEdit}
@@ -158,7 +158,7 @@ export function ProjectBar() {
               }}
               className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-white/60 hover:bg-white/5"
             >
-              Copy draft_url
+              Sao chép draft_url
             </button>
           )}
         </div>

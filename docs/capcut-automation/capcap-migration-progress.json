@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-05T12:45:00Z",
+  "currentPhase": "LIVE_VIDEO_PIPELINE",
+  "completed": [
+    "CAPCAP_INVENTORY",
+    "LICENSE_INVENTORY",
+    "ARTCRAFT_RESOURCE_RESOLVER",
+    "MIGRATION_MANIFEST",
+    "ENGINE_CATALOG_AND_VERIFIER",
+    "MODEL_MANAGER_API",
+    "LOCAL_TRANSCRIPTION_ADAPTER",
+    "REAL_TRANSCRIPTION_RESOURCE_RUN",
+    "REAL_TRANSCRIPTION_FIXTURE",
+    "TRANSLATION_ADAPTER_BOUNDARY",
+    "TRANSLATION_MODEL_DOWNLOAD_AND_HASH",
+    "OCR_TSV_ADAPTER_BOUNDARY",
+    "OCR_NORMALIZED_REGION_FIXTURE",
+    "TRANSLATION_PORTABLE_RUNTIME_FIXTURE",
+    "OCR_ENGLISH_LANGUAGE_DATA_VERIFIED",
+    "REAL_TRANSLATION_ADAPTER_FIXTURE",
+    "CAPCUT_AUTOMATION_TARGETED_TESTS",
+    "RAPIDOCR_RESOURCE_STAGING",
+    "REAL_OCR_FIXTURE",
+    "OCR_TRANSLATION_REAL_FIXTURE",
+    "QUICK_LOCALIZED_VERTICAL_PRESET",
+    "CANONICAL_FFMPEG_UI_MAPPING",
+    "SCHEDULE_VALIDATION",
+    "NATIVE_FRONTEND_COMPONENT_TESTS",
+    "NATIVE_INTEGRATION_TESTS",
+    "SPEAKER_EMBEDDING_MODEL_STAGED",
+    "REAL_SPEAKER_DIARIZATION_FIXTURE",
+    "PIPER_RUNTIME_STAGED",
+    "PIPER_VIETNAMESE_VOICE_FIXTURE",
+    "VOICE_ASSIGNMENT_SOURCE_PASS",
+    "LIVE_BACKEND_VIDEO_IMPORT",
+    "LIVE_BACKEND_FIFO_PROGRESS_CANCEL_RETRY",
+    "LIVE_BACKEND_PREVIEW_SUBTITLE_BLUR_STICKER",
+    "LIVE_BACKEND_QUEUE_RESTORE",
+    "LIVE_NATIVE_FULL_VIDEO_E2E_R10"
+  ],
+  "inProgress": [],
+  "blocked": ["FULL_TYPESCRIPT_WORKSPACE_ERRORS"],
+  "resourceArtifacts": [
+    {
+      "id": "whisper-cpp-ggml-tiny",
+      "path": "capcut-automation/models/whisper/ggml-tiny.bin",
+      "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+      "size": 77691713,
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "whisper-cpp-cli",
+      "path": "capcut-automation/bin/whisper-cli.exe",
+      "sha256": "31513eef3a9721d377544e10edfb7b27f4533ca84b71c8b87764da4cdf36da18",
+      "size": 489984,
+      "status": "READY_BUILT_FROM_OFFICIAL_SOURCE"
+    },
+    {
+      "id": "argos-en-vi-1-9",
+      "path": "capcut-automation/models/argos/translate-en_vi-1_9.argosmodel",
+      "sha256": "86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16",
+      "size": 67770159,
+      "status": "READY_VERIFIED_MODEL_PORTABLE_RUNTIME_FIXTURE_PASS"
+    },
+    {
+      "id": "python314-embedded-runtime",
+      "path": "capcut-automation/runtime/python314/python.exe",
+      "sha256": "03168c01b7b7491423350e82c26fee71f35b43694d1319d3c668bda6903a0c38",
+      "size": 106208,
+      "status": "READY_VERIFIED_DEVELOPMENT_RUNTIME"
+    },
+    {
+      "id": "argos-translation-worker",
+      "path": "capcut-automation/scripts/translation_worker.py",
+      "sha256": "aaabd15d6d4d01f93a9623b817b5ecd5ced96091c06b43c155a1af5b1b04eec4",
+      "size": 8152,
+      "status": "READY_VERIFIED_RUNTIME_MATCH"
+    },
+    {
+      "id": "argos-zt-en-1-9",
+      "path": "capcut-automation/models/argos/translate-zt_en-1_9.argosmodel",
+      "sha256": "a9ea826d801f059dd47f1f47b6c1dc9d762519a80ea3afd2a982130a42a25486",
+      "size": 74498034,
+      "status": "READY_VERIFIED_REAL_PIVOT_FIXTURE"
+    },
+    {
+      "id": "argos-zh-en-1-9",
+      "path": "capcut-automation/models/argos/translate-zh_en-1_9.argosmodel",
+      "sha256": "62e7af5a3a48b530e47b7b3e5c78c2de79073ecd815750d2bf3ab35b4a67da2d",
+      "size": 74481402,
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "tesseract-chi-tra-fast",
+      "path": "capcut-automation/models/tesseract/chi_tra.traineddata",
+      "sha256": "529c5b5797d64b126065cd55f2bb4c7fd7b15790798091b1ff259941a829330b",
+      "size": 2366642,
+      "status": "READY_VERIFIED_RUNTIME_NO_TESSERACT_BINARY"
+    },
+    {
+      "id": "tesseract-chi-sim-fast",
+      "path": "capcut-automation/models/tesseract/chi_sim.traineddata",
+      "sha256": "a5fcb6f0db1e1d6d8522f39db4e848f05984669172e584e8d76b6b3141e1f730",
+      "size": 2469156,
+      "status": "READY_VERIFIED_RUNTIME_NO_TESSERACT_BINARY"
+    },
+    {
+      "id": "tesseract-eng-fast",
+      "path": "capcut-automation/models/tesseract/eng.traineddata",
+      "sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+      "size": 4113088,
+      "status": "LEGACY_TESSERACT_DATA_NOT_SELECTED"
+    },
+    {
+      "id": "rapidocr-det-model",
+      "path": "capcut-automation/python/rapidocr_onnxruntime/models/ch_PP-OCRv3_det_infer.onnx",
+      "sha256": "3439588c030faea393a54515f51e983d8e155b19a2e8aba7891934c1cf0de526",
+      "size": 2432880,
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "rapidocr-rec-model",
+      "path": "capcut-automation/python/rapidocr_onnxruntime/models/ch_PP-OCRv3_rec_infer.onnx",
+      "sha256": "897a3ededb38fee0dae2c1ccee38241f37df202c9509e3abca02e9217c5ee615",
+      "size": 10690752,
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "rapidocr-cls-model",
+      "path": "capcut-automation/python/rapidocr_onnxruntime/models/ch_ppocr_mobile_v2.0_cls_infer.onnx",
+      "sha256": "e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c",
+      "size": 585532,
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "rapidocr-worker",
+      "path": "capcut-automation/scripts/ocr_rapid_worker.py",
+      "sha256": "8eba11e3ad060bf5f6b4f33fb4c88a8a334534289cba2ae8d0f9a65b9ea43e0b",
+      "size": 1647,
+      "status": "READY_VERIFIED"
+    },
+    {
+      "id": "sherpa-speaker-worker",
+      "path": "capcut-automation/scripts/speaker_diarization_worker.py",
+      "sha256": "94ea11fb192cea7300faaf4bef91edd6f3891ef97eef2d05bdf88b4f33c5dbfd5",
+      "size": 2481,
+      "status": "READY_VERIFIED_MODEL_PENDING"
+    },
+    {
+      "id": "sherpa-pyannote-segmentation",
+      "path": "capcut-automation/models/diarization/segmentation/model.onnx",
+      "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
+      "size": 5992913,
+      "status": "READY_VERIFIED_REAL_DIARIZATION_FIXTURE_PASS"
+    },
+    {
+      "id": "sherpa-wespeaker-embedding",
+      "path": "capcut-automation/models/diarization/embedding.onnx",
+      "sha256": "5ef208a9da1453335308a6b6f4e6dfbd7e183a38b604de0a57664f45d257fe94",
+      "size": 26534365,
+      "status": "READY_VERIFIED_OFFICIAL_RELEASE_REAL_FIXTURE_PASS"
+    },
+    {
+      "id": "piper-windows-binary",
+      "path": "capcut-automation/bin/piper.exe",
+      "sha256": "96f3da3811151580073e40bb4dd20eb0fb8115f5f5f76e2fb54282b3edfa5c1f",
+      "size": 509952,
+      "status": "READY_VERIFIED_OFFICIAL_RELEASE"
+    },
+    {
+      "id": "piper-voice-vi-vivos-x-low",
+      "path": "capcut-automation/voices/piper/vi_VN-vivos-x_low/vi_VN-vivos-x_low.onnx",
+      "sha256": "6ab13374eb0862021a545befe7727aef59e16117f1c075aa9e0362237ecc98ae",
+      "size": 27789413,
+      "status": "READY_VERIFIED_VIETNAMESE_VOICE_FIXTURE_PASS"
+    },
+    {
+      "id": "piper-voice-vi-vivos-x-low-config",
+      "path": "capcut-automation/voices/piper/vi_VN-vivos-x_low/vi_VN-vivos-x_low.onnx.json",
+      "sha256": "9dc373d69b0e4f39d864cb8ac9fe42cee49817a0f02d831e57a9ce6e944e234a",
+      "size": 5592,
+      "status": "READY_VERIFIED"
+    }
+  ],
+  "tests": [
+    { "name": "resource_resolver", "result": "2/2_PASS" },
+    { "name": "engine_manager", "result": "2/2_PASS" },
+    { "name": "transcription_timestamp_parser", "result": "1/1_PASS" },
+    { "name": "whisper_cpp_cli_real_fixture", "result": "1_SEGMENT_PASS" },
+    { "name": "argos_en_vi_development_fixture", "result": "PASS_DEVELOPMENT_RUNTIME" },
+    { "name": "argos_portable_python_runtime_fixture", "result": "PASS_OFFLINE" },
+    { "name": "rust_translation_adapter_real_fixture", "result": "1_SEGMENT_PASS" },
+    { "name": "tesseract_eng_traineddata", "result": "SHA256_7d4322bd_size_4113088" },
+    { "name": "translation_output_id_validation", "result": "SOURCE_PASS" },
+    { "name": "translation_process_timeout", "result": "SOURCE_PASS" },
+    { "name": "ocr_tsv_normalized_region_fixture", "result": "1/1_PASS" },
+    { "name": "full_typescript", "result": "BLOCKED_TS6305_DECLARATION_OUTPUTS_AND_BASELINE_TYPE_ERRORS_AT_6GB_HEAP" },
+    { "name": "artcraft_cargo_check", "result": "PASS" },
+    { "name": "capcut_automation_unit_tests", "result": "31/31_PASS" },
+    { "name": "capcut_automation_integration_tests", "result": "3/3_PASS" },
+    { "name": "native_frontend_component_tests", "result": "6/6_PASS" },
+    { "name": "canonical_ffmpeg_mapping", "result": "BRIGHTNESS_0.05_SATURATION_0.95_CONTRAST_1.03_PASS" },
+    { "name": "rapidocr_offline_fixture", "result": "1_REGION_PASS" },
+    { "name": "ocr_translation_offline_fixture", "result": "1_REGION_TRANSLATED_PASS" },
+    { "name": "speaker_assignment_overlap", "result": "2/2_PASS" },
+    { "name": "speaker_diarization_worker", "result": "REAL_FIXTURE_PASS_10_TURNS_4_SPEAKERS" },
+    { "name": "speaker_embedding_model", "result": "OFFICIAL_RELEASE_SHA256_5ef208a9_size_26534365" },
+    { "name": "speaker_diarization_real_fixture", "result": "10_TURNS_4_SPEAKERS_EXIT_0" },
+    { "name": "piper_runtime", "result": "OFFICIAL_RELEASE_SHA256_96f3da38_size_509952" },
+    { "name": "piper_vietnamese_voice_fixture", "result": "WAV_108332_BYTES_3_184S_EXIT_0" },
+    { "name": "live_backend_video_import_fifo", "result": "PASS_VIDEO_A_VIDEO_B_CONCURRENCY_1" },
+    { "name": "live_backend_progress_cancel", "result": "PASS_FFMPEG_PID_TERMINATED_PARTIAL_REMOVED" },
+    { "name": "live_backend_retry", "result": "PASS_ATTEMPT_2" },
+    { "name": "live_backend_preview_ffprobe", "result": "PASS" },
+    { "name": "live_backend_queue_restore", "result": "PASS_FRESH_PID_REQUEUED_NO_STALE_PID" },
+    { "name": "live_backend_full_preset", "result": "PASS_HOOK_SUBTITLE_BLUR_STICKER_COLOR_MIRROR_SPEED_AUDIO" },
+    { "name": "native_local_stage_source_integration", "result": "CARGO_CHECK_PASS_WHISPER_ARGOS_RAPIDOCR_OCR_TRANSLATION_SHERPA_SPEAKER_PIPER" },
+    { "name": "rust_translation_route_tests", "result": "3_PASS_1_IGNORED_LIVE_PIVOT_PASS" },
+    { "name": "real_traditional_pivot", "result": "PASS_TWO_VERIFIED_WORKERS_ZT_EN_VI" },
+    { "name": "frontend_native_targeted", "result": "6/6_PASS" },
+    { "name": "ocr_chi_tra_load", "result": "BLOCKED_TESSERACT_EXECUTABLE_NOT_STAGED" }
+    ,{ "name": "native_local_stage_live_e2e_r10", "result": "PASS_WHISPER_ARGOS_RAPIDOCR_OCR_TRANSLATION_SHERPA_SPEAKER_PIPER_FFMPEG_RECEIPT" }
+    ,{ "name": "native_live_visual_verification_r10", "result": "PASS_HOOK_SUBTITLE_MIRROR_STICKER_FFPROBE" }
+  ],
+  "lastEvidence": {
+    "rustAutomationUnit": "31/31_PASS",
+    "rustAutomationIntegration": "3/3_PASS",
+    "frontendNativeComponent": "6/6_PASS",
+    "frontendTypecheck": "FAIL_TS6305_UNBUILT_WORKSPACE_DECLARATIONS_AND_BASELINE_TYPE_ERRORS_AT_6GB_HEAP",
+    "speakerEmbedding": "OFFICIAL_RELEASE_SHA256_5EF208A9_SIZE_26534365",
+    "speakerDiarization": "REAL_FIXTURE_PASS_EXIT_0_10_TURNS_4_SPEAKERS",
+    "piperTts": "REAL_VIETNAMESE_FIXTURE_PASS_EXIT_0_WAV_108332_BYTES_3_184S",
+    "voiceAssignment": "SOURCE_PASS_2_TESTS_PIPER_VOICE_MAPPING_READY",
+    "liveSmoke": {
+      "mode": "LIVE_BACKEND_SMOKE",
+      "nativeUiOpened": true,
+      "donutSpawned": false,
+      "sidecarSpawned": false,
+      "capcutMateSpawned": false,
+      "videoImport": "PASS",
+      "fifo": "PASS",
+      "progress": "PASS",
+      "cancel": "PASS_FFMPEG_PID_TERMINATED_AND_PARTIAL_REMOVED",
+      "retry": "PASS_ATTEMPT_2",
+      "preview": "PASS_FFPROBE",
+      "subtitle": "PASS_MANUAL_UTF8_CUE",
+      "blur": "PASS_MANUAL_REGION",
+      "sticker": "PASS_NORMALIZED_OVERLAY",
+      "queueRestore": "PASS_FRESH_PID_AND_QUEUED_JOB_CONTINUED",
+      "outputPlayable": "PASS",
+      "receiptVerified": "PASS_FULL_FIELDS_R10",
+      "receiptStageTiming": "PASS_NONZERO_ALL_STAGES_R10",
+      "whisperInVideo": "PASS_R10_TRANSCRIPT_2_CUES",
+      "translationInVideo": "PASS_R10_ARGOS_2_CUES",
+      "ocrTranslationInVideo": "PASS_R10_RAPIDOCR_3_REGIONS",
+      "diarizationInVideo": "PASS_R10_SHERPA_1_SPEAKER",
+      "speakerAssignmentInVideo": "PASS_R10_2_ASSIGNMENTS",
+      "ttsInVideo": "PASS_R10_PIPER_2_CUES",
+      "artifacts": {
+        "input": "C:\\Users\\thecong\\AppData\\Local\\Temp\\floword-artcraft-e2e-fixture\\video-e2e-r7.mp4",
+        "output": "C:\\Users\\thecong\\AppData\\Local\\Temp\\floword-artcraft-e2e-fixture\\outputs\\Native E2E fixture\\05-09-2026\\11-32-25_native-e_rendered_video.mp4",
+        "receipt": "C:\\Users\\thecong\\Artcraft\\video-jobs\\native-e2e-full-20260905-r10\\receipt.json",
+        "preview": "C:\\Users\\thecong\\Artcraft\\video-previews\\717c46c491a075d8613627009eb0a7e866eb626a9d7da48280415e699e1f8010-153033-1788540115-96258487f509e5d5a837a5a394124b7c3c580cae2a4a4e614a3f283b2aa035d3-540x540-0-5000-v2.mp4"
+      },
+      "inputSha256": "b0be86ff64771344e47564cd2087fcb849b9ecde3dc3847aefd92b0db731e686",
+      "outputSha256": "3ad030d97d0760b72e2ff42b05341be3aeb086f49708172afef12f603de2aa9d",
+      "outputMd5": "4bcd5e62f7b0e3630e326393fc46090b",
+      "previewSha256": "3895faa542987f067cb2182d9adcc7f991fecdd80193d3a00ca164d8e558d8e8",
+      "receiptSha256": "35fc98b061715b5b9df7697679d8f17c36ebab3e02354b6836d22ead7b883b71",
+      "inputMd5": "766ed0adecbd141ac7db22b8ff7cb589",
+      "outputSizeBytes": 251776,
+      "inputDurationMs": 20000,
+      "outputDurationMs": 18200,
+      "outputProbe": "h264+aac 1080x1920",
+      "previewProbe": "h264 540x540 4.6s",
+      "stageTimingsMs": { "probe": 406, "transcription": 7277, "translation": 3217, "ocr": 79804, "diarization": 9774, "tts": 9313, "subtitle": 5, "render": 7388, "verify": 124, "hash": 13, "total": 117408 },
+      "progressObserved": true,
+      "cancelVerified": true,
+      "retryVerified": true,
+      "restoreVerified": true,
+      "targetCDeleted": true,
+      "targetCFreeAfterGB": 15.50,
+      "leanTarget": "C:\\Users\\thecong\\AppData\\Local\\Temp\\floword-artcraft-e2e-target",
+      "leanTargetRetainedForUserTest": true,
+      "artcraftPid": 23064,
+      "engineCounts": { "artcraft": 1, "donut": 0, "sidecar": 0, "capcutMate": 0 },
+      "audioMeanVolumeDb": -25.2,
+      "audioMaxVolumeDb": -6.1,
+      "schedulerAcceleratedLive": "NOT_APPLICABLE_NATIVE_LOCAL_QUEUE;SCHEDULE_VALIDATION_PASS"
+    },
+    "package": "NOT_RUN",
+    "staleDebugProcesses": "TERMINATED_BY_ABSOLUTE_ARTCRAFT_TARGET_PATH",
+    "diskPreflight": {
+      "C_FREE_GB": 4.53,
+      "D_FREE_GB": 2.06,
+      "X_FREE_GB": 2.06,
+      "minimum_required_gb": 15,
+      "cleanup_target_gb": 18,
+      "artcraft_target_size_gb": 51.97,
+      "verified_c_artcraft_candidates": [
+        "C:\\Users\\thecong\\AppData\\Local\\Temp\\floword-artcraft-target",
+        "C:\\Users\\thecong\\AppData\\Local\\Temp\\artcraft-piper-stage"
+      ]
+    },
+    "diskCleanup": {
+      "deletedPath": ["C:\\Users\\thecong\\AppData\\Local\\Temp\\floword-artcraft-target", "C:\\Users\\thecong\\AppData\\Local\\Temp\\artcraft-piper-stage"],
+      "artifactType": ["ArtCraft Cargo target/debug temporary build root", "ArtCraft Piper download/extraction/fixture staging temp"],
+      "bytesReclaimed": 4736136543,
+      "totalBytesReclaimed": 4736136543,
+      "reason": "REBUILDABLE_ARTCRAFT_BUILD_ARTIFACT",
+      "deletedAt": "2026-09-04T13:31:00Z",
+      "freeSpaceBefore": { "C_GB": 17.55, "D_GB": 2.06, "X_GB": 2.06 },
+      "freeSpaceAfter": { "C_GB": 21.43, "D_GB": 2.06, "X_GB": 2.06 },
+      "candidatesInspected": [
+        {
+          "path": "C:\\Users\\thecong\\.cargo\\registry",
+          "sizeGB": 2.17,
+          "artifactType": "Cargo registry",
+          "evidence": "shared toolchain cache; explicitly protected",
+          "action": "PRESERVED"
+        },
+        {
+          "path": "C:\\Users\\thecong\\AppData\\Local\\pnpm",
+          "sizeGB": 2.45,
+          "artifactType": "pnpm store",
+          "evidence": "shared package store; explicitly protected",
+          "action": "PRESERVED"
+        },
+        {
+          "path": "D:\\capcutpolot\\artcraft\\target",
+          "sizeGB": 51.97,
+          "artifactType": "ArtCraft Cargo target",
+          "evidence": "verified ArtCraft build output but outside C-only cleanup scope",
+          "action": "PRESERVED"
+        },
+        {
+          "path": "C:\\Users\\thecong\\AppData\\Local\\Temp",
+          "sizeGB": null,
+          "artifactType": "temporary directory",
+          "evidence": "no ArtCraft/CapCut/Tauri build-named child directory found in narrow read-only scan",
+          "action": "NO_MATCH"
+        },
+        {
+          "path": "C:\\Users\\thecong\\AppData\\Local\\Temp\\floword-artcraft-target",
+          "sizeGB": 4.327,
+          "artifactType": "ArtCraft Cargo target/debug temporary build root",
+          "evidence": ".fingerprint\\artcraft-* and Cargo build lock; no process lock; no staged runtime dependency",
+          "action": "DELETED"
+        },
+        {
+          "path": "C:\\Users\\thecong\\AppData\\Local\\Temp\\artcraft-piper-stage",
+          "sizeGB": 0.084,
+          "artifactType": "ArtCraft Piper download/extraction/fixture staging temp",
+          "evidence": "official Piper archive and fixture outputs duplicated by verified D:\\capcutpolot\\artcraft resources; no process lock",
+          "action": "DELETED"
+        }
+      ],
+      "buildProcessesUsingCandidates": [],
+      "sourceChangedThisTurn": false,
+      "preserved": [
+        "C:\\Users\\thecong\\.cargo\\registry",
+        "C:\\Users\\thecong\\AppData\\Local\\pnpm",
+        "D:\\capcutpolot\\artcraft",
+        "D:\\capcutpolot\\CapCap",
+        "staged models and runtime manifest"
+      ]
+    },
+    "sourceChangedThisCheckpoint": true,
+    "externalRuntimeTouched": true,
+    "currentChineseTranslation": {
+      "requestedSourceLanguage": "zt",
+      "effectiveSourceLanguage": "zt",
+      "ocrLanguages": ["chi_tra"],
+      "routeKind": "PIVOT",
+      "translationHops": ["zt->en:argos-zt-en-1-9", "en->vi:argos-en-vi-1-9"],
+      "realPivotTest": "PASS",
+      "ocrChiTraLoad": "BLOCKED_TESSERACT_EXECUTABLE_NOT_STAGED"
+    }
+  },
+  "blockerDetails": [
+    "FULL_TYPESCRIPT_WORKSPACE_ERRORS: app typecheck completes at 6GB heap but fails on unbuilt workspace declaration outputs (TS6305), baseline implicit-any/type incompatibilities, and dependency declaration errors; native component tests remain green.",
+    "FULL_TYPESCRIPT_WORKSPACE_ERRORS: app typecheck remains blocked by unbuilt workspace declaration outputs (TS6305) and baseline errors; native CapCut Automation path is independently built and live-validated.",
+    "OCR_CHI_TRA_LOAD: chi_tra.traineddata is staged and SHA-verified, but the active ArtCraft runtime has no tesseract.exe or combine_tessdata loader; RapidOCR remains the configured OCR engine. Phase 7/activation is blocked until a verified local OCR loader is staged."
+  ],
+  "externalCapCapReferenceCount": 0,
+  "safeToDeleteCapCap": false
+}
