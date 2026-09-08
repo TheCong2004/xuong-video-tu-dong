@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 const MAX_TEXT: usize = 4_096;
@@ -60,6 +60,13 @@ pub struct CapcutAutomationPresetV1 {
   pub auto_diarize: bool,
   #[serde(default)]
   pub auto_tts: bool,
+  /// Explicit output contract persisted with every request.  The legacy
+  /// `tts_audio_mode` field remains for backwards compatibility, but these
+  /// fields are authoritative for new jobs and retries.
+  #[serde(default = "default_translation_output_mode")]
+  pub translation_output_mode: String,
+  #[serde(default = "default_original_audio_policy")]
+  pub original_audio_policy: String,
   #[serde(default = "default_tts_audio_mode")]
   pub tts_audio_mode: String,
   #[serde(default = "default_original_audio_gain")]
@@ -68,12 +75,31 @@ pub struct CapcutAutomationPresetV1 {
   pub speaker_voice_assignments: std::collections::HashMap<String, String>,
 }
 
-fn default_auto_source_language() -> String { "auto".to_string() }
-fn default_target_language() -> String { "vi".to_string() }
-fn default_ocr_interval() -> u64 { 1_000 }
-fn default_ocr_engine() -> String { "rapidocr-onnxruntime".to_string() }
-fn default_tts_audio_mode() -> String { "MIX".to_string() }
-fn default_original_audio_gain() -> f64 { 1.0 }
+fn default_auto_source_language() -> String {
+  "auto".to_string()
+}
+fn default_target_language() -> String {
+  "vi".to_string()
+}
+fn default_ocr_interval() -> u64 {
+  1_000
+}
+fn default_ocr_engine() -> String {
+  "rapidocr-onnxruntime".to_string()
+}
+fn default_tts_audio_mode() -> String {
+  // Generated narration replaces source audio by default. Mixing is opt-in.
+  "REPLACE".to_string()
+}
+fn default_translation_output_mode() -> String {
+  "SUBTITLE_ONLY".to_string()
+}
+fn default_original_audio_policy() -> String {
+  "KEEP_ORIGINAL".to_string()
+}
+fn default_original_audio_gain() -> f64 {
+  1.0
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct VideoColorAdjustments {
@@ -252,6 +278,49 @@ pub fn progress_fraction(out_time_ms: f64, duration_ms: Option<f64>) -> f64 {
   duration_ms.filter(|duration| duration.is_finite() && *duration > 0.0).map(|duration| (out_time_ms / duration).clamp(0.0, 1.0)).unwrap_or(0.0)
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RenderGraphComplexity {
+  pub render_track_count: usize,
+  pub filter_node_count: usize,
+  pub estimated_output_frames: u64,
+  pub output_megapixels: u64,
+}
+
+/// Estimate the graph before starting FFmpeg.  OCR detections are merged into
+/// timed tracks by the job manager, so this is intentionally based on the
+/// actual regions in the render preset rather than raw frame detections.
+pub fn estimate_render_graph_complexity(preset: &CapcutAutomationPresetV1, duration_ms: u64) -> RenderGraphComplexity {
+  let tracks = if preset.foreign_text.enabled { preset.foreign_text.manual_regions.len() } else { 0 };
+  let stickers = if preset.foreign_text.enabled { preset.foreign_text.stickers.iter().filter(|s| s.enabled).count() } else { 0 };
+  let base_nodes = 1 + usize::from(preset.mirror_horizontal) + 2 + usize::from([preset.color.brightness, preset.color.contrast, preset.color.saturation, preset.color.gamma].iter().any(|v| v.abs() > 0.001)) + usize::from(preset.color.hue.abs() > 0.001);
+  let privacy_nodes = match preset.foreign_text.action {
+    ForeignTextAction::Blur => {
+      if tracks > 0 {
+        4 + tracks
+      } else {
+        0
+      }
+    }, // split, blur, mask, composite + cheap drawboxes
+    ForeignTextAction::Cover => tracks,
+    ForeignTextAction::Sticker => tracks.saturating_mul(2).saturating_add(stickers.saturating_mul(4)),
+  };
+  let overlay_nodes = usize::from(preset.localization.burn_subtitles) + usize::from(preset.hook.enabled);
+  RenderGraphComplexity { render_track_count: tracks, filter_node_count: base_nodes + privacy_nodes + overlay_nodes + 2, estimated_output_frames: ((duration_ms as f64 / 1000.0) * 30.0 / preset.playback_rate.max(0.01)).ceil() as u64, output_megapixels: (preset.output.width as u64 * preset.output.height as u64) / 1_000_000 }
+}
+
+pub fn validate_render_graph_complexity(complexity: &RenderGraphComplexity) -> Result<(), String> {
+  // OCR masks are emitted as a single script-backed graph, so the limit is
+  // sized for long-form jobs (for example, 1,000 masks over a two-hour video)
+  // while still protecting the worker from unbounded input.
+  const MAX_RENDER_TRACKS: usize = 4_096;
+  const MAX_FILTER_NODES: usize = 8_192;
+  const MAX_OUTPUT_FRAMES: u64 = 10_000_000;
+  if complexity.render_track_count > MAX_RENDER_TRACKS || complexity.filter_node_count > MAX_FILTER_NODES || complexity.estimated_output_frames > MAX_OUTPUT_FRAMES {
+    return Err("CAPCUT_RENDER_GRAPH_COMPLEXITY_EXCEEDED".to_string());
+  }
+  Ok(())
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoOutputSettings {
@@ -287,6 +356,15 @@ pub struct CapcutAutomationReceipt {
   pub subtitle_mode: String,
   #[serde(default)]
   pub subtitle_cue_count: usize,
+  /// Canonical localization output contract persisted with every published
+  /// artifact.  These fields make the audio mapping auditable without having
+  /// to infer mode from legacy checkbox fields.
+  #[serde(default)]
+  pub translation_output_mode: String,
+  #[serde(default)]
+  pub original_audio_policy: String,
+  #[serde(default)]
+  pub tts_audio_mode: String,
   pub hook_applied: bool,
   pub foreign_text_regions_applied: usize,
   pub terminal: bool,
@@ -347,11 +425,62 @@ pub struct CapcutAutomationReceipt {
   pub route_kind: Option<String>,
   #[serde(default)]
   pub translation_hops: Vec<String>,
+  #[serde(default)]
+  pub render_track_count: usize,
+  #[serde(default)]
+  pub filter_node_count: usize,
+  #[serde(default)]
+  pub estimated_output_frames: u64,
+  #[serde(default)]
+  pub output_fps: Option<f64>,
+  #[serde(default)]
+  pub input_start_time_ms: Option<i64>,
+  #[serde(default)]
+  pub detected_languages: Vec<String>,
+  #[serde(default)]
+  pub dominant_detected_language: Option<String>,
+  #[serde(default)]
+  pub language_detection_confidence: Option<f32>,
+  #[serde(default)]
+  pub language_evidence: std::collections::HashMap<String, bool>,
+  #[serde(default)]
+  pub scan_fps: Option<f64>,
+  #[serde(default)]
+  pub ffmpeg_scan_process_count: u32,
+  #[serde(default)]
+  pub ocr_worker_start_count: u32,
+  #[serde(default)]
+  pub onnx_model_load_count: u32,
+  #[serde(default)]
+  pub decoded_frame_count: u64,
+  #[serde(default)]
+  pub change_candidate_count: u64,
+  #[serde(default)]
+  pub ocr_frame_count: u64,
+  #[serde(default)]
+  pub skipped_duplicate_count: u64,
+  #[serde(default)]
+  pub raw_detection_count: u64,
+  #[serde(default)]
+  pub merged_track_count: u64,
+  #[serde(default)]
+  pub first_scan_progress_at: Option<u64>,
+  #[serde(default)]
+  pub scan_finished_at: Option<u64>,
+  #[serde(default)]
+  pub first_render_progress_at: Option<u64>,
+  #[serde(default)]
+  pub last_render_progress_at: Option<u64>,
+  #[serde(default)]
+  pub max_no_progress_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MediaDimensions { pub width: u32, pub height: u32 }
+pub struct MediaDimensions {
+  pub width: u32,
+  pub height: u32,
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -397,7 +526,9 @@ impl Default for CapcutAutomationPresetV1 {
       ocr_sample_interval_ms: 1_000,
       auto_diarize: false,
       auto_tts: false,
-      tts_audio_mode: "MIX".to_string(),
+      translation_output_mode: default_translation_output_mode(),
+      original_audio_policy: default_original_audio_policy(),
+      tts_audio_mode: "REPLACE".to_string(),
       original_audio_gain: 1.0,
       speaker_voice_assignments: std::collections::HashMap::new(),
     }
@@ -459,6 +590,21 @@ impl CapcutAutomationPresetV1 {
     if !matches!(self.tts_audio_mode.as_str(), "REPLACE" | "DUCK_ORIGINAL" | "MIX") {
       return Err("TTS_AUDIO_MODE_INVALID".to_string());
     }
+    if !matches!(self.translation_output_mode.as_str(), "SUBTITLE_ONLY" | "DUBBED_AUDIO") {
+      return Err("TRANSLATION_OUTPUT_MODE_INVALID".to_string());
+    }
+    if !matches!(self.original_audio_policy.as_str(), "KEEP_ORIGINAL" | "REMOVE_ORIGINAL") {
+      return Err("ORIGINAL_AUDIO_POLICY_INVALID".to_string());
+    }
+    if self.auto_tts && !self.auto_translate {
+      return Err("CAPCUT_TTS_REQUIRES_TRANSLATION".to_string());
+    }
+    if self.auto_tts && (self.translation_output_mode != "DUBBED_AUDIO" || self.original_audio_policy != "REMOVE_ORIGINAL") {
+      return Err("CAPCUT_DUBBED_AUDIO_CONTRACT_INVALID".to_string());
+    }
+    if !self.auto_tts && self.auto_translate && (self.translation_output_mode != "SUBTITLE_ONLY" || self.original_audio_policy != "KEEP_ORIGINAL") {
+      return Err("CAPCUT_SUBTITLE_AUDIO_CONTRACT_INVALID".to_string());
+    }
     if !self.original_audio_gain.is_finite() || !(0.0..=2.0).contains(&self.original_audio_gain) {
       return Err("ORIGINAL_AUDIO_GAIN_INVALID".to_string());
     }
@@ -478,14 +624,33 @@ impl CapcutAutomationPresetV1 {
     preset.auto_ocr = true;
     preset.auto_diarize = true;
     preset.auto_tts = true;
+    preset.translation_output_mode = "DUBBED_AUDIO".to_string();
+    preset.original_audio_policy = "REMOVE_ORIGINAL".to_string();
+    preset.tts_audio_mode = "REPLACE".to_string();
     preset
+  }
+
+  /// Fill the explicit audio contract for requests created by older clients.
+  /// This is called before validation and persistence, so retries retain the
+  /// same immutable mode instead of inheriting current UI checkboxes.
+  pub fn normalize_audio_contract(&mut self) {
+    if self.auto_tts {
+      self.translation_output_mode = "DUBBED_AUDIO".to_string();
+      self.original_audio_policy = "REMOVE_ORIGINAL".to_string();
+      self.tts_audio_mode = "REPLACE".to_string();
+    } else {
+      self.translation_output_mode = "SUBTITLE_ONLY".to_string();
+      self.original_audio_policy = "KEEP_ORIGINAL".to_string();
+    }
   }
 
   /// Load old presets while filling fields introduced by schema v1.
   pub fn migrate_from_value(value: serde_json::Value) -> Result<Self, String> {
     let mut merged = serde_json::to_value(Self::default()).map_err(|e| format!("PRESET_MIGRATION_FAILED: {e}"))?;
     merge_defaults(&mut merged, value);
-    serde_json::from_value(merged).map_err(|e| format!("PRESET_MIGRATION_FAILED: {e}"))
+    let mut preset: Self = serde_json::from_value(merged).map_err(|e| format!("PRESET_MIGRATION_FAILED: {e}"))?;
+    preset.normalize_audio_contract();
+    Ok(preset)
   }
 }
 
@@ -554,8 +719,17 @@ pub fn build_filter_graph(preset: &CapcutAutomationPresetV1, subtitle_path: Opti
     .collect::<Result<Vec<_>, _>>()?;
 
   let mut suffix = overlay_parts;
+  // Normalize timestamps before retiming and make the requested output FPS
+  // real (the old graph merely carried an unused `output.fps` string).
   if (preset.playback_rate - 1.0).abs() > 0.001 {
-    suffix.push(format!("setpts=PTS/{:.6}", preset.playback_rate));
+    suffix.push(format!("setpts=(PTS-STARTPTS)/{:.6}", preset.playback_rate));
+  } else {
+    suffix.push("setpts=PTS-STARTPTS".to_string());
+  }
+  let output_fps = preset.output.fps.trim().parse::<f64>().ok().filter(|fps| fps.is_finite() && *fps > 0.0).unwrap_or(30.0);
+  if preset.output.fps.eq_ignore_ascii_case("source_or_30") || preset.output.fps.parse::<f64>().ok().is_some() {
+    let fps_value = if (output_fps.fract()).abs() < f64::EPSILON { format!("{}", output_fps as u32) } else { format!("{output_fps:.3}") };
+    suffix.push(format!("fps={fps_value}"));
   }
   suffix.push("format=yuv420p".to_string());
 
@@ -566,16 +740,26 @@ pub fn build_filter_graph(preset: &CapcutAutomationPresetV1, subtitle_path: Opti
     return Ok(parts.join(","));
   }
 
-  // A region blur must not blur the entire frame.  Split the current stream,
-  // crop only the selected rectangle, blur that crop, then overlay it back.
+  // Blur uses one full-frame blurred stream and one time-varying mask.  This
+  // keeps the expensive blur pass independent of the number of OCR tracks.
   // The labelled graph is consumed with `-filter_complex` by the renderer.
   let mut graph = format!("[0:v]{}[capcut_pre0]", parts.join(","));
   let mut current = 0usize;
+  if matches!(preset.foreign_text.action, ForeignTextAction::Blur) && !regions.is_empty() {
+    graph.push_str(&format!(";[capcut_pre0]split=2[capcut_clean][capcut_blur_src];[capcut_blur_src]boxblur=10:1[capcut_blurred];color=c=black:s={}x{}:r=30[capcut_mask0]", preset.output.width, preset.output.height));
+    let mut mask = 0usize;
+    for region in &regions {
+      graph.push_str(&format!(";[capcut_mask{mask}]drawbox=x=iw*{:.6}:y=ih*{:.6}:w=iw*{:.6}:h=ih*{:.6}:color=white@1:t=fill:enable='between(t,{:.3},{:.3})'[capcut_mask{}]", region.x, region.y, region.width, region.height, region.start_ms as f64 / 1000.0, region.end_ms as f64 / 1000.0, mask + 1));
+      mask += 1;
+    }
+    graph.push_str(&format!(";[capcut_clean][capcut_blurred][capcut_mask{mask}]maskedmerge[capcut_pre{}]", regions.len()));
+    current = regions.len();
+  }
   for (index, region) in regions.iter().enumerate() {
+    if matches!(preset.foreign_text.action, ForeignTextAction::Blur) {
+      continue;
+    }
     match preset.foreign_text.action {
-      ForeignTextAction::Blur => {
-        graph.push_str(&format!(";[capcut_pre{current}]split=2[capcut_base{index}][capcut_region{index}];[capcut_region{index}]crop=w=iw*{:.6}:h=ih*{:.6}:x=iw*{:.6}:y=ih*{:.6},boxblur=10:1[capcut_blurred{index}];[capcut_base{index}][capcut_blurred{index}]overlay=x=main_w*{:.6}:y=main_h*{:.6}:enable='between(t,{:.3},{:.3})'[capcut_pre{}]", region.width, region.height, region.x, region.y, region.x, region.y, region.start_ms as f64 / 1_000.0, region.end_ms as f64 / 1_000.0, index + 1));
-      },
       ForeignTextAction::Cover | ForeignTextAction::Sticker => {
         if matches!(preset.foreign_text.action, ForeignTextAction::Sticker) {
           if let Some(path) = preset.foreign_text.sticker_path.as_deref().filter(|path| Path::new(path).is_file()) {
@@ -588,6 +772,8 @@ pub fn build_filter_graph(preset: &CapcutAutomationPresetV1, subtitle_path: Opti
           graph.push_str(&format!(";[capcut_pre{current}]drawbox=x=iw*{:.6}:y=ih*{:.6}:w=iw*{:.6}:h=ih*{:.6}:color=black@0.85:t=fill:enable='between(t,{:.3},{:.3})'[capcut_pre{}]", region.x, region.y, region.width, region.height, region.start_ms as f64 / 1_000.0, region.end_ms as f64 / 1_000.0, index + 1));
         }
       },
+      // Blur regions are fully handled by the single masked stream above.
+      ForeignTextAction::Blur => {},
     }
     current = index + 1;
   }
@@ -611,12 +797,12 @@ pub fn build_filter_graph(preset: &CapcutAutomationPresetV1, subtitle_path: Opti
 pub fn build_audio_filter(preset: &CapcutAutomationPresetV1) -> Result<Option<String>, String> {
   preset.validate()?;
   if matches!(preset.audio_policy, AudioRightsPolicy::MuteOriginal) {
-    return Ok(Some("volume=0".to_string()));
+    return Ok(Some("asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0,volume=0".to_string()));
   }
   if !preset.preserve_audio_pitch || (preset.playback_rate - 1.0).abs() <= 0.001 {
     return Ok(None);
   }
-  Ok(Some(format!("atempo={:.6}", preset.playback_rate)))
+  Ok(Some(format!("asetpts=PTS-STARTPTS,aresample=async=1:first_pts=0,atempo={:.6}", preset.playback_rate)))
 }
 
 fn escape_filter_path(path: &Path) -> Result<String, String> {
@@ -668,6 +854,33 @@ pub fn render_video(ffmpeg: &Path, input: &Path, output: &Path, preset: &CapcutA
 
 pub fn render_video_with_overlays(ffmpeg: &Path, input: &Path, output: &Path, preset: &CapcutAutomationPresetV1, subtitle_path: Option<&Path>, hook_ass_path: Option<&Path>) -> Result<(String, String), String> {
   render_video_with_progress(ffmpeg, input, output, preset, subtitle_path, hook_ass_path, |_| {}, || false)
+}
+
+const INLINE_FILTER_GRAPH_MAX_BYTES: usize = 4_096;
+
+/// Keep large OCR overlay graphs out of the Windows command line. A video
+/// with hundreds of detected regions can exceed CreateProcess' command-line
+/// limit and surface as `ERROR_FILENAME_EXCED_RANGE` (os error 206).
+pub(crate) fn configure_filter_complex(command: &mut Command, output: &Path, graph: &str) -> Result<Option<PathBuf>, String> {
+  if graph.len() <= INLINE_FILTER_GRAPH_MAX_BYTES {
+    command.args(["-filter_complex", graph]);
+    return Ok(None);
+  }
+  let script_path = output.with_file_name("render.filter_complex.txt");
+  fs::write(&script_path, graph).map_err(|error| format!("FILTER_GRAPH_WRITE_FAILED: {error}"))?;
+  // FFmpeg 9 removed the deprecated `-filter_complex_script` spelling. The
+  // slash form reads the option value from a file and is supported by both
+  // the packaged FFmpeg 8.x and current system FFmpeg builds.
+  command.arg("-/filter_complex").arg(&script_path);
+  Ok(Some(script_path))
+}
+
+pub(crate) struct FilterScriptGuard(pub(crate) PathBuf);
+
+impl Drop for FilterScriptGuard {
+  fn drop(&mut self) {
+    let _ = fs::remove_file(&self.0);
+  }
 }
 
 pub fn media_duration_ms(ffmpeg: &Path, input: &Path) -> Option<f64> {
@@ -734,44 +947,44 @@ where
   let partial = output.with_extension(format!("{}.partial", output.extension().and_then(|e| e.to_str()).unwrap_or("mp4")));
   let graph = build_filter_graph(preset, subtitle_path, hook_ass_path)?;
   let mut command = Command::new(ffmpeg);
+  let mut filter_script_path: Option<PathBuf> = None;
   command.args(["-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y", "-i"]).arg(&input);
   if let Some(audio) = audio_override.filter(|path| path.is_file()) {
     command.args(["-i"]).arg(audio);
     if graph.starts_with("[0:v]") {
-      let audio_label = match preset.tts_audio_mode.as_str() {
-        "REPLACE" => "[1:a]aresample=async=1[capcut_audio]".to_string(),
-        "DUCK_ORIGINAL" => format!("[0:a]volume={:.4}[capcut_orig];[1:a]aresample=async=1[capcut_tts];[capcut_orig][capcut_tts]amix=inputs=2:duration=first:dropout_transition=2[capcut_audio]", preset.original_audio_gain.clamp(0.0, 2.0) * 0.25),
-        _ => format!("[0:a]volume={:.4}[capcut_orig];[1:a]aresample=async=1[capcut_tts];[capcut_orig][capcut_tts]amix=inputs=2:duration=first:dropout_transition=2[capcut_audio]", preset.original_audio_gain.clamp(0.0, 2.0)),
-      };
+      // The explicit output contract is authoritative. Dubbed audio must not
+      // leak the source track, even when a legacy caller still sends the old
+      // `tts_audio_mode` compatibility field.
+      let audio_label = if preset.translation_output_mode == "DUBBED_AUDIO" || preset.auto_tts { "[1:a]aresample=async=1:first_pts=0[capcut_audio]".to_string() } else { "[0:a]aresample=async=1:first_pts=0[capcut_orig];[1:a]aresample=async=1:first_pts=0[capcut_tts];[capcut_orig][capcut_tts]amix=inputs=2:duration=first:dropout_transition=2[capcut_audio]".to_string() };
       // When TTS is mixed through the complex graph, applying `-af` as a
       // separate simple filter is invalid in FFmpeg.  Keep the playback-rate
       // correction inside the same graph and map the filtered label.
-      let audio_map = if let Some(audio_filter) = build_audio_filter(preset)? {
-        format!("{audio_label};[capcut_audio]{audio_filter}[capcut_audio_final]")
-      } else {
-        audio_label
-      };
+      let audio_map = if let Some(audio_filter) = build_audio_filter(preset)? { format!("{audio_label};[capcut_audio]{audio_filter}[capcut_audio_final]") } else { audio_label };
       let graph_with_audio = format!("{graph};{audio_map}");
+      filter_script_path = configure_filter_complex(&mut command, output, &graph_with_audio)?;
       let mapped_audio = if build_audio_filter(preset)?.is_some() { "[capcut_audio_final]" } else { "[capcut_audio]" };
-      command.args(["-filter_complex", &graph_with_audio, "-map", "[capcut_out]", "-map", mapped_audio]);
+      command.args(["-map", "[capcut_out]", "-map", mapped_audio]);
     } else {
       let graph_with_audio = format!("[0:v]{graph}[capcut_out];[1:a]aresample=async=1[capcut_audio]");
-      command.args(["-filter_complex", &graph_with_audio, "-map", "[capcut_out]", "-map", "[capcut_audio]"]);
+      filter_script_path = configure_filter_complex(&mut command, output, &graph_with_audio)?;
+      command.args(["-map", "[capcut_out]", "-map", "[capcut_audio]"]);
     }
   } else if graph.starts_with("[0:v]") {
-    command.args(["-filter_complex", &graph, "-map", "[capcut_out]", "-map", "0:a?"]);
+    filter_script_path = configure_filter_complex(&mut command, output, &graph)?;
+    command.args(["-map", "[capcut_out]", "-map", "0:a?"]);
   } else {
     command.args(["-vf", &graph, "-map", "0:v:0", "-map", "0:a?"]);
   }
   command.args(["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-movflags", "+faststart"]);
   if audio_override.is_none() {
     if let Some(audio) = build_audio_filter(preset)? {
-    command.args(["-af", &audio]);
+      command.args(["-af", &audio]);
     }
   }
   if audio_override.is_some() {
     command.args(["-shortest"]);
   }
+  let _filter_script_guard = filter_script_path.map(FilterScriptGuard);
   // The atomic `.partial` suffix is intentionally not a media extension, so
   // tell FFmpeg the container explicitly instead of relying on filename
   // probing (which otherwise exits with EINVAL on Windows).
@@ -807,20 +1020,24 @@ where
           if progress_tx.send(Some(line.clone())).is_err() {
             break;
           }
-        }
+        },
         Err(_) => break,
       }
     }
     let _ = progress_tx.send(None);
   });
   let mut last_ms = 0.0_f64;
-  let duration_ms = media_duration_ms(ffmpeg, &input);
+  let duration_ms = media_duration_ms(ffmpeg, &input).map(|value| value / preset.playback_rate.max(0.01));
   // Rendering should be bounded even if a codec/filter deadlocks. Allow a
   // generous multiplier for slower machines while preventing hour-long
   // zombie jobs. The bound is independent of the UI's estimated duration.
   let expected_seconds = duration_ms.unwrap_or(60_000.0) / 1_000.0;
-  let render_timeout = std::time::Duration::from_secs_f64((expected_seconds * 10.0 + 300.0).max(600.0));
+  let render_timeout = std::time::Duration::from_secs_f64((expected_seconds * 10.0 + 300.0).clamp(600.0, 7_200.0));
   let render_started = std::time::Instant::now();
+  let first_progress_timeout = std::time::Duration::from_secs(90);
+  let no_progress_timeout = std::time::Duration::from_secs(60);
+  let mut first_progress_at = None;
+  let mut last_progress_at = std::time::Instant::now();
   let mut progress_closed = false;
   loop {
     if should_cancel() {
@@ -835,7 +1052,21 @@ where
       let _ = child.wait();
       let _ = progress_thread.join();
       let _ = fs::remove_file(&partial);
-      return Err(format!("RENDER_TIMEOUT: FFmpeg produced no complete output within {}s", render_timeout.as_secs()));
+      return Err(format!("CAPCUT_RENDER_NO_PROGRESS: FFmpeg produced no complete output within {}s", render_timeout.as_secs()));
+    }
+    if first_progress_at.is_none() && render_started.elapsed() >= first_progress_timeout {
+      let _ = child.kill();
+      let _ = child.wait();
+      let _ = progress_thread.join();
+      let _ = fs::remove_file(&partial);
+      return Err("CAPCUT_RENDER_FIRST_FRAME_TIMEOUT".to_string());
+    }
+    if first_progress_at.is_some() && last_progress_at.elapsed() >= no_progress_timeout {
+      let _ = child.kill();
+      let _ = child.wait();
+      let _ = progress_thread.join();
+      let _ = fs::remove_file(&partial);
+      return Err("CAPCUT_RENDER_NO_PROGRESS".to_string());
     }
     match progress_rx.recv_timeout(std::time::Duration::from_millis(250)) {
       Ok(Some(line)) => {
@@ -843,20 +1074,24 @@ where
           if let Ok(value) = raw.trim().parse::<f64>() {
             let ms = value / 1_000.0;
             last_ms = last_ms.max(ms);
+            if first_progress_at.is_none() {
+              first_progress_at = Some(render_started.elapsed());
+            }
+            last_progress_at = std::time::Instant::now();
             on_progress(progress_fraction(last_ms, duration_ms));
           }
         }
         if line.trim() == "progress=end" {
           on_progress(1.0);
         }
-      }
+      },
       Ok(None) => {
         progress_closed = true;
-      }
-      Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+      },
+      Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {},
       Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
         progress_closed = true;
-      }
+      },
     }
     if progress_closed {
       break;
@@ -901,13 +1136,13 @@ pub fn write_hook_ass(path: &Path, preset: &CapcutAutomationPresetV1) -> Result<
 /// same safe, deterministic overlay path as imported subtitles.
 pub fn write_manual_subtitle_ass(path: &Path, preset: &CapcutAutomationPresetV1) -> Result<(), String> {
   preset.validate()?;
-  let cues = preset.localization.manual_cues.iter().filter(|cue| cue.enabled).collect::<Vec<_>>();
+  let cues = normalize_subtitle_cues(&preset.localization.manual_cues);
   if cues.is_empty() {
     return Err("SUBTITLE_CUES_EMPTY".to_string());
   }
   let style = &preset.localization.subtitle_style;
   let mut body = format!("[Script Info]\nScriptType: v4.00+\nPlayResX: {}\nPlayResY: {}\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,{},{},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,0,0,1,2,1,2,40,40,{},1\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n", preset.output.width, preset.output.height, style.font_name, style.font_size, style.margin_v);
-  for cue in cues {
+  for cue in &cues {
     body.push_str(&format!("Dialogue: 0,{}, {},Default,,0,0,0,,{}\n", ass_timestamp(cue.start_ms), ass_timestamp(cue.end_ms), escape_ass_text(&cue.text)));
   }
   let partial = path.with_extension("ass.partial");
@@ -915,6 +1150,70 @@ pub fn write_manual_subtitle_ass(path: &Path, preset: &CapcutAutomationPresetV1)
   file.write_all(body.as_bytes()).map_err(|e| format!("OVERLAY_WRITE_FAILED: {e}"))?;
   file.sync_all().ok();
   fs::rename(partial, path).map_err(|e| format!("OVERLAY_WRITE_FAILED: {e}"))
+}
+
+/// Normalize generated/manual cues so duplicate adjacent segments are merged
+/// and overlapping cues cannot be rendered on top of one another.
+fn normalize_subtitle_cues(input: &[SubtitleCue]) -> Vec<SubtitleCue> {
+  let mut ordered = input.iter().filter(|cue| cue.enabled).cloned().collect::<Vec<_>>();
+  ordered.sort_by_key(|cue| (cue.start_ms, cue.end_ms));
+  let mut normalized: Vec<SubtitleCue> = Vec::with_capacity(ordered.len());
+  for mut cue in ordered {
+    // Keep intentional line breaks for ASS (`escape_ass_text` maps them to
+    // `\\N`) while still collapsing excess whitespace on each line.
+    cue.text = wrap_subtitle_text(&cue.text);
+    if cue.text.is_empty() || cue.end_ms <= cue.start_ms {
+      continue;
+    }
+    if let Some(previous) = normalized.last_mut() {
+      if cue.text == previous.text && cue.start_ms <= previous.end_ms.saturating_add(250) {
+        previous.end_ms = previous.end_ms.max(cue.end_ms);
+        continue;
+      }
+      if cue.start_ms < previous.end_ms {
+        previous.end_ms = cue.start_ms;
+        if previous.end_ms <= previous.start_ms {
+          normalized.pop();
+        }
+      }
+    }
+    normalized.push(cue);
+  }
+  normalized
+}
+
+/// Keep ASS captions readable and bounded.  Existing explicit line breaks are
+/// respected, while long lines are wrapped at word boundaries.  We cap the
+/// result at two display lines by folding any remaining lines into the second
+/// line instead of silently dropping translated text.
+fn wrap_subtitle_text(value: &str) -> String {
+  const MAX_LINE_CHARS: usize = 42;
+  let mut lines = Vec::new();
+  for source_line in value.lines() {
+    let words = source_line.split_whitespace().collect::<Vec<_>>();
+    if words.is_empty() {
+      continue;
+    }
+    let mut current = String::new();
+    for word in words {
+      let candidate_len = if current.is_empty() { word.len() } else { current.len() + 1 + word.len() };
+      if !current.is_empty() && candidate_len > MAX_LINE_CHARS {
+        lines.push(std::mem::take(&mut current));
+      }
+      if !current.is_empty() {
+        current.push(' ');
+      }
+      current.push_str(word);
+    }
+    if !current.is_empty() {
+      lines.push(current);
+    }
+  }
+  if lines.len() <= 2 {
+    return lines.join("\n");
+  }
+  let first = lines.remove(0);
+  format!("{}\n{}", first, lines.join(" "))
 }
 
 fn ass_timestamp(ms: u64) -> String {
@@ -986,9 +1285,9 @@ mod tests {
   #[test]
   fn audio_retime_and_mute_follow_rights_policy() {
     let mut preset = CapcutAutomationPresetV1::default();
-    assert_eq!(build_audio_filter(&preset).unwrap().as_deref(), Some("atempo=1.100000"));
+    assert!(build_audio_filter(&preset).unwrap().as_deref().unwrap().contains("atempo=1.100000"));
     preset.audio_policy = AudioRightsPolicy::MuteOriginal;
-    assert_eq!(build_audio_filter(&preset).unwrap().as_deref(), Some("volume=0"));
+    assert!(build_audio_filter(&preset).unwrap().as_deref().unwrap().contains("volume=0"));
   }
 
   #[test]
@@ -1123,6 +1422,65 @@ mod tests {
   }
 
   #[test]
+  fn subtitle_cues_merge_duplicates_and_trim_overlaps() {
+    let cues = vec![SubtitleCue { start_ms: 0, end_ms: 1_500, text: "Xin chào".into(), enabled: true }, SubtitleCue { start_ms: 1_000, end_ms: 2_000, text: "Xin chào".into(), enabled: true }, SubtitleCue { start_ms: 1_800, end_ms: 3_000, text: "Nội dung mới".into(), enabled: true }];
+    let normalized = normalize_subtitle_cues(&cues);
+    assert_eq!(normalized.len(), 2);
+    assert_eq!((normalized[0].start_ms, normalized[0].end_ms), (0, 1_800));
+    assert_eq!((normalized[1].start_ms, normalized[1].end_ms), (1_800, 3_000));
+  }
+
+  #[test]
+  fn subtitle_text_is_limited_to_two_word_wrapped_lines() {
+    let text = "Đây là một câu phụ đề rất dài cần được xuống dòng theo ranh giới từ để dễ đọc trên màn hình dọc";
+    let wrapped = wrap_subtitle_text(text);
+    assert!(wrapped.lines().count() <= 2);
+    assert!(!wrapped.contains("\n\n"));
+    assert!(wrapped.contains("màn hình dọc"));
+  }
+
+  #[test]
+  fn quick_preset_replaces_original_audio_when_tts_is_enabled() {
+    let preset = CapcutAutomationPresetV1::quick_localized_vertical_v1();
+    assert!(preset.auto_tts);
+    assert!(preset.auto_translate);
+    assert_eq!(preset.translation_output_mode, "DUBBED_AUDIO");
+    assert_eq!(preset.original_audio_policy, "REMOVE_ORIGINAL");
+    assert_eq!(preset.tts_audio_mode, "REPLACE");
+  }
+
+  #[test]
+  fn tts_without_translation_is_rejected_before_dispatch() {
+    let mut preset = CapcutAutomationPresetV1::default();
+    preset.auto_tts = true;
+    preset.normalize_audio_contract();
+    assert_eq!(preset.validate().unwrap_err(), "CAPCUT_TTS_REQUIRES_TRANSLATION");
+  }
+
+  #[test]
+  fn legacy_audio_contract_migrates_from_enabled_stages() {
+    let value = serde_json::json!({
+      "schemaVersion": 1,
+      "name": "legacy",
+      "mirrorHorizontal": true,
+      "playbackRate": 1.0,
+      "preserveAudioPitch": true,
+      "color": {"brightness": 0.0, "contrast": 0.0, "saturation": 0.0, "gamma": 0.0, "hue": 0.0, "temperature": 0.0, "highlights": 0.0, "shadows": 0.0},
+      "localization": {"enabled": true, "sourceLanguage": "auto", "targetLanguage": "vi", "transcriptionEngine": "local", "translate": true, "burnSubtitles": true, "subtitleStyle": {"fontName": "Arial", "fontSize": 48, "marginV": 80}},
+      "hook": {"enabled": false, "text": "", "startMs": 0, "endMs": 1, "style": {"fontName": "Arial", "fontSize": 48, "alignment": "top-center", "margin": 80, "outline": 2}},
+      "foreignText": {"enabled": false, "detectionMode": "MANUAL", "action": "BLUR", "manualRegions": []},
+      "output": {"container": "mp4", "videoCodec": "h264", "audioCodec": "aac", "ratio": "9:16", "width": 1080, "height": 1920, "fps": "source_or_30", "scaleMode": "fill", "qualityPreset": "balanced"},
+      "audioPolicy": "KEEP_IF_RIGHTS_CONFIRMED",
+      "autoTranslate": true,
+      "autoTts": true
+    });
+    let preset = CapcutAutomationPresetV1::migrate_from_value(value).unwrap();
+    assert_eq!(preset.translation_output_mode, "DUBBED_AUDIO");
+    assert_eq!(preset.original_audio_policy, "REMOVE_ORIGINAL");
+    assert!(preset.validate().is_ok());
+  }
+
+  #[test]
   fn sticker_overlay_rejects_invalid_opacity_and_accepts_normalized_timeline() {
     let mut preset = CapcutAutomationPresetV1::default();
     preset.foreign_text.enabled = true;
@@ -1139,8 +1497,9 @@ mod tests {
     preset.foreign_text.manual_regions = vec![TimedRegion { start_ms: 0, end_ms: 2_000, x: 0.1, y: 0.2, width: 0.3, height: 0.2 }];
     let graph = build_filter_graph(&preset, None, None).unwrap();
     assert!(graph.starts_with("[0:v]"));
-    assert!(graph.contains("crop=w=iw*0.300000"));
-    assert!(graph.contains("overlay=x=main_w*0.100000"));
+    assert!(graph.contains("maskedmerge"));
+    assert_eq!(graph.matches("boxblur=").count(), 1);
+    assert!(!graph.contains("crop=w="));
   }
 
   #[test]
@@ -1156,5 +1515,55 @@ mod tests {
     let graph = build_filter_graph(&preset, None, None).unwrap();
     assert!(graph.contains("movie=filename"));
     assert!(graph.contains("overlay=x=main_w*0.100000"));
+  }
+
+  #[test]
+  fn blur_complexity_is_bounded_by_tracks_not_blur_passes() {
+    let mut preset = CapcutAutomationPresetV1::default();
+    preset.foreign_text.enabled = true;
+    preset.foreign_text.manual_regions = (0..100).map(|i| TimedRegion { start_ms: i * 100, end_ms: i * 100 + 500, x: 0.01, y: 0.01, width: 0.1, height: 0.1 }).collect();
+    let graph = build_filter_graph(&preset, None, None).unwrap();
+    assert_eq!(graph.matches("boxblur=").count(), 1);
+    assert!(graph.matches("drawbox=").count() >= 100);
+    let complexity = estimate_render_graph_complexity(&preset, 120_000);
+    assert!(validate_render_graph_complexity(&complexity).is_ok());
+  }
+
+  #[test]
+  fn excessive_render_graph_is_rejected_before_spawn() {
+    let mut preset = CapcutAutomationPresetV1::default();
+    preset.foreign_text.enabled = true;
+    preset.foreign_text.manual_regions = (0..4_097).map(|_| TimedRegion { start_ms: 0, end_ms: 1_000, x: 0.01, y: 0.01, width: 0.1, height: 0.1 }).collect();
+    let complexity = estimate_render_graph_complexity(&preset, 60_000);
+    assert_eq!(validate_render_graph_complexity(&complexity).unwrap_err(), "CAPCUT_RENDER_GRAPH_COMPLEXITY_EXCEEDED");
+  }
+
+  #[test]
+  fn large_complex_graph_uses_job_local_filter_script() {
+    let temp = tempfile::tempdir().unwrap();
+    let output = temp.path().join("rendered.mp4");
+    let mut command = Command::new("ffmpeg");
+    let graph = "x".repeat(INLINE_FILTER_GRAPH_MAX_BYTES + 1);
+    let script = configure_filter_complex(&mut command, &output, &graph).unwrap();
+    let script_path = script.expect("large graphs must spill to a script");
+    assert_eq!(script_path, temp.path().join("render.filter_complex.txt"));
+    assert_eq!(fs::read_to_string(&script_path).unwrap(), graph);
+    let args = command.get_args().map(|arg| arg.to_string_lossy().into_owned()).collect::<Vec<_>>();
+    assert_eq!(args, vec!["-/filter_complex".to_string(), script_path.to_string_lossy().into_owned()]);
+    let _guard = FilterScriptGuard(script_path.clone());
+    assert!(script_path.is_file());
+    drop(_guard);
+    assert!(!script_path.exists());
+  }
+
+  #[test]
+  fn long_form_job_with_thousand_masks_is_within_capacity() {
+    let mut preset = CapcutAutomationPresetV1::default();
+    preset.foreign_text.enabled = true;
+    preset.foreign_text.manual_regions = (0..1_000).map(|index| TimedRegion { start_ms: index * 100, end_ms: index * 100 + 2_000, x: 0.01, y: 0.01, width: 0.1, height: 0.1 }).collect();
+    let complexity = estimate_render_graph_complexity(&preset, 2 * 60 * 60 * 1_000);
+    assert!(validate_render_graph_complexity(&complexity).is_ok());
+    assert_eq!(complexity.render_track_count, 1_000);
+    assert!(complexity.estimated_output_frames < 10_000_000);
   }
 }

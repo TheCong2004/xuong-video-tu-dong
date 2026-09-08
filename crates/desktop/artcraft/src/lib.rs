@@ -131,14 +131,14 @@ fn maybe_enqueue_capcut_e2e_request(app: &tauri::AppHandle, root: &AppDataRoot) 
     Err(err) => {
       error!("Failed to read CapCut E2E request: {err}");
       return;
-    }
+    },
   };
   let request: crate::services::pipeline::capcut_automation_job_manager::StartCapcutAutomationRequest = match serde_json::from_slice(&bytes) {
     Ok(request) => request,
     Err(err) => {
       error!("Invalid CapCut E2E request JSON: {err}");
       return;
-    }
+    },
   };
   let Some(manager) = app.try_state::<CapcutAutomationJobManager>() else {
     error!("CapCut E2E request ignored because JobManager is unavailable");

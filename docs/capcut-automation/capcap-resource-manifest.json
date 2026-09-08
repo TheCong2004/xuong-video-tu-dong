@@ -56,8 +56,8 @@
     {
       "id": "argos-translation-worker",
       "relativePath": "capcut-automation/scripts/translation_worker.py",
-      "sha256": "aaabd15d6d4d01f93a9623b817b5ecd5ced96091c06b43c155a1af5b1b04eec4",
-      "size": 8152,
+      "sha256": "f9b6dd09bdb75957718b293dbca95cf43463fa4d3f33c8879c0c8c3bd74ecb57",
+      "size": 8588,
       "required": false,
       "license": "Apache-2.0 (ArtCraft adapter)",
       "source": "ArtCraft tools/capcut-automation/translation_worker.py (staged to resources/capcut-automation/scripts/translation_worker.py)",
@@ -106,11 +106,11 @@
     {
       "id": "rapidocr-worker",
       "relativePath": "capcut-automation/scripts/ocr_rapid_worker.py",
-      "sha256": "8eba11e3ad060bf5f6b4f33fb4c88a8a334534289cba2ae8d0f9a65b9ea43e0b",
-      "size": 1647,
+      "sha256": "af40f798a214d311c19f8b48a62fe7a9658d895496654c0434374d7e5b0c57e0",
+      "size": 4376,
       "required": false,
       "license": "Apache-2.0 (ArtCraft adapter)",
-      "source": "ArtCraft resources/capcut-automation/ocr_rapid_worker.py",
+      "source": "ArtCraft tools/capcut-automation/ocr_rapid_worker.py (staged to resources/capcut-automation/scripts/ocr_rapid_worker.py)",
       "status": "READY_VERIFIED"
     },
     {

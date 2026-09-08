@@ -59,6 +59,7 @@ pub async fn preview_capcut_automation(app: AppHandle, root: State<'_, AppDataRo
     return Err("INPUT_NOT_FOUND".into());
   }
   let mut preset = request.preset.unwrap_or_default();
+  preset.normalize_audio_contract();
   preset.validate()?;
   preset.output.width = preset.output.width.min(540).max(2) & !1;
   preset.output.height = preset.output.height.min(540).max(2) & !1;
@@ -106,11 +107,15 @@ pub async fn preview_capcut_automation(app: AppHandle, root: State<'_, AppDataRo
       let partial = output_for_worker.with_extension("mp4.partial");
       let mut command = std::process::Command::new(ffmpeg);
       command.args(["-hide_banner", "-loglevel", "error", "-y", "-ss", &start_arg, "-t", &duration_arg, "-i"]).arg(&input_for_worker);
-      if graph.starts_with("[0:v]") {
-        command.args(["-filter_complex", &graph, "-map", "[capcut_out]"]);
+      let filter_script_path = if graph.starts_with("[0:v]") {
+        let script = crate::services::pipeline::capcut_automation::configure_filter_complex(&mut command, &output_for_worker, &graph)?;
+        command.args(["-map", "[capcut_out]"]);
+        script
       } else {
         command.args(["-vf", &graph]);
-      }
+        None
+      };
+      let _filter_script_guard = filter_script_path.map(crate::services::pipeline::capcut_automation::FilterScriptGuard);
       let status = command.args(["-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-f", "mp4"]).arg(&partial).status().map_err(|e| format!("PREVIEW_RENDER_FAILED: {e}"))?;
       if !status.success() {
         let _ = std::fs::remove_file(&partial);

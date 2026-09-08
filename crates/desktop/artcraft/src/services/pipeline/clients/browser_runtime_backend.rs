@@ -73,7 +73,9 @@ pub struct BrowserSession {
   pub reused: bool,
 }
 
-fn default_target_kind() -> String { "GROK".to_string() }
+fn default_target_kind() -> String {
+  "GROK".to_string()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -147,7 +149,9 @@ impl BrowserIdentity {
     let kind = self.target_kind.to_ascii_uppercase();
     let managed_id = self.managed_target_id.as_deref().unwrap_or_else(|| self.grok_target_id.as_str());
     let managed_url = self.managed_page_url.as_deref().unwrap_or_else(|| self.grok_page_url.as_str());
-    if managed_id.trim().is_empty() { return Err(format!("{kind}_TARGET_ID_REQUIRED")); }
+    if managed_id.trim().is_empty() {
+      return Err(format!("{kind}_TARGET_ID_REQUIRED"));
+    }
     let page = Url::parse(managed_url).map_err(|_| format!("{kind}_PAGE_URL_INVALID"))?;
     let host = page.host_str().unwrap_or_default().to_ascii_lowercase();
     let allowed = match kind.as_str() {
@@ -155,8 +159,12 @@ impl BrowserIdentity {
       "FACEBOOK" => host == "facebook.com" || host.ends_with(".facebook.com"),
       _ => false,
     };
-    if page.scheme() != "https" || !allowed { return Err(format!("{kind}_PAGE_URL_NOT_ALLOWED")); }
-    if managed_url.contains("[https://") || managed_url.contains("](") { return Err("MANAGED_PAGE_URL_MARKDOWN_CORRUPTED".to_string()); }
+    if page.scheme() != "https" || !allowed {
+      return Err(format!("{kind}_PAGE_URL_NOT_ALLOWED"));
+    }
+    if managed_url.contains("[https://") || managed_url.contains("](") {
+      return Err("MANAGED_PAGE_URL_MARKDOWN_CORRUPTED".to_string());
+    }
     Ok(())
   }
 }
@@ -312,13 +320,17 @@ impl BrowserRuntimeBackend {
   /// Claim a caller-selected target without allowing the runtime to invent a
   /// tab.  Facebook publishing always uses this exact-target variant.
   pub async fn claim_page_exact(&self, profile_id: &str, job_id: &str, request_id: &str, purpose: &str, target_kind: &str, target_id: &str) -> Result<PageLease, String> {
-    if target_id.trim().is_empty() { return Err("PAGE_TARGET_ID_REQUIRED".to_string()); }
+    if target_id.trim().is_empty() {
+      return Err("PAGE_TARGET_ID_REQUIRED".to_string());
+    }
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(30)).build().map_err(|e| format!("RUNTIME_CLIENT_INIT_FAILED:{e}"))?;
     let body = serde_json::json!({ "jobId": job_id, "requestId": request_id, "purpose": purpose, "maxPages": 1, "targetKind": target_kind, "targetId": target_id });
     let response = client.post(format!("{}/v1/local/browser/profiles/{}/pages/claim", runtime_api_base_url(), profile_id)).json(&body).send().await.map_err(|e| format!("RUNTIME_UNAVAILABLE:{e}"))?;
     let status = response.status();
     let value: serde_json::Value = response.json().await.map_err(|_| "RUNTIME_RESPONSE_INVALID".to_string())?;
-    if !status.is_success() { return Err(value.get("error").and_then(|v| v.get("code")).and_then(|v| v.as_str()).unwrap_or("RUNTIME_PAGE_CLAIM_FAILED").to_string()); }
+    if !status.is_success() {
+      return Err(value.get("error").and_then(|v| v.get("code")).and_then(|v| v.as_str()).unwrap_or("RUNTIME_PAGE_CLAIM_FAILED").to_string());
+    }
     serde_json::from_value(value).map_err(|_| "RUNTIME_PAGE_CLAIM_RESPONSE_INVALID".to_string())
   }
 
@@ -386,7 +398,9 @@ impl BrowserRuntimeBackend {
   /// is intentionally separate from Donut's legacy worker/lease dispatch so a
   /// Facebook DOM publisher cannot fall back to a cloud or extension route.
   pub async fn dispatch_sidecar(&self, profile_id: &str, request: serde_json::Value) -> Result<serde_json::Value, String> {
-    if profile_id.trim().is_empty() { return Err("PROFILE_ID_REQUIRED".to_string()); }
+    if profile_id.trim().is_empty() {
+      return Err("PROFILE_ID_REQUIRED".to_string());
+    }
     let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(180)).build().map_err(|e| format!("SIDECAR_CLIENT_INIT_FAILED:{e}"))?;
     let response = client.post(format!("{}/v1/profiles/{}/dispatch", extension_bridge_base_url(), profile_id)).json(&request).send().await.map_err(|e| format!("SIDECAR_UNAVAILABLE:{e}"))?;
     let status = response.status();

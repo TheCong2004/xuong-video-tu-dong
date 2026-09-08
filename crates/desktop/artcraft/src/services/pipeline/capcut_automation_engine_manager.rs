@@ -151,10 +151,7 @@ impl CapcutAutomationEngineManager {
   /// checked before the path is returned.
   pub fn resolve_model_path(&self, id: &str) -> Result<(CapcutModelRecord, PathBuf), String> {
     let record = default_model_records().into_iter().find(|record| record.id == id).ok_or_else(|| "CAPCUT_MODEL_UNKNOWN".to_string())?;
-    let path = self
-      .resolver
-      .resolve(&record.relative_path, record.size, Some(&record.sha256))
-      .map_err(|_| format!("CAPCUT_MODEL_NOT_READY:{id}"))?;
+    let path = self.resolver.resolve(&record.relative_path, record.size, Some(&record.sha256)).map_err(|_| format!("CAPCUT_MODEL_NOT_READY:{id}"))?;
     Ok((record, path))
   }
 
@@ -233,7 +230,11 @@ impl CapcutAutomationEngineManager {
         None => Ok(None),
       };
       let worker_script = match spec.worker_script.as_deref() {
-        Some(path) => self.resolver.resolve(path, spec.worker_script_size, spec.worker_script_sha256.as_deref()).map(Some),
+        Some(path) => match self.resolver.resolve(path, spec.worker_script_size, spec.worker_script_sha256.as_deref()) {
+          Ok(path) => Ok(Some(path)),
+          Err(error) if spec.id == "argos-translate" || spec.id == "rapidocr-onnx" => self.resolve_tracked_worker(spec).map(Some).or(Err(error)),
+          Err(error) => Err(error),
+        },
         None => Ok(None),
       };
       if let (Ok(resource_path), Ok(executable_path), Ok(worker_script_path)) = (resource, executable, worker_script) {
@@ -246,10 +247,33 @@ impl CapcutAutomationEngineManager {
     Err(format!("CAPCUT_ENGINE_NOT_READY:{kind:?}"))
   }
 
+  /// In a source checkout, prefer the tracked worker when an ignored/stale
+  /// resource copy is present.  Packaged/AppData roots remain authoritative
+  /// when they contain the same verified digest; this fallback only prevents
+  /// `cargo tauri dev` from silently running an older ignored copy.
+  fn resolve_tracked_worker(&self, spec: &CapcutEngineSpec) -> Result<PathBuf, ResourceError> {
+    let worker_name = spec.worker_script.as_deref().and_then(|path| Path::new(path).file_name()).ok_or_else(|| ResourceError::Missing(spec.worker_script.clone().unwrap_or_default()))?;
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../tools/capcut-automation").join(worker_name);
+    let canonical = fs::canonicalize(&source).map_err(|_| ResourceError::Missing(spec.worker_script.clone().unwrap_or_default()))?;
+    if !canonical.is_file() {
+      return Err(ResourceError::Missing(canonical.display().to_string()));
+    }
+    let metadata = fs::metadata(&canonical).map_err(|_| ResourceError::Missing(canonical.display().to_string()))?;
+    if spec.worker_script_size.is_some_and(|expected| expected != metadata.len()) {
+      return Err(ResourceError::SizeMismatch { expected: spec.worker_script_size.unwrap_or_default(), actual: metadata.len() });
+    }
+    let bytes = fs::read(&canonical).map_err(|_| ResourceError::Missing(canonical.display().to_string()))?;
+    let actual = hex_encode(&Sha256::digest(bytes));
+    if spec.worker_script_sha256.as_deref().is_some_and(|expected| !expected.eq_ignore_ascii_case(&actual)) {
+      return Err(ResourceError::HashMismatch { expected: spec.worker_script_sha256.clone().unwrap_or_default(), actual });
+    }
+    Ok(canonical)
+  }
+
   fn check_spec(&self, spec: &CapcutEngineSpec) -> CapcutEngineHealth {
     let resolved_resource = self.resolver.resolve(&spec.resource_path, spec.size, spec.sha256.as_deref()).ok();
     let resolved_executable = spec.executable.as_deref().and_then(|path| self.resolver.resolve(path, spec.executable_size, spec.executable_sha256.as_deref()).ok()).map(|path| path.display().to_string());
-    let resolved_worker_script = spec.worker_script.as_deref().and_then(|path| self.resolver.resolve(path, spec.worker_script_size, spec.worker_script_sha256.as_deref()).ok()).map(|path| path.display().to_string());
+    let resolved_worker_script = spec.worker_script.as_deref().and_then(|path| self.resolver.resolve(path, spec.worker_script_size, spec.worker_script_sha256.as_deref()).ok().or_else(|| (spec.id == "argos-translate" || spec.id == "rapidocr-onnx").then(|| self.resolve_tracked_worker(spec).ok()).flatten())).map(|path| path.display().to_string());
     let error_code = if resolved_resource.is_none() {
       Some("CAPCUT_ENGINE_RESOURCE_MISSING_OR_UNVERIFIED".to_string())
     } else if spec.executable.is_some() && resolved_executable.is_none() {
@@ -296,8 +320,8 @@ fn partial_path(path: &Path) -> PathBuf {
 fn default_engine_specs() -> Vec<CapcutEngineSpec> {
   vec![
     CapcutEngineSpec { id: "whisper-cpp".into(), kind: CapcutEngineKind::Transcription, display_name: "Whisper.cpp (local CPU)".into(), executable: Some("bin/whisper-cli.exe".into()), executable_sha256: Some("31513eef3a9721d377544e10edfb7b27f4533ca84b71c8b87764da4cdf36da18".into()), executable_size: Some(489_984), worker_script: None, worker_script_sha256: None, worker_script_size: None, resource_path: "models/whisper/ggml-tiny.bin".into(), sha256: Some("be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21".into()), size: Some(77_691_713), license: "MIT + model card terms".into(), status: CapcutEngineStatus::NotInstalled },
-    CapcutEngineSpec { id: "argos-translate".into(), kind: CapcutEngineKind::Translation, display_name: "Argos Translate (offline)".into(), executable: Some("runtime/python314/python.exe".into()), executable_sha256: Some("03168c01b7b7491423350e82c26fee71f35b43694d1319d3c668bda6903a0c38".into()), executable_size: Some(106_208), worker_script: Some("scripts/translation_worker.py".into()), worker_script_sha256: Some("aaabd15d6d4d01f93a9623b817b5ecd5ced96091c06b43c155a1af5b1b04eec4".into()), worker_script_size: Some(8_152), resource_path: "models/argos/translate-en_vi-1_9.argosmodel".into(), sha256: Some("86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16".into()), size: Some(67_770_159), license: "MIT engine; OPUS-MT model CC-BY 4.0".into(), status: CapcutEngineStatus::NotInstalled },
-    CapcutEngineSpec { id: "rapidocr-onnx".into(), kind: CapcutEngineKind::Ocr, display_name: "RapidOCR ONNX (local)".into(), executable: Some("runtime/python314/python.exe".into()), executable_sha256: Some("03168c01b7b7491423350e82c26fee71f35b43694d1319d3c668bda6903a0c38".into()), executable_size: Some(106_208), worker_script: Some("scripts/ocr_rapid_worker.py".into()), worker_script_sha256: Some("b4e8d87bc52d49435a4970492e439a1c1038d290f617716d0d9806cb87907eb7".into()), worker_script_size: Some(2_062), resource_path: "python/rapidocr_onnxruntime/models/ch_PP-OCRv3_det_infer.onnx".into(), sha256: Some("3439588c030faea393a54515f51e983d8e155b19a2e8aba7891934c1cf0de526".into()), size: Some(2_432_880), license: "Apache-2.0 engine/models".into(), status: CapcutEngineStatus::NotInstalled },
+    CapcutEngineSpec { id: "argos-translate".into(), kind: CapcutEngineKind::Translation, display_name: "Argos Translate (offline)".into(), executable: Some("runtime/python314/python.exe".into()), executable_sha256: Some("03168c01b7b7491423350e82c26fee71f35b43694d1319d3c668bda6903a0c38".into()), executable_size: Some(106_208), worker_script: Some("scripts/translation_worker.py".into()), worker_script_sha256: Some("f9b6dd09bdb75957718b293dbca95cf43463fa4d3f33c8879c0c8c3bd74ecb57".into()), worker_script_size: Some(8_588), resource_path: "models/argos/translate-en_vi-1_9.argosmodel".into(), sha256: Some("86957101aa4099aa9a1a7492e41987d938d3cf0fdaf4fb684c0797a9d567dd16".into()), size: Some(67_770_159), license: "MIT engine; OPUS-MT model CC-BY 4.0".into(), status: CapcutEngineStatus::NotInstalled },
+    CapcutEngineSpec { id: "rapidocr-onnx".into(), kind: CapcutEngineKind::Ocr, display_name: "RapidOCR ONNX (local)".into(), executable: Some("runtime/python314/python.exe".into()), executable_sha256: Some("03168c01b7b7491423350e82c26fee71f35b43694d1319d3c668bda6903a0c38".into()), executable_size: Some(106_208), worker_script: Some("scripts/ocr_rapid_worker.py".into()), worker_script_sha256: Some("af40f798a214d311c19f8b48a62fe7a9658d895496654c0434374d7e5b0c57e0".into()), worker_script_size: Some(4_376), resource_path: "python/rapidocr_onnxruntime/models/ch_PP-OCRv3_det_infer.onnx".into(), sha256: Some("3439588c030faea393a54515f51e983d8e155b19a2e8aba7891934c1cf0de526".into()), size: Some(2_432_880), license: "Apache-2.0 engine/models".into(), status: CapcutEngineStatus::NotInstalled },
     CapcutEngineSpec { id: "piper".into(), kind: CapcutEngineKind::TextToSpeech, display_name: "Piper (giọng Việt ngoại tuyến)".into(), executable: Some("bin/piper.exe".into()), executable_sha256: Some("96f3da3811151580073e40bb4dd20eb0fb8115f5f5f76e2fb54282b3edfa5c1f".into()), executable_size: Some(509_952), worker_script: None, worker_script_sha256: None, worker_script_size: None, resource_path: "voices/piper/vi_VN-vivos-x_low/vi_VN-vivos-x_low.onnx".into(), sha256: Some("6ab13374eb0862021a545befe7727aef59e16117f1c075aa9e0362237ecc98ae".into()), size: Some(27_789_413), license: "Piper MIT; VIVOS voice model terms".into(), status: CapcutEngineStatus::NotInstalled },
     CapcutEngineSpec { id: "sherpa-onnx-diarization".into(), kind: CapcutEngineKind::SpeakerDiarization, display_name: "Sherpa-ONNX diarization (offline)".into(), executable: Some("runtime/python314/python.exe".into()), executable_sha256: Some("03168c01b7b7491423350e82c26fee71f35b43694d1319d3c668bda6903a0c38".into()), executable_size: Some(106_208), worker_script: Some("scripts/speaker_diarization_worker.py".into()), worker_script_sha256: Some("94ea11fb192cea7300faf4bef91edd6f3891ef97eef2d05bdf88b4f33c5dbfd5".into()), worker_script_size: Some(2_481), resource_path: "models/diarization/segmentation/model.onnx".into(), sha256: Some("220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079".into()), size: Some(5_992_913), license: "Sherpa-ONNX Apache-2.0; model-specific terms".into(), status: CapcutEngineStatus::NotInstalled },
   ]
@@ -344,4 +368,10 @@ mod tests {
     assert!(matches!(CapcutAutomationEngineManager::verify_artifact(&path, "00", Some(5)), Err(ResourceError::HashMismatch { .. })));
   }
 
+  #[test]
+  fn tracked_translation_worker_matches_catalog_digest_and_size() {
+    let spec = default_engine_specs().into_iter().find(|spec| spec.id == "argos-translate").unwrap();
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../tools/capcut-automation/translation_worker.py");
+    assert!(CapcutAutomationEngineManager::verify_artifact(&path, spec.worker_script_sha256.as_deref().unwrap(), spec.worker_script_size).is_ok());
+  }
 }

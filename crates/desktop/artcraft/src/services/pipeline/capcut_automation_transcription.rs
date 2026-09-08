@@ -29,6 +29,22 @@ pub struct TranscriptSegment {
   pub language: Option<String>,
   pub confidence: Option<f32>,
   pub speaker_id: Option<String>,
+  #[serde(default)]
+  pub quality_state: String,
+  #[serde(default)]
+  pub repetition_ratio: f32,
+  #[serde(default)]
+  pub token_count: usize,
+  #[serde(default)]
+  pub character_count: usize,
+  #[serde(default)]
+  pub avg_log_prob: Option<f32>,
+  #[serde(default)]
+  pub no_speech_probability: Option<f32>,
+  #[serde(default)]
+  pub compression_ratio: Option<f32>,
+  #[serde(default)]
+  pub duration_ms: u64,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -63,6 +79,12 @@ struct WhisperResult {
 struct WhisperSegment {
   timestamps: WhisperTimestamps,
   text: String,
+  #[serde(default, alias = "avg_logprob")]
+  avg_log_prob: Option<f32>,
+  #[serde(default, alias = "no_speech_prob")]
+  no_speech_probability: Option<f32>,
+  #[serde(default)]
+  compression_ratio: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -129,11 +151,11 @@ pub fn transcribe_local(manager: &CapcutAutomationEngineManager, request: LocalT
   let stdout_file = File::create(&stdout_path).map_err(|_| "CAPCUT_TRANSCRIPTION_TEMP_FAILED".to_string())?;
   let stderr_file = File::create(&stderr_path).map_err(|_| "CAPCUT_TRANSCRIPTION_TEMP_FAILED".to_string())?;
   let requested_language = request.language.clone().filter(|value| !value.trim().is_empty());
-  let whisper_language = requested_language.as_deref().map(whisper_language_code).map(str::to_string);
-  let mut arguments = vec!["-m".to_string(), engine.resource_path.to_string_lossy().to_string(), "-f".to_string(), input.to_string_lossy().to_string(), "-oj".to_string(), "-of".to_string(), output_prefix.to_string_lossy().to_string()];
-  if let Some(language) = whisper_language.as_deref() {
-    arguments.extend(["-l".to_string(), language.to_string()]);
-  }
+  let whisper_language = requested_language.as_deref().map(whisper_language_code).map(str::to_string).or_else(|| Some("auto".to_string()));
+  // whisper.cpp defaults to English when -l is omitted. That silently turns
+  // Chinese speech into romanized English hallucinations, so auto detection
+  // must be explicit at the process boundary.
+  let mut arguments = whisper_arguments(&engine.resource_path, input, &output_prefix, whisper_language.as_deref());
   let mut command = Command::new(&executable);
   command.args(&arguments);
   command.stdout(Stdio::from(stdout_file)).stderr(Stdio::from(stderr_file));
@@ -224,8 +246,129 @@ fn matching_output_files(workspace: &Path, output_prefix: &Path) -> Vec<String> 
 fn parse_whisper_json(json: &str, requested_language: Option<String>) -> Result<ParsedWhisperOutput, String> {
   let parsed: WhisperJson = serde_json::from_str(json).map_err(|_| "CAPCUT_TRANSCRIPTION_OUTPUT_INVALID".to_string())?;
   let language = requested_language.filter(|value| !value.trim().is_empty() && value != "auto").or_else(|| parsed.result.as_ref().and_then(|result| result.language.clone())).or(parsed.language.clone());
-  let segments = parsed.transcription.into_iter().enumerate().map(|(index, segment)| TranscriptSegment { id: format!("segment-{}", index + 1), start_ms: parse_timestamp_ms(&segment.timestamps.from), end_ms: parse_timestamp_ms(&segment.timestamps.to), text: segment.text.trim().to_string(), language: language.clone(), confidence: None, speaker_id: None }).filter(|segment| !segment.text.is_empty() && segment.end_ms >= segment.start_ms).collect();
+  let segments = parsed
+    .transcription
+    .into_iter()
+    .enumerate()
+    .map(|(index, segment)| {
+      let start_ms = parse_timestamp_ms(&segment.timestamps.from);
+      let end_ms = parse_timestamp_ms(&segment.timestamps.to);
+      let text = segment.text.trim().to_string();
+      let quality = assess_transcript_quality(&text, end_ms.saturating_sub(start_ms));
+      let duration_ms = end_ms.saturating_sub(start_ms);
+      let quality_state = quality_state_with_language_and_whisper_metrics(language.as_deref(), quality.state, segment.avg_log_prob, segment.no_speech_probability, segment.compression_ratio, &text, duration_ms);
+      TranscriptSegment { id: format!("segment-{}", index + 1), start_ms, end_ms, text, language: language.clone(), confidence: segment.avg_log_prob.map(|value| value.clamp(-5.0, 0.0)), speaker_id: None, quality_state, repetition_ratio: quality.repetition_ratio, token_count: quality.token_count, character_count: quality.character_count, avg_log_prob: segment.avg_log_prob, no_speech_probability: segment.no_speech_probability, compression_ratio: segment.compression_ratio, duration_ms }
+    })
+    .filter(|segment| !segment.text.is_empty() && segment.end_ms >= segment.start_ms)
+    .collect();
   Ok(ParsedWhisperOutput { language, segments })
+}
+
+fn quality_state_with_whisper_metrics(base: &str, avg_log_prob: Option<f32>, no_speech_probability: Option<f32>, compression_ratio: Option<f32>, text: &str, duration_ms: u64) -> String {
+  if base == "HALLUCINATION_SUSPECTED" {
+    return base.to_string();
+  }
+  let token_count = text.split_whitespace().count();
+  let no_speech_hallucination = no_speech_probability.is_some_and(|value| value >= 0.80) && token_count >= 4;
+  let compression_hallucination = compression_ratio.is_some_and(|value| value >= 2.8) && token_count >= 4;
+  let too_low_confidence = avg_log_prob.is_some_and(|value| value < -1.5) && duration_ms >= 1_000;
+  if no_speech_hallucination || compression_hallucination {
+    "HALLUCINATION_SUSPECTED".to_string()
+  } else if too_low_confidence {
+    "LOW_CONFIDENCE".to_string()
+  } else {
+    base.to_string()
+  }
+}
+
+/// A Chinese language detection result must not be paired with an entirely
+/// Latin, hyphenated pseudo-transcript. Whisper can emit romanised syllables
+/// when it is invoked with an English/default language contract; accepting
+/// that text would poison translation and subtitles. This is a conservative
+/// consistency check: it only rejects Chinese-labelled segments with enough
+/// text and no Han characters at all.
+fn quality_state_with_language_and_whisper_metrics(language: Option<&str>, base: &str, avg_log_prob: Option<f32>, no_speech_probability: Option<f32>, compression_ratio: Option<f32>, text: &str, duration_ms: u64) -> String {
+  let normalized_language = language.map(|value| value.trim().to_ascii_lowercase());
+  let is_chinese = normalized_language.as_deref().is_some_and(|value| matches!(value, "zh" | "zt" | "zh-cn" | "zh-tw" | "zh-hans" | "zh-hant" | "chi_sim" | "chi_tra"));
+  let alphanumeric_count = text.chars().filter(|character| character.is_alphanumeric()).count();
+  let has_han = text.chars().any(|character| ('\u{3400}'..='\u{9fff}').contains(&character));
+  let hyphenated_tokens = text.split_whitespace().filter(|token| token.matches('-').count() >= 2).count();
+  if is_chinese && alphanumeric_count >= 4 && !has_han && (hyphenated_tokens > 0 || text.chars().all(|character| character.is_ascii() || character.is_whitespace() || "-,'\".!?".contains(character))) {
+    return "LANGUAGE_UNRESOLVED".to_string();
+  }
+  quality_state_with_whisper_metrics(base, avg_log_prob, no_speech_probability, compression_ratio, text, duration_ms)
+}
+
+fn whisper_arguments(model: &Path, input: &Path, output_prefix: &Path, language: Option<&str>) -> Vec<String> {
+  let language = language.filter(|value| !value.trim().is_empty()).unwrap_or("auto");
+  vec!["-m".to_string(), model.to_string_lossy().to_string(), "-f".to_string(), input.to_string_lossy().to_string(), "-oj".to_string(), "-of".to_string(), output_prefix.to_string_lossy().to_string(), "-l".to_string(), whisper_language_code(language).to_string()]
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct TranscriptQuality {
+  state: &'static str,
+  repetition_ratio: f32,
+  token_count: usize,
+  character_count: usize,
+}
+
+/// Detect the repeated hyphenated output produced when multilingual Whisper is
+/// accidentally run with its English default. This is deliberately a gate,
+/// not a language detector: questionable segments never reach translation.
+fn assess_transcript_quality(text: &str, duration_ms: u64) -> TranscriptQuality {
+  let tokens = text.split_whitespace().map(|token| token.trim_matches(|character: char| !character.is_alphanumeric() && character != '-').to_ascii_lowercase()).filter(|token| !token.is_empty()).collect::<Vec<_>>();
+  let mut counts = std::collections::HashMap::<&str, usize>::new();
+  for token in &tokens {
+    *counts.entry(token.as_str()).or_default() += 1;
+  }
+  let repeated_tokens = counts.values().map(|count| count.saturating_sub(1)).sum::<usize>();
+  let repetition_ratio = if tokens.is_empty() { 0.0 } else { repeated_tokens as f32 / tokens.len() as f32 };
+  let hyphenated = tokens.iter().filter(|token| token.matches('-').count() >= 2).count();
+  let hyphen_ratio = if tokens.is_empty() { 0.0 } else { hyphenated as f32 / tokens.len() as f32 };
+  let duration_seconds = duration_ms as f32 / 1_000.0;
+  let too_many_characters = duration_seconds >= 1.0 && text.chars().count() as f32 > duration_seconds * 42.0;
+  // A short repeated hyphenated sequence is already enough to indicate the
+  // multilingual-Whisper romanisation failure (the common fixture has four
+  // repeated tokens). Keep the repetition-only checks conservative so normal
+  // speech with a repeated word is not rejected.
+  let repeated_hyphenated = tokens.len() >= 4 && hyphen_ratio >= 0.7;
+  let hallucination = repeated_hyphenated || (tokens.len() >= 8 && ((repetition_ratio >= 0.45 && hyphen_ratio >= 0.25) || too_many_characters && repetition_ratio >= 0.35));
+  TranscriptQuality { state: if hallucination { "HALLUCINATION_SUSPECTED" } else { "ACCEPTED" }, repetition_ratio, token_count: tokens.len(), character_count: text.chars().count() }
+}
+
+pub fn validate_transcript_quality(segments: &[TranscriptSegment]) -> Result<(), String> {
+  if segments.is_empty() {
+    return Err("CAPCUT_TRANSCRIPTION_EMPTY".to_string());
+  }
+  let suspicious = segments.iter().filter(|segment| matches!(segment.quality_state.as_str(), "HALLUCINATION_SUSPECTED" | "LOW_CONFIDENCE" | "LANGUAGE_UNRESOLVED")).count();
+  // Whisper may omit the language field in JSON output. In that case a
+  // romanised pseudo-transcript can otherwise evade the per-segment Chinese
+  // script check (the failure observed in production was one hyphenated token
+  // per cue). Detect the characteristic pattern across the transcript as a
+  // whole, while requiring multiple independent cues to avoid rejecting a
+  // legitimate single proper name.
+  let romanized_cues = segments.iter().filter(|segment| looks_like_romanized_pseudotranscript(&segment.text)).count();
+  let romanized_majority = romanized_cues >= 2 && romanized_cues * 2 >= segments.len();
+  // Never pass even a single confidently suspicious cue downstream. A single
+  // hallucinated segment is enough to create a repeated/garbled subtitle and
+  // can also poison the translation context for the following cues.
+  if suspicious > 0 || romanized_majority {
+    return Err("CAPCUT_TRANSCRIPTION_QUALITY_UNRESOLVED".to_string());
+  }
+  Ok(())
+}
+
+fn looks_like_romanized_pseudotranscript(text: &str) -> bool {
+  let trimmed = text.trim();
+  if trimmed.is_empty() || trimmed.chars().any(|character| ('\u{3400}'..='\u{9fff}').contains(&character)) {
+    return false;
+  }
+  let tokens = trimmed.split_whitespace().collect::<Vec<_>>();
+  // The bad Whisper mode emits ASCII syllable chains such as
+  // "Seqi-Wang-Lio-Defu-Gai". Require at least two hyphens and enough letters;
+  // ordinary hyphenated prose (or a single proper name) is not sufficient.
+  let hyphenated = tokens.iter().filter(|token| token.matches('-').count() >= 2 && token.chars().filter(|character| character.is_ascii_alphabetic()).count() >= 6).count();
+  hyphenated > 0 && trimmed.chars().all(|character| character.is_ascii() || character.is_whitespace() || "-'.,!?\"()".contains(character))
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
@@ -287,5 +430,61 @@ mod tests {
   #[test]
   fn successful_exit_with_whisper_error_is_a_process_failure() {
     assert_eq!(classify_whisper_process_result(true, "whisper_lang_id: unknown language 'zt'\nerror: unknown language 'zt'").unwrap_err(), "CAPCUT_TRANSCRIPTION_PROCESS_FAILED:WHISPER_REPORTED_ERROR:UNKNOWN_LANGUAGE");
+  }
+
+  #[test]
+  fn auto_language_is_explicit_at_whisper_boundary() {
+    let arguments = whisper_arguments(Path::new("model.bin"), Path::new("audio.wav"), Path::new("out"), None);
+    assert_eq!(arguments.last().map(String::as_str), Some("auto"));
+    assert_eq!(arguments[arguments.len() - 2], "-l");
+  }
+
+  #[test]
+  fn repeated_hyphenated_transcript_is_rejected_as_hallucination() {
+    let quality = assess_transcript_quality("Segi-Wang-Luo-Defu-Gai Segi-Wang-Luo-Defu-Gai Segi-Wang-Luo-Defu-Gai Segi-Wang-Luo-Defu-Gai", 4_000);
+    assert_eq!(quality.state, "HALLUCINATION_SUSPECTED");
+  }
+
+  #[test]
+  fn ordinary_sentence_passes_transcript_quality_gate() {
+    let quality = assess_transcript_quality("This is a short sentence with useful context.", 4_000);
+    assert_eq!(quality.state, "ACCEPTED");
+  }
+
+  #[test]
+  fn whisper_metrics_reject_speech_probability_hallucination() {
+    let state = quality_state_with_whisper_metrics("ACCEPTED", Some(-0.2), Some(0.95), Some(1.1), "one two three four", 4_000);
+    assert_eq!(state, "HALLUCINATION_SUSPECTED");
+  }
+
+  #[test]
+  fn whisper_metrics_mark_low_confidence_without_rewriting_text() {
+    let state = quality_state_with_whisper_metrics("ACCEPTED", Some(-2.0), Some(0.05), Some(1.1), "a normal sentence", 4_000);
+    assert_eq!(state, "LOW_CONFIDENCE");
+  }
+
+  #[test]
+  fn chinese_language_with_romanized_hyphenated_text_is_unresolved() {
+    let state = quality_state_with_language_and_whisper_metrics(Some("zh"), "ACCEPTED", Some(-0.2), Some(0.05), Some(1.1), "Segi-Wang-Lio-Defu-Gai", 2_000);
+    assert_eq!(state, "LANGUAGE_UNRESOLVED");
+  }
+
+  #[test]
+  fn chinese_language_with_han_text_is_not_rejected_by_script_check() {
+    let state = quality_state_with_language_and_whisper_metrics(Some("zh"), "ACCEPTED", Some(-0.2), Some(0.05), Some(1.1), "今天天氣很好", 2_000);
+    assert_eq!(state, "ACCEPTED");
+  }
+
+  #[test]
+  fn missing_language_metadata_rejects_repeated_romanized_cues() {
+    let segments = vec![TranscriptSegment { id: "segment-1".into(), start_ms: 0, end_ms: 2_000, text: "Seqi-Wang-Lio-Defu-Gai".into(), language: None, confidence: None, speaker_id: None, quality_state: "ACCEPTED".into(), repetition_ratio: 0.0, token_count: 1, character_count: 24, avg_log_prob: None, no_speech_probability: None, compression_ratio: None, duration_ms: 2_000 }, TranscriptSegment { id: "segment-2".into(), start_ms: 2_000, end_ms: 4_000, text: "Sang-Gang-Gu-Gu-Gang".into(), language: None, confidence: None, speaker_id: None, quality_state: "ACCEPTED".into(), repetition_ratio: 0.0, token_count: 1, character_count: 20, avg_log_prob: None, no_speech_probability: None, compression_ratio: None, duration_ms: 2_000 }];
+    assert_eq!(validate_transcript_quality(&segments).unwrap_err(), "CAPCUT_TRANSCRIPTION_QUALITY_UNRESOLVED");
+  }
+
+  #[test]
+  fn one_hyphenated_proper_name_is_not_a_transcript_failure() {
+    assert!(!looks_like_romanized_pseudotranscript("Jean-Pierre"));
+    let segment = TranscriptSegment { id: "segment-1".into(), start_ms: 0, end_ms: 1_000, text: "Jean-Pierre".into(), language: None, confidence: None, speaker_id: None, quality_state: "ACCEPTED".into(), repetition_ratio: 0.0, token_count: 1, character_count: 11, avg_log_prob: None, no_speech_probability: None, compression_ratio: None, duration_ms: 1_000 };
+    assert!(validate_transcript_quality(&[segment]).is_ok());
   }
 }

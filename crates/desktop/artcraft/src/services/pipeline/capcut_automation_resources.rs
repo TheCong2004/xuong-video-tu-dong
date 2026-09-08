@@ -63,35 +63,61 @@ impl CapcutResourceResolver {
     if relative.is_absolute() || relative_path.trim().is_empty() || relative.components().any(|component| matches!(component, Component::ParentDir | Component::Prefix(_))) {
       return Err(ResourceError::InvalidRelativePath);
     }
+    // A stale artifact in one owned root must not mask a verified artifact in
+    // another owned root (for example an older AppData copy ahead of the
+    // development/resource tree).  Keep the last verification error for a
+    // useful final diagnostic, but continue searching all ArtCraft roots.
+    let mut last_error: Option<ResourceError> = None;
     for root in &self.roots {
       let candidate = root.join(relative);
       if !candidate.is_file() {
         continue;
       }
-      let canonical = fs::canonicalize(&candidate).map_err(|_| ResourceError::Missing(relative_path.to_string()))?;
+      let canonical = match fs::canonicalize(&candidate) {
+        Ok(path) => path,
+        Err(_) => {
+          last_error = Some(ResourceError::Missing(relative_path.to_string()));
+          continue;
+        },
+      };
       if !canonical.starts_with(root) {
         return Err(ResourceError::OutsideOwnedRoot(relative_path.to_string()));
       }
-      let metadata = fs::symlink_metadata(&candidate).map_err(|_| ResourceError::Missing(relative_path.to_string()))?;
+      let metadata = match fs::symlink_metadata(&candidate) {
+        Ok(metadata) => metadata,
+        Err(_) => {
+          last_error = Some(ResourceError::Missing(relative_path.to_string()));
+          continue;
+        },
+      };
       if metadata.file_type().is_symlink() {
-        return Err(ResourceError::SymlinkNotAllowed(relative_path.to_string()));
+        last_error = Some(ResourceError::SymlinkNotAllowed(relative_path.to_string()));
+        continue;
       }
       if let Some(expected) = expected_size {
         let actual = metadata.len();
         if actual != expected {
-          return Err(ResourceError::SizeMismatch { expected, actual });
+          last_error = Some(ResourceError::SizeMismatch { expected, actual });
+          continue;
         }
       }
       if let Some(expected) = expected_sha256 {
-        let bytes = fs::read(&canonical).map_err(|_| ResourceError::Missing(relative_path.to_string()))?;
+        let bytes = match fs::read(&canonical) {
+          Ok(bytes) => bytes,
+          Err(_) => {
+            last_error = Some(ResourceError::Missing(relative_path.to_string()));
+            continue;
+          },
+        };
         let actual = hex_encode(&Sha256::digest(bytes));
         if !actual.eq_ignore_ascii_case(expected) {
-          return Err(ResourceError::HashMismatch { expected: expected.to_string(), actual });
+          last_error = Some(ResourceError::HashMismatch { expected: expected.to_string(), actual });
+          continue;
         }
       }
       return Ok(canonical);
     }
-    Err(ResourceError::Missing(relative_path.to_string()))
+    Err(last_error.unwrap_or_else(|| ResourceError::Missing(relative_path.to_string())))
   }
 }
 
@@ -116,5 +142,20 @@ mod tests {
     let hash = hex_encode(&Sha256::digest(b"demo"));
     assert!(resolver.resolve("models/demo.bin", Some(4), Some(&hash)).is_ok());
     assert!(matches!(resolver.resolve("models/demo.bin", Some(5), Some(&hash)), Err(ResourceError::SizeMismatch { .. })));
+  }
+
+  #[test]
+  fn resolver_skips_stale_owned_root_and_uses_verified_fallback() {
+    let stale = tempfile::tempdir().unwrap();
+    let verified = tempfile::tempdir().unwrap();
+    let stale_file = stale.path().join("scripts").join("worker.py");
+    let verified_file = verified.path().join("scripts").join("worker.py");
+    fs::create_dir_all(stale_file.parent().unwrap()).unwrap();
+    fs::create_dir_all(verified_file.parent().unwrap()).unwrap();
+    fs::write(&stale_file, b"old-worker").unwrap();
+    fs::write(&verified_file, b"new-worker").unwrap();
+    let hash = hex_encode(&Sha256::digest(b"new-worker"));
+    let resolver = CapcutResourceResolver::new(Some(stale.path().to_path_buf()), Some(verified.path().to_path_buf()), None);
+    assert_eq!(resolver.resolve("scripts/worker.py", Some(10), Some(&hash)).unwrap(), fs::canonicalize(verified_file).unwrap());
   }
 }

@@ -40,6 +40,15 @@ type QueueItem = {
   stage?: string;
   processedMs?: number | null;
   expectedDurationMs?: number | null;
+  decodedFrames?: number;
+  changeCandidateFrames?: number;
+  ocrFrames?: number;
+  skippedDuplicateFrames?: number;
+  rawDetectionCount?: number;
+  mergedTrackCount?: number;
+  processingFps?: number | null;
+  speedRatio?: number | null;
+  estimatedRemainingMs?: number | null;
   attempt?: number;
   attemptId?: string;
   receipt?: LocalAutomationReceipt;
@@ -120,7 +129,10 @@ const DEFAULT_PRESET: LocalAutomationPreset = {
   ocrSampleIntervalMs: 1000,
   autoDiarize: true,
   autoTts: true,
-  ttsAudioMode: "MIX",
+  translationOutputMode: "DUBBED_AUDIO",
+  originalAudioPolicy: "REMOVE_ORIGINAL",
+  // TTS replaces the original track by default; mixing is explicit.
+  ttsAudioMode: "REPLACE",
   originalAudioGain: 1,
   speakerVoiceAssignments: {},
 };
@@ -146,6 +158,15 @@ export function NativeAutomationWorkspace() {
         stage: job.stage,
         processedMs: job.processedMs,
         expectedDurationMs: job.expectedDurationMs,
+        decodedFrames: job.decodedFrames,
+        changeCandidateFrames: job.changeCandidateFrames,
+        ocrFrames: job.ocrFrames,
+        skippedDuplicateFrames: job.skippedDuplicateFrames,
+        rawDetectionCount: job.rawDetectionCount,
+        mergedTrackCount: job.mergedTrackCount,
+        processingFps: job.processingFps,
+        speedRatio: job.speedRatio,
+        estimatedRemainingMs: job.estimatedRemainingMs,
         attempt: job.attempt,
         attemptId: job.attemptId,
         receipt: job.receipt ?? undefined,
@@ -153,8 +174,12 @@ export function NativeAutomationWorkspace() {
       };
       const index = current.findIndex((item) => item.id === job.jobId);
       if (index < 0) return [...current, next];
+      const previous = current[index];
+      if ((previous.attempt ?? 1) > (next.attempt ?? 1)) return current;
+      if ((previous.attempt ?? 1) === (next.attempt ?? 1) && previous.state === "COMPLETED" && next.state !== "COMPLETED") return current;
+      if ((previous.attempt ?? 1) === (next.attempt ?? 1) && (previous.progress ?? 0) > next.progress && next.state !== "FAILED" && next.state !== "CANCELLED") return current;
       const copy = [...current];
-      copy[index] = { ...copy[index], ...next };
+      copy[index] = { ...previous, ...next, progress: Math.max(previous.progress ?? 0, next.progress ?? 0) };
       return copy;
     });
 
@@ -382,8 +407,14 @@ export function NativeAutomationWorkspace() {
   const runQueue = async () => {
     if (running || !queued.length) return;
     const source = (preset.localization.sourceLanguage || preset.sourceLanguage || "").trim();
-    if (!source || source.toLowerCase() === "auto") {
-      setItems((current) => current.map((item) => item.state === "QUEUED" ? { ...item, error: "CAPCUT_SOURCE_LANGUAGE_UNRESOLVED: chọn ngôn ngữ nguồn trước khi chạy" } : item));
+    // Automatic detection is supported when Whisper transcription is enabled;
+    // the backend resolves the effective language before selecting a route.
+    if (!source || (source.toLowerCase() === "auto" && !preset.autoTranscribe)) {
+      setItems((current) => current.map((item) => item.state === "QUEUED" ? { ...item, error: "CAPCUT_SOURCE_LANGUAGE_UNRESOLVED: không nhận diện được ngôn ngữ nguồn" } : item));
+      return;
+    }
+    if (preset.autoTts && !preset.autoTranslate) {
+      setItems((current) => current.map((item) => item.state === "QUEUED" ? { ...item, error: "CAPCUT_TTS_REQUIRES_TRANSLATION: hãy bật Dịch trước khi lồng tiếng" } : item));
       return;
     }
     const ocrEngine = (preset.ocrEngine || "rapidocr-onnxruntime").trim().toLowerCase();
@@ -392,9 +423,18 @@ export function NativeAutomationWorkspace() {
       return;
     }
     setRunning(true);
+    // Native jobs restored from persistence are already owned by the
+    // backend FIFO. Re-submitting them on refresh produces a duplicate-ID
+    // error and leaves a misleading local failure card.
+    const persisted = new Map((await listNativeAutomationJobs()).map((job) => [job.jobId, job]));
     await Promise.all(
       queued.map(async (item) => {
         try {
+          const existing = persisted.get(item.id);
+          if (existing) {
+            applyJob(existing);
+            return;
+          }
           applyJob(
             await startNativeAutomationJob({
               inputPath: item.path,
@@ -415,7 +455,9 @@ export function NativeAutomationWorkspace() {
                     error:
                       error instanceof Error
                         ? error.message
-                        : "Kết xuất nội bộ thất bại",
+                        : typeof error === "string"
+                          ? error
+                          : JSON.stringify(error),
                   }
                 : entry,
             ),
@@ -478,7 +520,7 @@ export function NativeAutomationWorkspace() {
         <div>
           <h2 className="text-xl font-semibold">Tự động hóa nội bộ</h2>
           <p className="mt-1 text-sm text-white/55">
-            Quy trình FFmpeg nội bộ của ArtCraft, hàng đợi FIFO, chạy lần lượt từng video.
+            Quy trình FFmpeg nội bộ của ArtCraft, hàng đợi FIFO, tối đa 2 video chạy song song.
           </p>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs">
@@ -486,7 +528,20 @@ export function NativeAutomationWorkspace() {
           <Toggle label="Whisper" checked={Boolean(preset.autoTranscribe)} onChange={(value) => setPreset((current) => ({ ...current, autoTranscribe: value }))} />
           <Toggle label="Dịch" checked={Boolean(preset.autoTranslate)} onChange={(value) => setPreset((current) => ({ ...current, autoTranslate: value }))} />
           <Toggle label="OCR" checked={Boolean(preset.autoOcr)} onChange={(value) => setPreset((current) => ({ ...current, autoOcr: value }))} />
-          <Toggle label="Giọng nói" checked={Boolean(preset.autoDiarize && preset.autoTts)} onChange={(value) => setPreset((current) => ({ ...current, autoDiarize: value, autoTts: value }))} />
+          <Toggle
+            label="Giọng nói"
+            checked={Boolean(preset.autoDiarize && preset.autoTts)}
+            onChange={(value) => setPreset((current) => ({
+              ...current,
+              autoDiarize: value,
+              autoTts: value,
+              autoTranslate: value || Boolean(current.autoTranslate),
+              localization: { ...current.localization, translate: value || current.localization.translate },
+              translationOutputMode: value ? "DUBBED_AUDIO" : "SUBTITLE_ONLY",
+              originalAudioPolicy: value ? "REMOVE_ORIGINAL" : "KEEP_ORIGINAL",
+              ttsAudioMode: value ? "REPLACE" : current.ttsAudioMode,
+            }))}
+          />
         </div>
         <button
           type="button"
@@ -524,7 +579,11 @@ export function NativeAutomationWorkspace() {
                     <span className="truncate">
                       {item.path.split(/[\\/]/).pop()}
                     </span>
-                    <span>{item.stage ?? item.state}</span>
+                    <span>
+                      {item.state === "FAILED" || item.state === "CANCELLED"
+                        ? item.state
+                        : item.stage ?? item.state}
+                    </span>
                   </div>
                   {(item.attempt ?? 1) > 1 && (
                     <p className="mt-1 text-[10px] text-white/45">
@@ -538,6 +597,17 @@ export function NativeAutomationWorkspace() {
                         {Math.round(item.expectedDurationMs / 1000)}s
                       </p>
                     )}
+                  {(item.decodedFrames ?? 0) > 0 && (
+                    <p className="mt-1 text-[10px] text-cyan-100/70">
+                      Khung: {item.decodedFrames} · OCR: {item.ocrFrames ?? 0} · Ứng viên: {item.changeCandidateFrames ?? 0} · Vùng: {item.mergedTrackCount ?? 0}
+                    </p>
+                  )}
+                  {(item.receipt?.detectedLanguages?.length ?? 0) > 0 && (
+                    <p className="mt-1 text-[10px] text-cyan-100/70">Ngôn ngữ: {item.receipt?.detectedLanguages?.join(", ")}</p>
+                  )}
+                  {item.estimatedRemainingMs != null && item.state !== "COMPLETED" && (
+                    <p className="mt-1 text-[10px] text-white/45">Còn khoảng {Math.ceil(item.estimatedRemainingMs / 1000)}s</p>
+                  )}
                   {(item.state === "PROBING" ||
                     item.state === "PREPARING" ||
                     item.state === "RENDERING" ||
@@ -644,6 +714,28 @@ export function NativeAutomationWorkspace() {
                 Thay bằng âm thanh của bạn
               </option>
             </select>
+            {preset.autoTts && (
+              <select
+                value={preset.ttsAudioMode ?? "REPLACE"}
+                onChange={() =>
+                  setPreset((current) => ({
+                    ...current,
+                    translationOutputMode: "DUBBED_AUDIO",
+                    originalAudioPolicy: "REMOVE_ORIGINAL",
+                    ttsAudioMode: "REPLACE",
+                  }))
+                }
+                className="mt-2 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                aria-label="Chế độ âm thanh giọng nói"
+              >
+                <option value="REPLACE">Thay âm thanh gốc bằng giọng Việt</option>
+              </select>
+            )}
+            <p className="mt-2 text-xs text-white/55">
+              {preset.autoTts
+                ? "Dịch bằng giọng nói: thay âm thanh gốc bằng giọng Việt."
+                : "Chỉ dịch phụ đề: giữ âm thanh gốc."}
+            </p>
           </Panel>
         </div>
         <div className="space-y-4">
@@ -1015,7 +1107,7 @@ export function NativeAutomationWorkspace() {
           Xem trước 5 giây
         </button>
         <span className="text-xs text-white/50">
-          {items.length} video · {queued.length} đang chờ · tiến độ/hủy do máy xử lý
+          {items.length} video · {queued.length} đang chờ · tối đa 2 video chạy song song · tiến độ/hủy do máy xử lý
         </span>
       </div>
     </section>

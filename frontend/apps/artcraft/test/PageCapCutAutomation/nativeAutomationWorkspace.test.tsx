@@ -110,9 +110,10 @@ describe("NativeAutomationWorkspace", () => {
     render(<NativeAutomationWorkspace />);
     fireEvent.click(screen.getByRole("button", { name: "Thêm video" }));
     await waitFor(() => expect(screen.getByText("first.mp4")).toBeInTheDocument());
-    // `auto` is intentionally rejected by production preflight. Select an
-    // explicit source language before dispatching the queue.
-    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "zt" } });
+    // Production dispatch requires an explicit source-language contract.
+    fireEvent.change(screen.getByDisplayValue("Tự động phát hiện"), {
+      target: { value: "en" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Chạy hàng đợi" }));
 
     await waitFor(() => expect(startJobMock).toHaveBeenCalledTimes(2));

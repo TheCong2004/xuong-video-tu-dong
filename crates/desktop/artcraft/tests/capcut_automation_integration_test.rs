@@ -31,12 +31,12 @@ fn local_automation_contract_is_stable_end_to_end() {
   let graph = build_filter_graph(&preset, None, Some(&hook)).unwrap();
   assert!(graph.contains("hflip"));
   assert!(graph.contains("ass=filename"));
-  assert!(graph.contains("setpts=PTS/1.100000"));
-  assert_eq!(build_audio_filter(&preset).unwrap().as_deref(), Some("atempo=1.100000"));
+  assert!(graph.contains("setpts=(PTS-STARTPTS)/1.100000"));
+  assert!(build_audio_filter(&preset).unwrap().as_deref().unwrap().contains("atempo=1.100000"));
 
   let mut muted = preset;
   muted.audio_policy = AudioRightsPolicy::MuteOriginal;
-  assert_eq!(build_audio_filter(&muted).unwrap().as_deref(), Some("volume=0"));
+  assert!(build_audio_filter(&muted).unwrap().as_deref().unwrap().contains("volume=0"));
 }
 
 #[test]

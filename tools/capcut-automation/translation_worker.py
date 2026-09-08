@@ -47,6 +47,10 @@ def _record_shape(diagnostics: dict[str, object], encoded: list[list[str]]) -> N
 
 
 def translate(package_root: Path, segments: list[dict], diagnostics: dict[str, object]) -> list[dict]:
+    # Record the boundary before importing optional native dependencies.  A
+    # missing runtime package must be distinguishable from a tokenizer or
+    # CTranslate2 shape failure and should never surface as an opaque exit=1.
+    _set_stage(diagnostics, "IMPORT_RUNTIME")
     import ctranslate2
     import sentencepiece as spm
     extraction: tempfile.TemporaryDirectory[str] | None = None
@@ -74,8 +78,11 @@ def translate(package_root: Path, segments: list[dict], diagnostics: dict[str, o
     # builds; CTranslate2's pybind boundary rejects that object even though it
     # prints like a string.  The native API contract is exactly List[List[str]].
     _set_stage(diagnostics, "TOKENIZE")
+    # Use the explicit SentencePiece pieces API instead of the overloaded
+    # encode(out_type=...) binding.  The latter differs between package builds
+    # and can raise the same opaque PyBind cast error seen in production.
     encoded: list[list[str]] = [
-        [str(token) for token in tokenizer.encode(str(item.get("text", "")), out_type=str)]
+        [str(token) for token in tokenizer.encode_as_pieces(str(item.get("text", "")))]
         for item in segments
     ]
     if not all(isinstance(tokens, list) and all(isinstance(token, str) for token in tokens) for tokens in encoded):
@@ -89,18 +96,26 @@ def translate(package_root: Path, segments: list[dict], diagnostics: dict[str, o
         "tokenCount": sum(len(tokens) for tokens in encoded),
         "allTokensAreStrings": all(isinstance(token, str) for tokens in encoded for token in tokens),
     })
-    # Keep each native call to one example.  This preserves the required
-    # List[List[str]] boundary while avoiding a pybind cast failure observed
-    # with mixed/large OCR batches in the production pipeline.
-    batches = []
-    for index, tokens in enumerate(encoded):
-        _set_stage(diagnostics, "TRANSLATE_BATCH")
-        call_diagnostics = {**diagnostics, "hopIndex": diagnostics.get("hopIndex", 0), "itemCount": 1, "tokenCount": len(tokens)}
-        print("CAPCUT_TRANSLATION_DIAGNOSTICS " + json.dumps(call_diagnostics, ensure_ascii=True, sort_keys=True), file=sys.stderr, flush=True)
-        try:
-            batches.extend(translator.translate_batch([tokens], batch_type="examples", replace_unknowns=True, beam_size=2, num_hypotheses=1))
-        except Exception as exc:
-            raise RuntimeError(f"CTranslate2 translate_batch failed at segment {index}/{len(encoded)}: {exc}") from exc
+    # Translate the complete contiguous transcript in one call so the model
+    # sees the same context/order as production rather than independently
+    # translating every Whisper segment.
+    _set_stage(diagnostics, "TRANSLATE_BATCH")
+    print("CAPCUT_TRANSLATION_DIAGNOSTICS " + json.dumps(diagnostics, ensure_ascii=True, sort_keys=True), file=sys.stderr, flush=True)
+    try:
+        # A wider beam plus a small repetition guard prevents long Whisper
+        # batches from collapsing into repeated tokens (the previous beam=2
+        # setting produced quality-gate failures on real Chinese speech).
+        batches = translator.translate_batch(
+            encoded,
+            batch_type="examples",
+            replace_unknowns=True,
+            beam_size=4,
+            no_repeat_ngram_size=3,
+            repetition_penalty=1.1,
+            num_hypotheses=1,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"CTranslate2 translate_batch failed for {len(encoded)} segments: {exc}") from exc
     result: list[dict] = []
     for item, batch in zip(segments, batches):
         _set_stage(diagnostics, "DECODE")
@@ -113,9 +128,6 @@ def translate(package_root: Path, segments: list[dict], diagnostics: dict[str, o
         # Decode explicitly as SentencePiece pieces to avoid the overloaded
         # decode/decode_ids PyBind boundary for List[str] hypotheses.
         text = tokenizer.decode_pieces([str(token) for token in tokens]).replace("▁", " ").strip()
-        result.append({"id": item.get("id"), "translatedText": text})
-        continue
-        text = tokenizer.decode(tokens).replace("▁", " ").strip()
         result.append({"id": item.get("id"), "translatedText": text})
     if extraction is not None:
         extraction.cleanup()
@@ -133,22 +145,23 @@ def main() -> int:
     parser.add_argument("--route-kind", default="unknown")
     parser.add_argument("--hop-index", default=0, type=int)
     args = parser.parse_args()
+    worker_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    model_sha = hashlib.sha256(args.model_package.read_bytes()).hexdigest() if args.model_package.is_file() else "unknown"
     for line in sys.stdin:
         if not line.strip():
             continue
+        diagnostics = {
+            "sourceLanguage": args.source_language,
+            "effectiveSourceLanguage": args.effective_source_language,
+            "route": args.route_kind,
+            "hopIndex": args.hop_index,
+            "modelId": args.model_id,
+            "modelSha256": model_sha,
+            "workerSha": os.environ.get("CAPCUT_WORKER_SHA256", worker_sha),
+        }
         try:
             payload = json.loads(line)
             segments = payload.get("segments", [])
-            worker_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
-            diagnostics = {
-                "sourceLanguage": args.source_language,
-                "effectiveSourceLanguage": args.effective_source_language,
-                "route": args.route_kind,
-                "hopIndex": args.hop_index,
-                "modelId": args.model_id,
-                "modelSha256": hashlib.sha256(args.model_package.read_bytes()).hexdigest() if args.model_package.is_file() else "unknown",
-                "workerSha": os.environ.get("CAPCUT_WORKER_SHA256", worker_sha),
-            }
             output = {"provider": "argos-translate", "model": args.model_id, "segments": translate(args.model_package, segments, diagnostics)}
             print(json.dumps(output, ensure_ascii=False), flush=True)
         except Exception as exc:  # protocol errors are returned, never faked as success

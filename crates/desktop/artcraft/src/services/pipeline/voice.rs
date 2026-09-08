@@ -231,15 +231,7 @@ async fn request_piper_speech(input: &VoiceInput, text: &str, cancel_flag: &Arc<
   let model = input.piper_model.as_ref().ok_or_else(|| VoiceError::new("VOICE_LOCAL_ENGINE_NOT_READY", "Piper voice model is not resolved", false))?;
   let suffix = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|value| value.as_nanos()).unwrap_or_default();
   let output_path = env::temp_dir().join(format!("artcraft-piper-{}-{suffix}.wav", std::process::id()));
-  let mut child = TokioCommand::new(executable)
-    .current_dir(executable.parent().unwrap_or_else(|| Path::new(".")))
-    .arg("--model").arg(model)
-    .arg("--output_file").arg(&output_path)
-    .stdin(Stdio::piped())
-    .stdout(Stdio::null())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|error| VoiceError::new("VOICE_PIPER_START_FAILED", error.to_string(), false))?;
+  let mut child = TokioCommand::new(executable).current_dir(executable.parent().unwrap_or_else(|| Path::new("."))).arg("--model").arg(model).arg("--output_file").arg(&output_path).stdin(Stdio::piped()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn().map_err(|error| VoiceError::new("VOICE_PIPER_START_FAILED", error.to_string(), false))?;
   if let Some(mut stdin) = child.stdin.take() {
     stdin.write_all(text.as_bytes()).await.map_err(|error| VoiceError::new("VOICE_PIPER_WRITE_FAILED", error.to_string(), false))?;
     drop(stdin);

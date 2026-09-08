@@ -150,8 +150,8 @@ pub fn infer_ocr_source_language(regions: &[OcrRegion]) -> String {
   let text = regions.iter().map(|region| region.text.as_str()).collect::<Vec<_>>().join(" ");
   let traditional_markers = ['國', '氣', '為', '與', '現', '臺', '觀', '園', '應', '這', '來', '對', '後', '發', '會', '說', '還', '華', '風', '電', '體', '畫', '號', '開', '關', '過', '點', '長', '門', '見', '從', '讓', '變', '聽', '樣', '實', '時', '麼', '機', '種', '個', '兩', '無', '國'];
   let simplified_markers = ['国', '气', '为', '与', '现', '台', '观', '园', '应', '这', '来', '对', '后', '发', '会', '说', '还', '华', '风', '电', '体', '画', '号', '开', '关', '过', '点', '长', '门', '见', '从', '让', '变', '听', '样', '实', '时', '么', '机', '种', '个', '两', '无'];
-  let traditional = text.chars().filter(|character| traditional_markers.contains(character)).count();
-  let simplified = text.chars().filter(|character| simplified_markers.contains(character)).count();
+  let traditional = text.chars().filter(|character| traditional_markers.contains(character)).count() + ["國", "氣", "為", "與", "現", "臺", "觀", "園", "應", "這", "來", "對", "後", "發", "會", "說", "還", "華", "風", "電", "體", "畫", "號", "開", "關", "過", "點", "長", "門", "見", "從", "讓", "變", "聽", "樣", "實", "時", "麼", "機", "種", "個", "兩", "無"].iter().map(|marker| text.matches(marker).count()).sum::<usize>();
+  let simplified = text.chars().filter(|character| simplified_markers.contains(character)).count() + ["国", "气", "为", "与", "现", "台", "观", "园", "应", "这", "来", "对", "后", "发", "会", "说", "还", "华", "风", "电", "体", "画", "号", "开", "关", "过", "点", "长", "门", "见", "从", "让", "变", "听", "样", "实", "时", "么", "机", "种", "个", "两", "无"].iter().map(|marker| text.matches(marker).count()).sum::<usize>();
   if traditional > simplified {
     return "zt".to_string();
   }
@@ -163,7 +163,18 @@ pub fn infer_ocr_source_language(regions: &[OcrRegion]) -> String {
     // user-provided `chi_tra`/`chi_sim` hint remains authoritative.
     return "zh".to_string();
   }
-  "en".to_string()
+  if text.chars().any(|character| character.is_alphabetic()) {
+    let vietnamese = ['ă', 'â', 'đ', 'ê', 'ô', 'ơ', 'ư', 'Ă', 'Â', 'Đ', 'Ê', 'Ô', 'Ơ', 'Ư'];
+    if text.chars().any(|character| vietnamese.contains(&character)) {
+      return "vi".to_string();
+    }
+    return "en".to_string();
+  }
+  "unknown".to_string()
+}
+
+pub fn infer_text_language(text: &str) -> String {
+  infer_ocr_source_language(&[OcrRegion { id: "language-evidence".into(), text: text.to_string(), x: 0.0, y: 0.0, width: 1.0, height: 1.0, confidence: Some(1.0) }])
 }
 
 fn parse_tsv(tsv: &str, image_width: u32, image_height: u32) -> Vec<OcrRegion> {

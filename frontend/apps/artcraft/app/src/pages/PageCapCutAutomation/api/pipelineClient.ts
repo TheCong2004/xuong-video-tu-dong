@@ -58,6 +58,8 @@ export interface LocalAutomationPreset {
   ocrSampleIntervalMs?: number;
   autoDiarize?: boolean;
   autoTts?: boolean;
+  translationOutputMode?: "SUBTITLE_ONLY" | "DUBBED_AUDIO";
+  originalAudioPolicy?: "KEEP_ORIGINAL" | "REMOVE_ORIGINAL";
   ttsAudioMode?: "REPLACE" | "DUCK_ORIGINAL" | "MIX";
   originalAudioGain?: number;
   speakerVoiceAssignments?: Record<string, string>;
@@ -80,6 +82,9 @@ export interface LocalAutomationReceipt {
   subtitleBurned: boolean;
   subtitleMode?: string;
   subtitleCueCount?: number;
+  translationOutputMode?: 'SUBTITLE_ONLY' | 'DUBBED_AUDIO' | string;
+  originalAudioPolicy?: 'KEEP_ORIGINAL' | 'REMOVE_ORIGINAL' | string;
+  ttsAudioMode?: 'REPLACE' | 'DUCK_ORIGINAL' | 'MIX' | string;
   hookApplied: boolean;
   foreignTextRegionsApplied: number;
   terminal: boolean;
@@ -106,6 +111,15 @@ export interface LocalAutomationReceipt {
   previewSha256?: string | null;
   resourceVersions?: Record<string, string>;
   warnings?: string[];
+  renderTrackCount?: number;
+  filterNodeCount?: number;
+  estimatedOutputFrames?: number;
+  outputFps?: number | null;
+  detectedLanguages?: string[];
+  dominantDetectedLanguage?: string | null;
+  languageDetectionConfidence?: number | null;
+  effectiveSourceLanguages?: string[];
+  translationRoutes?: string[][];
   requestedSourceLanguage?: string | null;
   effectiveSourceLanguage?: string | null;
   ocrLanguages?: string[];
@@ -116,7 +130,7 @@ export interface LocalAutomationReceipt {
 export type NativeAutomationJobState = 'QUEUED' | 'PROBING' | 'PREPARING' | 'RENDERING' | 'VERIFYING' | 'COMPLETED' | 'CANCEL_REQUESTED' | 'FAILED' | 'CANCELLED';
 export interface NativeAutomationJob {
   jobId: string; requestId: string; attempt: number; attemptId?: string; dispatchCount?: number; retryCount?: number; lastWorkerInvocationAt?: number | null; inputPath: string; outputRoot?: string | null; pageName: string;
-  state: NativeAutomationJobState; progress: number; stageProgress?: number; overallProgress?: number; elapsedMs?: number; estimatedRemainingMs?: number | null; message?: string | null; stage: string; createdAt: number; startedAt?: number | null; finishedAt?: number | null; processedMs?: number | null; expectedDurationMs?: number | null; ffmpegPid?: number | null; errorCode?: string | null; errorMessage?: string | null; error?: string | null; receipt?: LocalAutomationReceipt | null;
+  state: NativeAutomationJobState; progress: number; stageProgress?: number; overallProgress?: number; elapsedMs?: number; estimatedRemainingMs?: number | null; decodedFrames?: number; changeCandidateFrames?: number; ocrFrames?: number; skippedDuplicateFrames?: number; rawDetectionCount?: number; mergedTrackCount?: number; processingFps?: number | null; speedRatio?: number | null; firstProgressAt?: number | null; lastProgressAt?: number | null; message?: string | null; stage: string; createdAt: number; startedAt?: number | null; finishedAt?: number | null; processedMs?: number | null; expectedDurationMs?: number | null; ffmpegPid?: number | null; errorCode?: string | null; errorMessage?: string | null; error?: string | null; receipt?: LocalAutomationReceipt | null;
 }
 export interface NativeAutomationProgressPayload extends NativeAutomationJob {}
 
