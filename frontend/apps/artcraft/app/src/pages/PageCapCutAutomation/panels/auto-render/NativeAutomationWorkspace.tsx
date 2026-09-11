@@ -141,9 +141,12 @@ export function NativeAutomationWorkspace() {
   const [preset, setPreset] = useState<LocalAutomationPreset>(DEFAULT_PRESET);
   const [items, setItems] = useState<QueueItem[]>([]);
   const [running, setRunning] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [outputRoot, setOutputRoot] = useState("");
   const [transcript, setTranscript] = useState<LocalTranscriptSegment[]>([]);
   const [localAiBusy, setLocalAiBusy] = useState<"transcribe" | "translate" | null>(null);
+  const [addingVideos, setAddingVideos] = useState(false);
+  const [videoDialogError, setVideoDialogError] = useState<string | null>(null);
 
   const applyJob = (job: NativeAutomationJob) =>
     setItems((current) => {
@@ -197,7 +200,6 @@ export function NativeAutomationWorkspace() {
     [items],
   );
   const previewInput = items[0]?.path;
-  const previewOutput = items.find((item) => item.receipt)?.receipt?.outputPath;
   const updateColor = (
     key: keyof LocalAutomationPreset["color"],
     value: number,
@@ -283,33 +285,44 @@ export function NativeAutomationWorkspace() {
     }));
 
   const addVideos = async () => {
-    const selected = await open({
-      multiple: true,
-      directory: false,
-      filters: [
-        { name: "Video", extensions: ["mp4", "mov", "mkv", "webm", "avi"] },
-      ],
-    });
-    const paths = Array.isArray(selected)
-      ? selected
-      : selected
-        ? [selected]
-        : [];
-    setItems((current) => [
-      ...current,
-      ...paths
-        .filter(
-          (path): path is string =>
-            typeof path === "string" &&
-            !current.some((item) => item.path === path),
-        )
-        .map((path) => ({
-          id: crypto.randomUUID(),
-          path,
-          state: "QUEUED" as const,
-          progress: 0,
-        })),
-    ]);
+    if (addingVideos) return;
+    setAddingVideos(true);
+    setVideoDialogError(null);
+    try {
+      const selected = await open({
+        multiple: true,
+        directory: false,
+        filters: [
+          { name: "Video", extensions: ["mp4", "mov", "mkv", "webm", "avi"] },
+        ],
+      });
+      const paths = Array.isArray(selected)
+        ? selected
+        : selected
+          ? [selected]
+          : [];
+      setItems((current) => [
+        ...current,
+        ...paths
+          .filter(
+            (path): path is string =>
+              typeof path === "string" &&
+              !current.some((item) => item.path === path),
+          )
+          .map((path) => ({
+            id: crypto.randomUUID(),
+            path,
+            state: "QUEUED" as const,
+            progress: 0,
+          })),
+      ]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[CapCut Automation] failed to open video picker", error);
+      setVideoDialogError(`Không mở được hộp thoại chọn video: ${message}`);
+    } finally {
+      setAddingVideos(false);
+    }
   };
 
   const createFreshJobWithCurrentPreset = (item: QueueItem) => {
@@ -469,43 +482,49 @@ export function NativeAutomationWorkspace() {
   };
 
   const preview = async () => {
-    if (!previewInput) return;
-    try {
-      const result = await previewNativeAutomation(previewInput, preset);
-      setItems((current) =>
-        current.map((item) =>
-          item.path === previewInput
-            ? {
-                ...item,
-                receipt: {
-                  schemaVersion: 1,
-                  jobId: item.id,
-                  requestId: item.id,
-                  inputSha256: "",
-                  outputSha256: "",
-                  outputMd5: "",
-                  outputPath: result.path,
-                  durationMs: 5000,
-                  width: 540,
-                  height: 540,
-                  videoCodec: "h264",
-                  audioCodec: "none",
-                  playbackRate: preset.playbackRate,
-                  subtitleBurned: preset.localization.burnSubtitles && (preset.localization.manualCues?.length ?? 0) > 0,
-                  subtitleMode: (preset.localization.manualCues?.length ?? 0) > 0 ? "MANUAL" : "NONE",
-                  subtitleCueCount: preset.localization.manualCues?.filter((cue) => cue.enabled).length ?? 0,
-                  hookApplied: preset.hook.enabled,
-                  foreignTextRegionsApplied: preset.foreignText.enabled ? preset.foreignText.manualRegions.length : 0,
-                  terminal: false,
-                  state: "PREVIEW",
-                },
-              }
-            : item,
-        ),
-      );
-    } catch {
-      /* Preview never changes terminal state. */
-    }
+    if (!items.length || previewing) return;
+    setPreviewing(true);
+    await Promise.all(
+      items.map(async (item) => {
+        try {
+          const result = await previewNativeAutomation(item.path, preset);
+          setItems((current) =>
+            current.map((entry) =>
+              entry.id === item.id
+                ? {
+                    ...entry,
+                    receipt: {
+                      schemaVersion: 1,
+                      jobId: entry.id,
+                      requestId: entry.id,
+                      inputSha256: "",
+                      outputSha256: "",
+                      outputMd5: "",
+                      outputPath: result.path,
+                      durationMs: 5000,
+                      width: 540,
+                      height: 540,
+                      videoCodec: "h264",
+                      audioCodec: "none",
+                      playbackRate: preset.playbackRate,
+                      subtitleBurned: preset.localization.burnSubtitles && (preset.localization.manualCues?.length ?? 0) > 0,
+                      subtitleMode: (preset.localization.manualCues?.length ?? 0) > 0 ? "MANUAL" : "NONE",
+                      subtitleCueCount: preset.localization.manualCues?.filter((cue) => cue.enabled).length ?? 0,
+                      hookApplied: preset.hook.enabled,
+                      foreignTextRegionsApplied: preset.foreignText.enabled ? preset.foreignText.manualRegions.length : 0,
+                      terminal: false,
+                      state: "PREVIEW",
+                    },
+                  }
+                : entry,
+            ),
+          );
+        } catch {
+          /* Preview never changes terminal state. */
+        }
+      }),
+    );
+    setPreviewing(false);
   };
 
   const remove = (id: string) => {
@@ -520,7 +539,7 @@ export function NativeAutomationWorkspace() {
         <div>
           <h2 className="text-xl font-semibold">Tự động hóa nội bộ</h2>
           <p className="mt-1 text-sm text-white/55">
-            Quy trình FFmpeg nội bộ của ArtCraft, hàng đợi FIFO, tối đa 2 video chạy song song.
+            Quy trình FFmpeg nội bộ của ArtCraft, hàng đợi FIFO, mặc định 3 video chạy song song (có thể cấu hình tối đa 10).
           </p>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs">
@@ -564,11 +583,17 @@ export function NativeAutomationWorkspace() {
           <Panel title="Video / Hàng đợi">
             <button
               type="button"
+              disabled={addingVideos}
               onClick={() => void addVideos()}
-              className="w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-semibold text-[#071018] shadow-[0_8px_20px_rgba(34,211,238,0.16)] transition hover:bg-cyan-300"
+              className="w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-semibold text-[#071018] shadow-[0_8px_20px_rgba(34,211,238,0.16)] transition hover:bg-cyan-300 disabled:cursor-wait disabled:opacity-60"
             >
-              Thêm video
+              {addingVideos ? "Đang mở hộp thoại…" : "Thêm video"}
             </button>
+            {videoDialogError && (
+              <p className="mt-2 break-words text-xs text-rose-300" role="alert">
+                {videoDialogError}
+              </p>
+            )}
             <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
               {items.map((item) => (
                 <div
@@ -755,6 +780,8 @@ export function NativeAutomationWorkspace() {
               value={preset.color.brightness}
               min={-100}
               max={100}
+              valueLabel={formatSignedPercent(preset.color.brightness)}
+              hint={`FFmpeg brightness: ${formatSignedDecimal(preset.color.brightness / 100)}`}
               onChange={(value) => updateColor("brightness", value)}
             />
             <Slider
@@ -762,6 +789,8 @@ export function NativeAutomationWorkspace() {
               value={preset.color.contrast}
               min={-100}
               max={100}
+              valueLabel={formatSignedPercent(preset.color.contrast)}
+              hint={`FFmpeg contrast: ${(1 + preset.color.contrast / 100).toFixed(2)}`}
               onChange={(value) => updateColor("contrast", value)}
             />
             <Slider
@@ -769,6 +798,8 @@ export function NativeAutomationWorkspace() {
               value={preset.color.saturation}
               min={-100}
               max={100}
+              valueLabel={formatSignedPercent(preset.color.saturation)}
+              hint={`FFmpeg saturation: ${(1 + preset.color.saturation / 100).toFixed(2)}`}
               onChange={(value) => updateColor("saturation", value)}
             />
             <Slider
@@ -777,10 +808,30 @@ export function NativeAutomationWorkspace() {
               min={0.5}
               max={2}
               step={0.05}
+              valueLabel={formatPlaybackRate(preset.playbackRate)}
+              hint="Range: 0.50x - 2.00x"
               onChange={(value) =>
                 setPreset((current) => ({ ...current, playbackRate: value }))
               }
             />
+            <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Quick speed presets">
+              {[1, 1.1, 1.25, 1.5, 2].map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  onClick={() =>
+                    setPreset((current) => ({ ...current, playbackRate: rate }))
+                  }
+                  className={`rounded-md border px-2 py-1 text-[10px] transition ${
+                    Math.abs(preset.playbackRate - rate) < 0.001
+                      ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
+                      : "border-slate-700/70 bg-slate-900/40 text-white/65 hover:border-cyan-300/50 hover:text-white"
+                  }`}
+                >
+                  {formatPlaybackRate(rate)}
+                </button>
+              ))}
+            </div>
           </Panel>
           <Panel title="Phụ đề / Hook mở đầu">
             <label className="mb-3 block text-xs text-white/75">
@@ -1060,32 +1111,49 @@ export function NativeAutomationWorkspace() {
             )}
           </Panel>
           <Panel title="Xem trước">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                {previewInput ? (
-                  <video
-                    className="aspect-video w-full bg-black object-contain"
-                    controls
-                    src={convertFileSrc(previewInput)}
-                  />
-                ) : (
-                  <div className="aspect-video bg-black" />
-                )}
+            {items.length ? (
+              <div className="space-y-3">
+                {items.map((item) => {
+                  const inputName = item.path.split(/[\\/]/).pop() || item.path;
+                  const outputPath = item.receipt?.outputPath;
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-lg border border-slate-700/70 bg-slate-950/20 p-2"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-2 text-[10px] text-white/65">
+                        <span className="truncate" title={item.path}>
+                          {inputName}
+                        </span>
+                        <span className="shrink-0 text-cyan-100">{item.state}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <video
+                          className="aspect-video w-full bg-black object-contain"
+                          controls
+                          src={convertFileSrc(item.path)}
+                        />
+                        {outputPath ? (
+                          <video
+                            className="aspect-video w-full bg-black object-contain"
+                            controls
+                            src={convertFileSrc(outputPath)}
+                          />
+                        ) : (
+                          <div className="flex aspect-video items-center justify-center bg-black text-[10px] text-white/40">
+                            Chưa có kết quả
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                {previewOutput ? (
-                  <video
-                    className="aspect-video w-full bg-black object-contain"
-                    controls
-                    src={convertFileSrc(previewOutput)}
-                  />
-                ) : (
-                  <div className="flex aspect-video items-center justify-center bg-black text-xs text-white/40">
-                    Chưa có kết quả
-                  </div>
-                )}
+            ) : (
+              <div className="flex aspect-video items-center justify-center bg-black text-xs text-white/40">
+                Chưa có video trong hàng đợi
               </div>
-            </div>
+            )}
           </Panel>
         </div>
       </div>
@@ -1100,14 +1168,14 @@ export function NativeAutomationWorkspace() {
         </button>
         <button
           type="button"
-          disabled={!previewInput}
+          disabled={!previewInput || previewing}
           onClick={() => void preview()}
           className="rounded-lg border border-cyan-300/40 bg-cyan-300/5 px-4 py-2.5 text-cyan-100 transition hover:bg-cyan-300/10 disabled:opacity-40"
         >
-          Xem trước 5 giây
+          {previewing ? "Đang xem trước…" : "Xem trước 5 giây"}
         </button>
         <span className="text-xs text-white/50">
-          {items.length} video · {queued.length} đang chờ · tối đa 2 video chạy song song · tiến độ/hủy do máy xử lý
+          {items.length} video · {queued.length} đang chờ · mặc định 3 chạy song song (tối đa 10 theo cấu hình) · tiến độ/hủy do máy xử lý
         </span>
       </div>
     </section>
@@ -1148,6 +1216,8 @@ function Slider({
   min,
   max,
   step = 1,
+  valueLabel,
+  hint,
   onChange,
 }: {
   label: string;
@@ -1155,11 +1225,16 @@ function Slider({
   min: number;
   max: number;
   step?: number;
+  valueLabel?: string;
+  hint?: string;
   onChange: (value: number) => void;
 }) {
   return (
     <label className="mt-3 block text-xs">
-      {label}
+      <span className="flex items-center justify-between gap-3">
+        <span>{label}</span>
+        <span className="font-mono text-cyan-100">{valueLabel ?? value}</span>
+      </span>
       <input
         className="mt-1 w-full accent-cyan-400"
         type="range"
@@ -1167,10 +1242,33 @@ function Slider({
         max={max}
         step={step}
         value={value}
+        aria-valuetext={valueLabel ?? String(value)}
         onChange={(event) => onChange(Number(event.target.value))}
       />
+      <span className="mt-0.5 flex justify-between text-[10px] text-white/40">
+        <span>{formatSliderBoundary(min, step)}</span>
+        <span>{formatSliderBoundary(max, step)}</span>
+      </span>
+      {hint ? <span className="mt-1 block text-[10px] text-white/45">{hint}</span> : null}
     </label>
   );
+}
+
+function formatSignedPercent(value: number) {
+  return `${value > 0 ? "+" : ""}${Math.round(value)}%`;
+}
+
+function formatSignedDecimal(value: number) {
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
+}
+
+function formatPlaybackRate(value: number) {
+  return `${value.toFixed(2)}x`;
+}
+
+function formatSliderBoundary(value: number, step: number) {
+  if (step < 1) return value.toFixed(2);
+  return String(Math.round(value));
 }
 function NumberInput({
   label,

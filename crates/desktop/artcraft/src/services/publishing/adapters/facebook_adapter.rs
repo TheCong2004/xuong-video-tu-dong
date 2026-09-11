@@ -8,14 +8,23 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 
 pub struct FacebookPublisherAdapter;
-impl FacebookPublisherAdapter { pub fn new() -> Self { Self } }
+impl FacebookPublisherAdapter {
+  pub fn new() -> Self {
+    Self
+  }
+}
 
 fn facebook_url(url: &str) -> bool {
-  url::Url::parse(url).ok().and_then(|u| {
-    if u.scheme() != "https" { return None; }
-    let host = u.host_str()?.to_ascii_lowercase();
-    Some(host == "facebook.com" || host.ends_with(".facebook.com"))
-  }).unwrap_or(false)
+  url::Url::parse(url)
+    .ok()
+    .and_then(|u| {
+      if u.scheme() != "https" {
+        return None;
+      }
+      let host = u.host_str()?.to_ascii_lowercase();
+      Some(host == "facebook.com" || host.ends_with(".facebook.com"))
+    })
+    .unwrap_or(false)
 }
 
 fn identity_from_page(session: &BrowserSession, target_id: &str, page_url: &str) -> BrowserIdentity {
@@ -29,7 +38,9 @@ fn runtime_identity_from_page(session: &BrowserSession, target_id: &str, page_ur
 #[async_trait]
 impl PublisherAdapter for FacebookPublisherAdapter {
   async fn prepare(&self, ctx: &PublicationExecutionContext) -> Result<(), PublisherError> {
-    if !Path::new(&ctx.video_path).is_file() { return Err(PublisherError::new(PublisherErrorCode::VideoNotFound, "Facebook video path does not exist", false)); }
+    if !Path::new(&ctx.video_path).is_file() {
+      return Err(PublisherError::new(PublisherErrorCode::VideoNotFound, "Facebook video path does not exist", false));
+    }
     Ok(())
   }
 
@@ -40,7 +51,9 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     let session = backend.run_browser(&ctx.browser_profile_id, serde_json::json!({"targetKind":"FACEBOOK","browserEngine":"CHROME_FOR_TESTING","coldStartOnly":true,"headless":false})).await.map_err(PublisherError::profile_offline)?;
     let pages = backend.list_pages(&ctx.browser_profile_id).await.map_err(PublisherError::profile_offline)?;
     let candidate = pages.pages.iter().find(|p| p.target_id == expected_target).ok_or_else(|| PublisherError::new(PublisherErrorCode::TargetNotFound, "Configured Facebook target is no longer present", false))?;
-    if candidate.page_type.as_deref().unwrap_or("page") != "page" || !facebook_url(&candidate.url) { return Err(PublisherError::new(PublisherErrorCode::TargetNotFound, "Configured target is not a Facebook page", false)); }
+    if candidate.page_type.as_deref().unwrap_or("page") != "page" || !facebook_url(&candidate.url) {
+      return Err(PublisherError::new(PublisherErrorCode::TargetNotFound, "Configured target is not a Facebook page", false));
+    }
     let identity = identity_from_page(&session, &candidate.target_id, &candidate.url);
     if let Some(binding) = ctx.facebook_runtime_binding.as_ref() {
       let mut runtime_identity = runtime_identity_from_page(&session, &candidate.target_id, &candidate.url);
@@ -54,7 +67,9 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     }
     validate_page_snapshot(ctx, &candidate.url)?;
     let status = backend.start_worker(&ctx.browser_profile_id, &identity).await.map_err(PublisherError::profile_offline)?;
-    if !status.extension_ready || !matches!(status.state.as_str(), "READY" | "IDLE") { return Err(PublisherError::auth_required("Facebook session is not ready")); }
+    if !status.extension_ready || !matches!(status.state.as_str(), "READY" | "IDLE") {
+      return Err(PublisherError::auth_required("Facebook session is not ready"));
+    }
     Ok(true)
   }
 
@@ -70,7 +85,9 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     let session = backend.run_browser(&ctx.browser_profile_id, serde_json::json!({"targetKind":"FACEBOOK","browserEngine":"CHROME_FOR_TESTING","coldStartOnly":true,"headless":false})).await.map_err(PublisherError::profile_offline)?;
     let pages = backend.list_pages(&ctx.browser_profile_id).await.map_err(PublisherError::profile_offline)?;
     let candidate = pages.pages.iter().find(|p| p.target_id == expected_target).ok_or_else(|| PublisherError::new(PublisherErrorCode::TargetNotFound, "Configured Facebook target is stale", false))?;
-    if candidate.page_type.as_deref().unwrap_or("page") != "page" || !facebook_url(&candidate.url) { return Err(PublisherError::new(PublisherErrorCode::TargetNotFound, "Configured target is not a Facebook page", false)); }
+    if candidate.page_type.as_deref().unwrap_or("page") != "page" || !facebook_url(&candidate.url) {
+      return Err(PublisherError::new(PublisherErrorCode::TargetNotFound, "Configured target is not a Facebook page", false));
+    }
     if let Some(binding) = ctx.facebook_runtime_binding.as_ref() {
       let mut live_identity = runtime_identity_from_page(&session, &candidate.target_id, &candidate.url);
       if let Some(stored) = binding.runtime.as_ref() {
@@ -95,12 +112,18 @@ impl PublisherAdapter for FacebookPublisherAdapter {
     let result = validate_dispatch_response(parsed, &expected, "Facebook")?;
     let post_id = result.as_ref().and_then(|r| r.get("postId")).and_then(|v| v.as_str()).map(str::to_string);
     let post_url = result.as_ref().and_then(|r| r.get("postUrl")).and_then(|v| v.as_str()).map(str::to_string);
-    if post_id.is_none() && post_url.is_none() { return Err(PublisherError::new(PublisherErrorCode::VerificationRequired, "Facebook post has no authoritative verification evidence", false)); }
+    if post_id.is_none() && post_url.is_none() {
+      return Err(PublisherError::new(PublisherErrorCode::VerificationRequired, "Facebook post has no authoritative verification evidence", false));
+    }
     Ok(PublicationResult { platform_post_id: post_id, post_url, posted_at: chrono::Utc::now().timestamp(), raw_metadata: Some(raw) })
   }
 
-  async fn verify(&self, _ctx: &PublicationExecutionContext) -> Result<Option<PublicationResult>, PublisherError> { Ok(None) }
-  async fn cancel_if_supported(&self, _ctx: &PublicationExecutionContext) -> Result<(), PublisherError> { Ok(()) }
+  async fn verify(&self, _ctx: &PublicationExecutionContext) -> Result<Option<PublicationResult>, PublisherError> {
+    Ok(None)
+  }
+  async fn cancel_if_supported(&self, _ctx: &PublicationExecutionContext) -> Result<(), PublisherError> {
+    Ok(())
+  }
 }
 
 fn validate_page_snapshot(ctx: &PublicationExecutionContext, current_url: &str) -> Result<(), PublisherError> {
@@ -114,7 +137,9 @@ fn validate_page_snapshot(ctx: &PublicationExecutionContext, current_url: &str) 
     return Err(PublisherError::new(PublisherErrorCode::TargetNotFound, "Facebook Page identity does not match the persisted snapshot", false));
   }
   if let Some(url) = expected_url {
-    if url != current_url { return Err(PublisherError::new(PublisherErrorCode::TargetNotFound, "Facebook Page canonical URL changed", false)); }
+    if url != current_url {
+      return Err(PublisherError::new(PublisherErrorCode::TargetNotFound, "Facebook Page canonical URL changed", false));
+    }
   }
   Ok(())
 }

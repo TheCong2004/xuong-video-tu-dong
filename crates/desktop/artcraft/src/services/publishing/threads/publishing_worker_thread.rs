@@ -83,19 +83,13 @@ impl PublishingWorkerThread {
             let hashtags: Vec<String> = claimed.hashtags_json.as_deref().and_then(|j| serde_json::from_str(j).ok()).unwrap_or_default();
 
             let binding_id = claimed.target_config_id.as_deref().unwrap_or_default();
-            let facebook_runtime_binding = if claimed.platform.eq_ignore_ascii_case("facebook") && !binding_id.is_empty() {
-              load_runtime_binding(&db, binding_id).await.ok().flatten()
-            } else { None };
-            let facebook_page_snapshot = if claimed.platform.eq_ignore_ascii_case("facebook") && !binding_id.is_empty() {
-              load_page_snapshot(&db, binding_id).await.ok().flatten()
-            } else { None };
+            let facebook_runtime_binding = if claimed.platform.eq_ignore_ascii_case("facebook") && !binding_id.is_empty() { load_runtime_binding(&db, binding_id).await.ok().flatten() } else { None };
+            let facebook_page_snapshot = if claimed.platform.eq_ignore_ascii_case("facebook") && !binding_id.is_empty() { load_page_snapshot(&db, binding_id).await.ok().flatten() } else { None };
             let managed_facebook_target_id = facebook_runtime_binding.as_ref().and_then(|binding| binding.runtime.as_ref()).map(|runtime| runtime.managed_target_id.clone());
             let facebook_page_id = facebook_page_snapshot.as_ref().and_then(|snapshot| snapshot.facebook_page_id.clone());
             let facebook_page_canonical_url = facebook_page_snapshot.as_ref().and_then(|snapshot| snapshot.facebook_page_canonical_url.clone());
             let facebook_page_display_name = facebook_page_snapshot.as_ref().map(|snapshot| snapshot.facebook_page_display_name.clone());
-            let live_publish_confirmation = if claimed.platform.eq_ignore_ascii_case("facebook") {
-              load_confirmation(&db, &claimed.id).await.ok().flatten()
-            } else { None };
+            let live_publish_confirmation = if claimed.platform.eq_ignore_ascii_case("facebook") { load_confirmation(&db, &claimed.id).await.ok().flatten() } else { None };
 
             let ctx = PublicationExecutionContext { publication_id: claimed.id.clone(), job_id: claimed.job_id.clone(), page_id: claimed.page_id.clone(), platform: claimed.platform.clone(), browser_profile_id: claimed.browser_profile_id.clone(), video_path: claimed.video_path.clone().unwrap_or_default(), title: claimed.title.clone(), caption: claimed.caption.clone(), hashtags, description: claimed.description.clone(), target_destination_id: claimed.target_config_id.clone().unwrap_or_default(), target_destination_handle: None, managed_facebook_target_id, facebook_page_id, facebook_page_canonical_url, facebook_page_display_name, visible_link: None, facebook_runtime_binding, facebook_page_snapshot, scheduled_occurrence_id: None, live_publish_confirmation, idempotency_key: claimed.idempotency_key.clone(), attempt_number: claimed.attempt_count as i32 };
 

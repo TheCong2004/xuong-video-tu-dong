@@ -125,15 +125,21 @@ async fn synthesize_voice_with_ffmpeg(input: &VoiceInput, work_dir: &Path, cance
   let mut clip_paths = Vec::with_capacity(input.script.scenes.len());
   let mut measured = Vec::with_capacity(input.script.scenes.len());
 
-  for scene in &input.script.scenes {
+  for (scene_position, scene) in input.script.scenes.iter().enumerate() {
     if cancel_flag.load(Ordering::SeqCst) {
       return Err(VoiceError::cancelled());
     }
-    let narration = scene.narration.trim();
+    // Piper treats punctuation as prosody.  Translated segments often arrive
+    // without terminal punctuation, so add a light inter-segment pause and a
+    // full stop at the end instead of concatenating words at clip boundaries.
+    let narration = normalize_narration_for_tts(
+      scene.narration.trim(),
+      scene_position + 1 == input.script.scenes.len(),
+    );
     if narration.is_empty() {
       return Err(VoiceError::new("VOICE_INPUT_INVALID", format!("Scene {} narration is empty", scene.id), false));
     }
-    let audio = request_speech(&client, input, narration, &cancel_flag).await?;
+    let audio = request_speech(&client, input, &narration, &cancel_flag).await?;
     let path = clips_dir.join(format!("scene_{:04}.{}", scene.index, audio.extension));
     std::fs::write(&path, &audio.bytes).map_err(|error| VoiceError::new("VOICE_ARTIFACT_FAILED", error.to_string(), false))?;
     let metadata = std::fs::metadata(&path).map_err(|error| VoiceError::new("VOICE_ARTIFACT_FAILED", error.to_string(), false))?;
@@ -145,7 +151,7 @@ async fn synthesize_voice_with_ffmpeg(input: &VoiceInput, work_dir: &Path, cance
       return Err(VoiceError::new("VOICE_AUDIO_INVALID", format!("Audio duration is invalid for scene {}", scene.id), false));
     }
     clip_paths.push(path);
-    measured.push((scene.id.clone(), scene.index, narration.to_string(), probe.duration_seconds));
+    measured.push((scene.id.clone(), scene.index, narration, probe.duration_seconds));
   }
 
   if cancel_flag.load(Ordering::SeqCst) {
@@ -280,6 +286,20 @@ fn measured_timings(measured: &[(String, u32, String, f64)]) -> Result<Vec<Voice
   Ok(result)
 }
 
+fn normalize_narration_for_tts(text: &str, is_last: bool) -> String {
+  let mut normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
+  if normalized.is_empty() {
+    return normalized;
+  }
+  let has_terminal_punctuation = normalized.chars().last().is_some_and(|character| {
+    ".!?;:,\u{3002}\u{3001}\u{FF01}\u{FF0C}\u{FF1A}\u{FF1B}\u{FF1F}\u{2026}".contains(character)
+  });
+  if !has_terminal_punctuation {
+    normalized.push(if is_last { '.' } else { ',' });
+  }
+  normalized
+}
+
 pub fn should_retry(error: &VoiceError, attempt: u32) -> bool {
   error.retryable && !error.cancelled && attempt < VOICE_MAX_ATTEMPTS
 }
@@ -332,6 +352,14 @@ mod tests {
     assert_eq!(timing[0].end_seconds, 1.25);
     assert_eq!(timing[1].start_seconds, 1.25);
     assert_eq!(timing[1].end_seconds, 3.25);
+  }
+
+  #[test]
+  fn narration_normalization_adds_boundary_prosody_without_overwriting_punctuation() {
+    assert_eq!(normalize_narration_for_tts("Xin chào", false), "Xin chào,");
+    assert_eq!(normalize_narration_for_tts("Đã xong!", true), "Đã xong!");
+    assert_eq!(normalize_narration_for_tts("你好", true), "你好.");
+    assert_eq!(normalize_narration_for_tts("   ", false), "");
   }
 
   #[test]

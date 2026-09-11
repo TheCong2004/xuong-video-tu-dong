@@ -140,8 +140,9 @@ struct Inner {
 pub struct CapcutAutomationJobManager {
   inner: Arc<Mutex<Inner>>,
   notify: Arc<Notify>,
-  /// Limits simultaneous native renders. Two jobs can translate/OCR in
-  /// parallel while preventing an unbounded process and memory explosion.
+  /// Limits simultaneous native renders. Three jobs run by default; the
+  /// ARTCRAFT_CAPCUT_CONCURRENCY override allows up to ten when the machine
+  /// has enough CPU/RAM, while still preventing an unbounded process fan-out.
   concurrency: Arc<Semaphore>,
 }
 
@@ -153,7 +154,7 @@ impl Default for CapcutAutomationJobManager {
 
 impl CapcutAutomationJobManager {
   pub fn new() -> Self {
-    let concurrency = std::env::var("ARTCRAFT_CAPCUT_CONCURRENCY").ok().and_then(|value| value.parse::<usize>().ok()).filter(|value| (1..=4).contains(value)).unwrap_or(2);
+    let concurrency = std::env::var("ARTCRAFT_CAPCUT_CONCURRENCY").ok().and_then(|value| value.parse::<usize>().ok()).filter(|value| (1..=10).contains(value)).unwrap_or(3);
     Self { inner: Arc::new(Mutex::new(Inner { jobs: HashMap::new(), queue: VecDeque::new(), worker_started: false, persistence_path: None })), notify: Arc::new(Notify::new()), concurrency: Arc::new(Semaphore::new(concurrency)) }
   }
 
@@ -841,6 +842,11 @@ fn run_native_local_stages(app: &AppHandle, ffmpeg: &Path, input: &Path, job_dir
   let mut speaker_turns: Vec<SpeakerTurn> = Vec::new();
   let mut speaker_assignment_count = 0usize;
   let mut tts_audio_path = None;
+  // Piper concatenates clips using their measured durations. Keep those
+  // timings so burned subtitles follow the spoken audio instead of the
+  // original Whisper timestamps (which drift as soon as translated speech
+  // is shorter or longer than the source segment).
+  let mut tts_segment_timings: std::collections::HashMap<String, (u64, u64)> = std::collections::HashMap::new();
   let mut resource_versions = HashMap::new();
   let requested_source_language = if preset.localization.source_language.trim().is_empty() || preset.localization.source_language == "auto" { preset.source_language.clone() } else { preset.localization.source_language.clone() };
   let mut effective_source_language: Option<String> = None;
@@ -1160,6 +1166,7 @@ fn run_native_local_stages(app: &AppHandle, ffmpeg: &Path, input: &Path, job_dir
     let input = VoiceInput { script_artifact_id: record.snapshot.lock().map_err(|_| "JOB_MANAGER_LOCK_FAILED".to_string())?.job_id.clone(), script, voice: "vi".into(), language: preset.target_language.clone(), model: "piper".into(), piper_executable: None, piper_model: None };
     let output = tauri::async_runtime::block_on(synthesize_voice_with_runtime(app, &input, job_dir, Arc::new(AtomicBool::new(false)))).map_err(|error| format!("CAPCUT_TTS_FAILED:{}", error.code))?;
     tts_audio_path = Some(output.audio_path);
+    tts_segment_timings = output.timing.segments.into_iter().map(|segment| (segment.scene_id, ((segment.start_seconds * 1_000.0).round() as u64, (segment.end_seconds * 1_000.0).round() as u64))).collect();
     timings.tts_ms = clock.elapsed().as_millis() as u64;
   }
   if preset.localization.burn_subtitles && (!translated.is_empty() || !preset.localization.manual_cues.is_empty()) {
@@ -1167,7 +1174,13 @@ fn run_native_local_stages(app: &AppHandle, ffmpeg: &Path, input: &Path, job_dir
     announce_stage(app, record, "BUILDING_SUBTITLES", Some(jobs))?;
     let mut subtitle_preset = preset.clone();
     if !translated.is_empty() {
-      subtitle_preset.localization.manual_cues = translated.iter().map(|s| SubtitleCue { start_ms: s.start_ms, end_ms: s.end_ms, text: s.translated_text.clone().unwrap_or_else(|| s.text.clone()), enabled: true }).collect();
+      subtitle_preset.localization.manual_cues = translated
+        .iter()
+        .map(|s| {
+          let (start_ms, end_ms) = tts_segment_timings.get(&s.id).copied().unwrap_or((s.start_ms, s.end_ms));
+          SubtitleCue { start_ms, end_ms: end_ms.max(start_ms.saturating_add(1)), text: s.translated_text.clone().unwrap_or_else(|| s.text.clone()), enabled: true }
+        })
+        .collect();
     }
     let path = job_dir.join("subtitles.ass");
     write_manual_subtitle_ass(&path, &subtitle_preset)?;

@@ -19,17 +19,23 @@ fn setting_key(kind: &str, id: &str) -> String {
 /// malformed row is treated as absent so callers fail closed rather than
 /// dispatching against an untrusted target.
 pub async fn load_runtime_binding(db: &TaskDbConnection, binding_id: &str) -> Result<Option<FacebookRuntimeBinding>, String> {
-  let Some(row) = get_floword_setting(db, &setting_key("runtime_binding", binding_id)).await.map_err(|e| e.to_string())? else { return Ok(None); };
+  let Some(row) = get_floword_setting(db, &setting_key("runtime_binding", binding_id)).await.map_err(|e| e.to_string())? else {
+    return Ok(None);
+  };
   serde_json::from_str(&row.value_json).map(Some).map_err(|e| e.to_string())
 }
 
 pub async fn load_page_snapshot(db: &TaskDbConnection, binding_id: &str) -> Result<Option<FacebookPageSnapshot>, String> {
-  let Some(row) = get_floword_setting(db, &setting_key("page_snapshot", binding_id)).await.map_err(|e| e.to_string())? else { return Ok(None); };
+  let Some(row) = get_floword_setting(db, &setting_key("page_snapshot", binding_id)).await.map_err(|e| e.to_string())? else {
+    return Ok(None);
+  };
   serde_json::from_str(&row.value_json).map(Some).map_err(|e| e.to_string())
 }
 
 pub async fn load_confirmation(db: &TaskDbConnection, publication_id: &str) -> Result<Option<LivePublishConfirmation>, String> {
-  let Some(row) = get_floword_setting(db, &setting_key("confirmation", publication_id)).await.map_err(|e| e.to_string())? else { return Ok(None); };
+  let Some(row) = get_floword_setting(db, &setting_key("confirmation", publication_id)).await.map_err(|e| e.to_string())? else {
+    return Ok(None);
+  };
   serde_json::from_str(&row.value_json).map(Some).map_err(|e| e.to_string())
 }
 
@@ -59,12 +65,10 @@ pub struct FacebookRuntimeBinding {
 
 impl FacebookRuntimeBinding {
   pub fn runtime_is_current(&self, profile_id: &str, identity: &FacebookRuntimeIdentity, page_is_live: bool) -> bool {
-    let Some(runtime) = self.runtime.as_ref() else { return false; };
-    self.enabled
-      && self.target_kind == "FACEBOOK"
-      && self.donut_profile_id == profile_id
-      && runtime == identity
-      && page_is_live
+    let Some(runtime) = self.runtime.as_ref() else {
+      return false;
+    };
+    self.enabled && self.target_kind == "FACEBOOK" && self.donut_profile_id == profile_id && runtime == identity && page_is_live
   }
 }
 
@@ -82,7 +86,9 @@ pub struct FacebookPageSnapshot {
 
 impl FacebookPageSnapshot {
   pub fn matches_current(&self, page_id: Option<&str>, canonical_url: Option<&str>, display_name: &str, evidence: bool) -> bool {
-    if !evidence || self.facebook_page_display_name.trim() != display_name.trim() { return false; }
+    if !evidence || self.facebook_page_display_name.trim() != display_name.trim() {
+      return false;
+    }
     match (self.facebook_page_id.as_deref(), page_id, self.facebook_page_canonical_url.as_deref(), canonical_url) {
       (Some(expected), Some(actual), _, _) => expected == actual,
       (None, _, Some(expected), Some(actual)) => expected == actual,
@@ -107,15 +113,7 @@ pub struct LivePublishConfirmation {
 
 impl LivePublishConfirmation {
   pub fn is_valid_for(&self, publication_id: &str, occurrence_id: &str, profile_id: &str, page_id: Option<&str>, video_sha256: &str, caption_sha256: &str, visible_link: Option<&str>, now_utc: i64) -> bool {
-    self.confirmed_by_user
-      && now_utc <= self.confirmation_expires_at_utc
-      && self.publication_id == publication_id
-      && self.scheduled_occurrence_id == occurrence_id
-      && self.donut_profile_id == profile_id
-      && self.facebook_page_id.as_deref() == page_id
-      && self.video_sha256 == video_sha256
-      && self.caption_sha256 == caption_sha256
-      && self.visible_link.as_deref() == visible_link
+    self.confirmed_by_user && now_utc <= self.confirmation_expires_at_utc && self.publication_id == publication_id && self.scheduled_occurrence_id == occurrence_id && self.donut_profile_id == profile_id && self.facebook_page_id.as_deref() == page_id && self.video_sha256 == video_sha256 && self.caption_sha256 == caption_sha256 && self.visible_link.as_deref() == visible_link
   }
 }
 
@@ -124,11 +122,7 @@ mod tests {
   use super::*;
 
   fn binding() -> FacebookRuntimeBinding {
-    FacebookRuntimeBinding {
-      binding_id: "binding-1".into(), donut_profile_id: "profile-1".into(), target_kind: "FACEBOOK".into(), enabled: true,
-      auto_start_managed_donut_profile: false, created_at_utc: 1, updated_at_utc: 2,
-      runtime: Some(FacebookRuntimeIdentity { browser_pid: 10, launch_generation: 20, cdp_endpoint: "http://127.0.0.1:9222".into(), managed_target_id: "target-1".into(), managed_page_url: "https://www.facebook.com/me".into(), claimed_at_utc: 3, last_validated_at_utc: 4 }),
-    }
+    FacebookRuntimeBinding { binding_id: "binding-1".into(), donut_profile_id: "profile-1".into(), target_kind: "FACEBOOK".into(), enabled: true, auto_start_managed_donut_profile: false, created_at_utc: 1, updated_at_utc: 2, runtime: Some(FacebookRuntimeIdentity { browser_pid: 10, launch_generation: 20, cdp_endpoint: "http://127.0.0.1:9222".into(), managed_target_id: "target-1".into(), managed_page_url: "https://www.facebook.com/me".into(), claimed_at_utc: 3, last_validated_at_utc: 4 }) }
   }
 
   #[test]
