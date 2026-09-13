@@ -1,0 +1,8 @@
+upstream = "https://github.com/k2-fsa/OmniVoice.git"
+commit = "08be0b4ccbac3e13e374e86fbfead4b4cac343e2"
+license = "Apache-2.0"
+license_sha256 = "C843A20EDE4D1E7595C2736B88FC62CB7483A8C082EB7092A3772248849C59E2"
+vendored_path = "vendor/omnivoice"
+
+# The Python code is Apache-2.0.  Model weights and the audio tokenizer are
+# not covered by this file and must be approved separately before use.

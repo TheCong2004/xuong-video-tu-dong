@@ -7,6 +7,7 @@ use super::capcut_automation_engine_manager::{CapcutAutomationEngineManager, Cap
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -81,6 +82,9 @@ pub fn detect_speakers_local(manager: &CapcutAutomationEngineManager, request: L
   if !audio.is_file() {
     return Err("SPEAKER_AUDIO_NOT_FOUND".to_string());
   }
+  if voicestudio_diarization_enabled() {
+    return detect_speakers_with_voicestudio(request);
+  }
   let resolved = manager.resolve_first(CapcutEngineKind::SpeakerDiarization)?;
   let executable = resolved.executable_path.ok_or_else(|| "SPEAKER_EXECUTABLE_MISSING".to_string())?;
   let worker = resolved.worker_script_path.ok_or_else(|| "SPEAKER_WORKER_MISSING".to_string())?;
@@ -92,6 +96,74 @@ pub fn detect_speakers_local(manager: &CapcutAutomationEngineManager, request: L
     return Err(format!("SPEAKER_WORKER_FAILED:{}", String::from_utf8_lossy(&output.stderr).trim()));
   }
   serde_json::from_slice::<LocalSpeakerResponse>(&output.stdout).map_err(|error| format!("SPEAKER_RESPONSE_INVALID:{error}"))
+}
+
+fn voicestudio_diarization_enabled() -> bool {
+  std::env::var("FLOWORD_DIARIZATION_PROVIDER").ok().is_some_and(|value| value.trim().eq_ignore_ascii_case("voicestudio"))
+}
+
+/// Use VoiceStudio's full-audio dubbing transcribe endpoint when explicitly
+/// selected. That endpoint performs ASR and diarization in one persisted job;
+/// the returned speaker-labelled segments are collapsed into temporal turns so
+/// ArtCraft's existing deterministic assignment stage can remain unchanged.
+fn detect_speakers_with_voicestudio(request: LocalSpeakerRequest) -> Result<LocalSpeakerResponse, String> {
+  let audio = PathBuf::from(request.audio_path.trim());
+  let num_speakers = (request.num_speakers > 0).then_some(request.num_speakers.min(20) as u16);
+  let response = run_voice_studio_future(async move {
+    let client = voicestudio_client::VoiceStudioClient::from_env().map_err(|error| error.to_string())?;
+    let upload = client.dub_upload(&audio, None, "audio", None).await.map_err(|error| error.to_string())?;
+    let job_id = upload.get("job_id").and_then(serde_json::Value::as_str).ok_or_else(|| "SPEAKER_VOICESTUDIO_JOB_ID_MISSING".to_string())?.to_string();
+    if let Some(task_id) = upload.get("task_id").and_then(serde_json::Value::as_str) {
+      let timeout_seconds = std::env::var("FLOWORD_DIARIZATION_TIMEOUT_SECONDS").ok().and_then(|value| value.trim().parse::<u64>().ok()).map(|value| value.clamp(60, 7_200)).unwrap_or(600);
+      client.wait_for_task(task_id, Duration::from_secs(timeout_seconds)).await.map_err(|error| error.to_string())?;
+    }
+    client.dub_transcribe(&job_id, num_speakers).await.map_err(|error| error.to_string())
+  })?;
+  let turns = parse_voicestudio_turns(&response)?;
+  Ok(LocalSpeakerResponse { engine: "voicestudio-diarization".to_string(), turns, sample_rate: 16_000 })
+}
+
+fn parse_voicestudio_turns(response: &serde_json::Value) -> Result<Vec<SpeakerTurn>, String> {
+  let segments = response.get("segments").and_then(serde_json::Value::as_array).ok_or_else(|| "SPEAKER_RESPONSE_INVALID:segments".to_string())?;
+  let mut turns: Vec<SpeakerTurn> = Vec::new();
+  for segment in segments {
+    let Some(speaker_id) = segment.get("speaker_id").or_else(|| segment.get("speaker")).and_then(serde_json::Value::as_str).filter(|value| !value.trim().is_empty()) else {
+      continue;
+    };
+    let start_ms = segment.get("start").and_then(value_to_millis).or_else(|| segment.get("start_ms").and_then(serde_json::Value::as_u64)).unwrap_or(0);
+    let end_ms = segment.get("end").and_then(value_to_millis).or_else(|| segment.get("end_ms").and_then(serde_json::Value::as_u64)).unwrap_or(start_ms);
+    if end_ms <= start_ms {
+      continue;
+    }
+    if let Some(previous) = turns.last_mut() {
+      if previous.speaker_id == speaker_id && previous.end_ms >= start_ms.saturating_sub(250) {
+        previous.end_ms = previous.end_ms.max(end_ms);
+        continue;
+      }
+    }
+    turns.push(SpeakerTurn { speaker_id: speaker_id.to_string(), start_ms, end_ms, confidence: segment.get("confidence").and_then(serde_json::Value::as_f64) });
+  }
+  if turns.is_empty() {
+    return Err("SPEAKER_RESPONSE_EMPTY".to_string());
+  }
+  Ok(turns)
+}
+
+fn value_to_millis(value: &serde_json::Value) -> Option<u64> {
+  let seconds = value.as_f64()?;
+  (seconds.is_finite() && seconds >= 0.0).then(|| (seconds * 1_000.0).round() as u64)
+}
+
+fn run_voice_studio_future<F, T>(future: F) -> Result<T, String>
+where
+  F: std::future::Future<Output = Result<T, String>> + Send + 'static,
+  T: Send + 'static,
+{
+  let join = std::thread::spawn(move || {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|error| format!("SPEAKER_VOICESTUDIO_RUNTIME_FAILED:{error}"))?;
+    runtime.block_on(future)
+  });
+  join.join().map_err(|_| "SPEAKER_VOICESTUDIO_REQUEST_PANICKED".to_string())?
 }
 
 #[cfg(test)]
@@ -113,5 +185,18 @@ mod tests {
     let segments = vec![SpeakerSegment { id: "s1".into(), start_ms: 1_000, end_ms: 2_000, text: "none".into() }];
     let turns = vec![SpeakerTurn { speaker_id: "speaker-1".into(), start_ms: 0, end_ms: 999, confidence: None }];
     assert!(assign_speakers(&segments, &turns, &HashMap::new()).is_empty());
+  }
+
+  #[test]
+  fn parses_and_merges_voice_studio_speaker_segments() {
+    let response = serde_json::json!({"segments": [
+      {"speaker_id": "S1", "start": 0.0, "end": 1.0},
+      {"speaker_id": "S1", "start": 1.1, "end": 2.0},
+      {"speaker_id": "S2", "start": 2.0, "end": 3.5}
+    ]});
+    let turns = parse_voicestudio_turns(&response).expect("speaker turns should parse");
+    assert_eq!(turns.len(), 2);
+    assert_eq!((turns[0].start_ms, turns[0].end_ms), (0, 2_000));
+    assert_eq!(turns[1].speaker_id, "S2");
   }
 }

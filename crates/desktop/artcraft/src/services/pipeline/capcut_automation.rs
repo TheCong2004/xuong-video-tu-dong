@@ -73,6 +73,16 @@ pub struct CapcutAutomationPresetV1 {
   pub original_audio_gain: f64,
   #[serde(default)]
   pub speaker_voice_assignments: std::collections::HashMap<String, String>,
+  /// Optional VoiceStudio profile used for the native dubbing stage.  When
+  /// absent, the runtime falls back to VOICESTUDIO_VOICE_ID/FLOWORD_VOICE_ID.
+  #[serde(default)]
+  pub voice_profile_id: Option<String>,
+  /// TTS runtime selected for this immutable job request. A selected cloned
+  /// profile must not silently fall back to the process-wide Piper setting.
+  #[serde(default = "default_voice_provider")]
+  pub voice_provider: String,
+  #[serde(default = "default_voice_model")]
+  pub voice_model: String,
 }
 
 fn default_auto_source_language() -> String {
@@ -99,6 +109,12 @@ fn default_original_audio_policy() -> String {
 }
 fn default_original_audio_gain() -> f64 {
   1.0
+}
+fn default_voice_provider() -> String {
+  "PIPER".to_string()
+}
+fn default_voice_model() -> String {
+  "k2-fsa/OmniVoice".to_string()
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -531,6 +547,9 @@ impl Default for CapcutAutomationPresetV1 {
       tts_audio_mode: "REPLACE".to_string(),
       original_audio_gain: 1.0,
       speaker_voice_assignments: std::collections::HashMap::new(),
+      voice_profile_id: None,
+      voice_provider: default_voice_provider(),
+      voice_model: default_voice_model(),
     }
   }
 }
@@ -555,6 +574,12 @@ impl CapcutAutomationPresetV1 {
     }
     if self.output.width == 0 || self.output.height == 0 || self.output.width % 2 != 0 || self.output.height % 2 != 0 {
       return Err("OUTPUT_DIMENSIONS_INVALID".to_string());
+    }
+    if !matches!(self.voice_provider.trim().to_ascii_uppercase().as_str(), "PIPER" | "ARTCRAFT_SPEECH") {
+      return Err("VOICE_PROVIDER_UNSUPPORTED".to_string());
+    }
+    if self.voice_model.trim().is_empty() || self.voice_model.len() > 256 {
+      return Err("VOICE_MODEL_INVALID".to_string());
     }
     if self.hook.enabled {
       if self.hook.end_ms <= self.hook.start_ms || self.hook.text.trim().is_empty() || self.hook.text.chars().count() > MAX_TEXT {
@@ -1250,7 +1275,18 @@ mod tests {
     assert_eq!(preset.playback_rate, 1.1);
     assert_eq!(preset.hook.start_ms, 0);
     assert_eq!(preset.hook.end_ms, 3_000);
+    assert_eq!(preset.voice_provider, "PIPER");
+    assert_eq!(preset.voice_model, "k2-fsa/OmniVoice");
     assert!(preset.validate().is_ok());
+  }
+
+  #[test]
+  fn voice_clone_provider_is_persisted_and_unknown_providers_are_rejected() {
+    let mut preset = CapcutAutomationPresetV1::default();
+    preset.voice_provider = "ARTCRAFT_SPEECH".to_string();
+    assert!(preset.validate().is_ok());
+    preset.voice_provider = "unknown".to_string();
+    assert_eq!(preset.validate().unwrap_err(), "VOICE_PROVIDER_UNSUPPORTED");
   }
 
   #[test]

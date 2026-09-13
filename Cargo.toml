@@ -36,6 +36,7 @@ members = [
   "crates/api_clients/thumbnail_generator",
   "crates/api_clients/worldlabs_api_client",
   "crates/api_clients/worldlabs_consumer_client",
+  "crates/api_clients/voicestudio_client",
 
   # CLI tools for operations, etc.
   "crates/cli/devenv/dev-database-seed",
@@ -308,6 +309,7 @@ video_info = { path = "crates/lib/video_info" }
 web_base64 = { path = "crates/lib/data/web_base64" }
 worldlabs_api_client = { path = "crates/api_clients/worldlabs_api_client" }
 worldlabs_consumer_client = { path = "crates/api_clients/worldlabs_consumer_client" }
+voicestudio_client = { path = "crates/api_clients/voicestudio_client" }
 
 # External libs
 # Centrally pinned versions so that we can uniformly upgrade/downgrade versions across the workspace

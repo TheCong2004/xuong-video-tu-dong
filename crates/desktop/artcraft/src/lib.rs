@@ -42,7 +42,7 @@ use crate::core::commands::pipeline::floword_commands::{
 use crate::core::commands::pipeline::list_pipeline_jobs_command::list_pipeline_jobs_command;
 use crate::core::commands::pipeline::run_capcut_automation_command::run_capcut_automation_command;
 use crate::core::commands::pipeline::capcut_automation_job_commands::{start_capcut_automation_job, list_capcut_automation_jobs, get_capcut_automation_job, cancel_capcut_automation_job, retry_capcut_automation_job, remove_capcut_automation_job, preview_capcut_automation};
-use crate::core::commands::pipeline::capcut_automation_engine_commands::{cancel_capcut_ai_model_download, check_capcut_automation_engine, detect_speakers_capcut_automation_local, download_capcut_ai_model, get_capcut_ai_model_status, list_capcut_ai_models, list_capcut_automation_engines, ocr_capcut_automation_local, remove_capcut_ai_model, transcribe_capcut_automation_local, translate_capcut_automation_local, translate_ocr_capcut_automation_local, verify_capcut_ai_model};
+use crate::core::commands::pipeline::capcut_automation_engine_commands::{cancel_capcut_ai_model_download, check_capcut_automation_engine, detect_speakers_capcut_automation_local, download_capcut_ai_model, ensure_artcraft_speech_runtime, get_capcut_ai_model_status, get_voice_studio_capabilities, list_capcut_ai_models, list_capcut_automation_engines, list_voice_studio_profiles, ocr_capcut_automation_local, remove_capcut_ai_model, save_voice_studio_profile, transcribe_capcut_automation_local, translate_capcut_automation_local, translate_ocr_capcut_automation_local, upload_voice_studio_clip, verify_capcut_ai_model};
 use crate::core::commands::pipeline::facebook_publishing_commands::{get_facebook_page_snapshot_command, get_facebook_runtime_binding_command, get_live_publish_confirmation_command, upsert_facebook_page_snapshot_command, upsert_facebook_runtime_binding_command, upsert_live_publish_confirmation_command};
 use crate::core::commands::pipeline::capcut_mate_commands::ensure_legacy_capcut_mate;
 use crate::services::pipeline::capcut_automation_job_manager::CapcutAutomationJobManager;
@@ -381,6 +381,11 @@ pub fn run() {
     get_live_publish_confirmation_command,
     upsert_live_publish_confirmation_command,
     remove_capcut_ai_model,
+    ensure_artcraft_speech_runtime,
+    get_voice_studio_capabilities,
+    list_voice_studio_profiles,
+    upload_voice_studio_clip,
+    save_voice_studio_profile,
     ensure_legacy_capcut_mate,
     enqueue_floword_workflow,
     get_floword_workflow,

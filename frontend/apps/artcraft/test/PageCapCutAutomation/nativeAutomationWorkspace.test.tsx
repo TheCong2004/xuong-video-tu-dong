@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-const { openMock, listJobsMock, listenProgressMock, cancelJobMock, startJobMock, previewJobMock, removeJobMock, retryJobMock } = vi.hoisted(() => ({
+const { openMock, listJobsMock, listenProgressMock, cancelJobMock, startJobMock, previewJobMock, removeJobMock, retryJobMock, ensureArtcraftSpeechRuntimeMock, listVoiceStudioProfilesMock, uploadVoiceStudioClipMock, saveVoiceStudioProfileMock } = vi.hoisted(() => ({
   openMock: vi.fn(),
   listJobsMock: vi.fn(),
   listenProgressMock: vi.fn(),
@@ -11,6 +11,10 @@ const { openMock, listJobsMock, listenProgressMock, cancelJobMock, startJobMock,
   previewJobMock: vi.fn(),
   removeJobMock: vi.fn(),
   retryJobMock: vi.fn(),
+  ensureArtcraftSpeechRuntimeMock: vi.fn(),
+  listVoiceStudioProfilesMock: vi.fn(),
+  uploadVoiceStudioClipMock: vi.fn(),
+  saveVoiceStudioProfileMock: vi.fn(),
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: openMock }));
@@ -25,6 +29,10 @@ vi.mock("../../app/src/pages/PageCapCutAutomation/api/pipelineClient", () => ({
   removeNativeJob: removeJobMock,
   retryNativeJob: retryJobMock,
   startNativeAutomationJob: startJobMock,
+  ensureArtcraftSpeechRuntime: ensureArtcraftSpeechRuntimeMock,
+  listVoiceStudioProfiles: listVoiceStudioProfilesMock,
+  uploadVoiceStudioClip: uploadVoiceStudioClipMock,
+  saveVoiceStudioProfile: saveVoiceStudioProfileMock,
 }));
 
 import { NativeAutomationWorkspace } from "../../app/src/pages/PageCapCutAutomation/panels/auto-render/NativeAutomationWorkspace";
@@ -37,6 +45,8 @@ describe("NativeAutomationWorkspace", () => {
     listenProgressMock.mockResolvedValue(() => undefined);
     previewJobMock.mockResolvedValue({ path: "C:\\preview\\first.mp4", cacheKey: "preview-key" });
     removeJobMock.mockResolvedValue(undefined);
+    ensureArtcraftSpeechRuntimeMock.mockResolvedValue({ service: "artcraft-speech" });
+    listVoiceStudioProfilesMock.mockResolvedValue([]);
   });
   afterEach(() => cleanup());
 
@@ -168,5 +178,30 @@ describe("NativeAutomationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Thêm vùng" }));
     expect(screen.getByText("Bật xử lý chữ")).toBeInTheDocument();
     expect(screen.getAllByText("Bắt đầu (ms)").length).toBeGreaterThan(0);
+  });
+
+  test("loads and persists a VoiceStudio cloned profile selection", async () => {
+    listVoiceStudioProfilesMock.mockResolvedValue([{ id: "clone-voice-1", name: "Giọng clone 1" }]);
+    render(<NativeAutomationWorkspace />);
+    const profileSelect = await screen.findByLabelText("Voice profile VoiceStudio");
+    expect(profileSelect).toHaveValue("");
+    fireEvent.change(profileSelect, { target: { value: "clone-voice-1" } });
+    expect(profileSelect).toHaveValue("clone-voice-1");
+  });
+
+  test("creates a consented local clone profile and selects its runtime", async () => {
+    openMock.mockResolvedValue("C:\\media\\reference.wav");
+    uploadVoiceStudioClipMock.mockResolvedValue({ id: "profile-local-1", name: "Giọng kể" });
+    listVoiceStudioProfilesMock.mockResolvedValue([{ id: "profile-local-1", name: "Giọng kể" }]);
+    render(<NativeAutomationWorkspace />);
+
+    fireEvent.change(screen.getByLabelText("Bộ máy giọng nói"), { target: { value: "ARTCRAFT_SPEECH" } });
+    fireEvent.change(screen.getByLabelText("Tên voice profile mới"), { target: { value: "Giọng kể" } });
+    fireEvent.click(screen.getByLabelText("Xác nhận quyền audio mẫu"));
+    fireEvent.click(screen.getByLabelText("Chấp nhận điều khoản model OmniVoice"));
+    fireEvent.click(screen.getByRole("button", { name: /clip clone/i }));
+
+    await waitFor(() => expect(uploadVoiceStudioClipMock).toHaveBeenCalledWith({ path: "C:\\media\\reference.wav", name: "Giọng kể" }));
+    await waitFor(() => expect(screen.getByLabelText("Voice profile VoiceStudio")).toHaveValue("profile-local-1"));
   });
 });

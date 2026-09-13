@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "artcraft-speech-runtime"
+version = "0.1.0"
+description = "ArtCraft-managed local zero-shot voice-cloning runtime"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "accelerate",
+  "fastapi>=0.115",
+  "librosa",
+  "numpy",
+  "pydub",
+  "python-multipart>=0.0.9",
+  "soundfile",
+  "torch>=2.4",
+  "torchaudio>=2.4",
+  "transformers>=5.3.0",
+  "uvicorn[standard]>=0.30",
+  "webdataset",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]

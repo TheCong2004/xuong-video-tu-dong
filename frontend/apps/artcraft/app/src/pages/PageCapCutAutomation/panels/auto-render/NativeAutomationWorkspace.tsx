@@ -12,6 +12,10 @@ import {
   startNativeAutomationJob,
   transcribeCapCutAutomationLocal,
   translateCapCutAutomationLocal,
+  ensureArtcraftSpeechRuntime,
+  listVoiceStudioProfiles,
+  uploadVoiceStudioClip,
+  type VoiceStudioProfile,
   type LocalTranslationSegment,
   type LocalTranscriptSegment,
   type LocalAutomationPreset,
@@ -135,6 +139,9 @@ const DEFAULT_PRESET: LocalAutomationPreset = {
   ttsAudioMode: "REPLACE",
   originalAudioGain: 1,
   speakerVoiceAssignments: {},
+  voiceProfileId: null,
+  voiceProvider: "PIPER",
+  voiceModel: "k2-fsa/OmniVoice",
 };
 
 export function NativeAutomationWorkspace() {
@@ -147,6 +154,11 @@ export function NativeAutomationWorkspace() {
   const [localAiBusy, setLocalAiBusy] = useState<"transcribe" | "translate" | null>(null);
   const [addingVideos, setAddingVideos] = useState(false);
   const [videoDialogError, setVideoDialogError] = useState<string | null>(null);
+  const [voiceProfiles, setVoiceProfiles] = useState<VoiceStudioProfile[]>([]);
+  const [voiceStudioMessage, setVoiceStudioMessage] = useState<string | null>(null);
+  const [voiceProfileName, setVoiceProfileName] = useState("");
+  const [voiceConsent, setVoiceConsent] = useState(false);
+  const [voiceModelTermsAccepted, setVoiceModelTermsAccepted] = useState(false);
 
   const applyJob = (job: NativeAutomationJob) =>
     setItems((current) => {
@@ -194,6 +206,50 @@ export function NativeAutomationWorkspace() {
     });
     return () => stop?.();
   }, []);
+
+  useEffect(() => {
+    void ensureArtcraftSpeechRuntime()
+      .then(listVoiceStudioProfiles)
+      .then(setVoiceProfiles)
+      .catch(() => {
+        // VoiceStudio is optional; Piper/OmniRoute remain available when its
+        // service is not running.
+      });
+  }, []);
+
+  const refreshVoiceProfiles = async () => {
+    try {
+      await ensureArtcraftSpeechRuntime();
+      setVoiceProfiles(await listVoiceStudioProfiles());
+      setVoiceStudioMessage("Đã tải danh sách voice profile");
+    } catch (error) {
+      setVoiceStudioMessage(error instanceof Error ? error.message : "VoiceStudio chưa chạy");
+    }
+  };
+
+  const uploadVoiceClip = async () => {
+    if (!voiceConsent) {
+      setVoiceStudioMessage("Xác nhận quyền sử dụng audio mẫu trước khi tạo giọng clone.");
+      return;
+    }
+    if (!voiceModelTermsAccepted) {
+      setVoiceStudioMessage("Xác nhận điều khoản model OmniVoice trước khi tạo giọng clone.");
+      return;
+    }
+    const selected = await open({ multiple: false, directory: false, filters: [{ name: "Audio", extensions: ["wav", "mp3", "m4a", "flac", "ogg"] }] });
+    if (typeof selected !== "string") return;
+    try {
+      const inferredName = selected.split(/[\\\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Giọng ArtCraft";
+      await ensureArtcraftSpeechRuntime(voiceModelTermsAccepted);
+      const result = await uploadVoiceStudioClip({ path: selected, name: voiceProfileName.trim() || inferredName });
+      const voiceId = typeof result.voice_id === "string" ? result.voice_id : typeof result.id === "string" ? result.id : null;
+      if (voiceId) setPreset((current) => ({ ...current, voiceProvider: "ARTCRAFT_SPEECH", voiceProfileId: voiceId }));
+      await refreshVoiceProfiles();
+      setVoiceStudioMessage(voiceId ? "Đã tải clip và chọn voice profile mới" : "Đã tải clip lên VoiceStudio");
+    } catch (error) {
+      setVoiceStudioMessage(error instanceof Error ? error.message : "Không thể tải clip lên VoiceStudio");
+    }
+  };
 
   const queued = useMemo(
     () => items.filter((item) => item.state === "QUEUED"),
@@ -756,6 +812,64 @@ export function NativeAutomationWorkspace() {
                 <option value="REPLACE">Thay âm thanh gốc bằng giọng Việt</option>
               </select>
             )}
+            {preset.autoTts && (
+              <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/5 p-2">
+                <label className="block text-xs text-white/75">
+                  Bộ máy giọng nói
+                  <select
+                    value={preset.voiceProvider ?? "PIPER"}
+                    onChange={(event) => setPreset((current) => ({ ...current, voiceProvider: event.target.value as "PIPER" | "ARTCRAFT_SPEECH" }))}
+                    className="mt-1 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                    aria-label="Bộ máy giọng nói"
+                  >
+                    <option value="PIPER">Piper nội bộ</option>
+                    <option value="ARTCRAFT_SPEECH">ArtCraft Voice Clone (OmniVoice)</option>
+                  </select>
+                </label>
+                {(preset.voiceProvider ?? "PIPER") === "ARTCRAFT_SPEECH" && (
+                  <>
+                    <label className="mt-2 block text-xs text-white/75">
+                      Tên voice profile mới
+                      <input
+                        value={voiceProfileName}
+                        onChange={(event) => setVoiceProfileName(event.target.value)}
+                        placeholder="Ví dụ: Giọng dẫn chuyện"
+                        className="mt-1 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                      />
+                    </label>
+                    <label className="mt-2 flex items-start gap-2 text-[11px] text-white/70">
+                      <input type="checkbox" aria-label="Xác nhận quyền audio mẫu" checked={voiceConsent} onChange={(event) => setVoiceConsent(event.target.checked)} className="mt-0.5" />
+                      Tôi có quyền sử dụng audio mẫu và đồng ý tạo voice profile cục bộ.
+                    </label>
+                    <label className="mt-2 flex items-start gap-2 text-[11px] text-white/70">
+                      <input type="checkbox" aria-label="Chấp nhận điều khoản model OmniVoice" checked={voiceModelTermsAccepted} onChange={(event) => setVoiceModelTermsAccepted(event.target.checked)} className="mt-0.5" />
+                      Tôi đã đọc và chấp nhận điều khoản riêng của model OmniVoice để tổng hợp giọng cục bộ.
+                    </label>
+                  </>
+                )}
+                <label className="block text-xs text-white/75">
+                  Voice profile VoiceStudio
+                  <select
+                    value={preset.voiceProfileId ?? ""}
+                    onChange={(event) => setPreset((current) => ({ ...current, voiceProfileId: event.target.value || null }))}
+                    disabled={(preset.voiceProvider ?? "PIPER") !== "ARTCRAFT_SPEECH"}
+                    className="mt-1 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                  >
+                    <option value="">Mặc định từ cấu hình môi trường</option>
+                    {voiceProfiles.map((profile, index) => {
+                      const id = typeof profile.voice_id === "string" ? profile.voice_id : typeof profile.id === "string" ? profile.id : "";
+                      const label = typeof profile.name === "string" ? profile.name : typeof profile.profile_name === "string" ? profile.profile_name : id || `Voice ${index + 1}`;
+                      return id ? <option key={id} value={id}>{label}</option> : null;
+                    })}
+                  </select>
+                </label>
+                <div className="mt-2 flex gap-2">
+                  <button type="button" onClick={() => void refreshVoiceProfiles()} className="rounded border border-cyan-300/30 px-2 py-1 text-[11px] text-cyan-100">Tải profile</button>
+                  <button type="button" onClick={() => void uploadVoiceClip()} className="rounded border border-cyan-300/30 px-2 py-1 text-[11px] text-cyan-100">Tải clip clone</button>
+                </div>
+                {voiceStudioMessage && <p className="mt-1 text-[10px] text-white/55">{voiceStudioMessage}</p>}
+              </div>
+            )}
             <p className="mt-2 text-xs text-white/55">
               {preset.autoTts
                 ? "Dịch bằng giọng nói: thay âm thanh gốc bằng giọng Việt."
@@ -1113,7 +1227,7 @@ export function NativeAutomationWorkspace() {
           <Panel title="Xem trước">
             {items.length ? (
               <div className="space-y-3">
-                {items.map((item) => {
+                {items.map((item, previewIndex) => {
                   const inputName = item.path.split(/[\\/]/).pop() || item.path;
                   const outputPath = item.receipt?.outputPath;
                   return (
@@ -1122,10 +1236,10 @@ export function NativeAutomationWorkspace() {
                       className="rounded-lg border border-slate-700/70 bg-slate-950/20 p-2"
                     >
                       <div className="mb-2 flex items-center justify-between gap-2 text-[10px] text-white/65">
-                        <span className="truncate" title={item.path}>
-                          {inputName}
+                        <span className="truncate" title={inputName}>
+                          Video {previewIndex + 1}
                         </span>
-                        <span className="shrink-0 text-cyan-100">{item.state}</span>
+                        <span className="shrink-0 text-cyan-100">Xem trước: {item.state}</span>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <video

@@ -5,7 +5,7 @@ use super::capcut_automation_speaker::{assign_speakers, detect_speakers_local, L
 use super::capcut_automation_translation::{plan_translation_route, translate_local, translate_segments_by_language, validate_translation_quality_against_source, LocalTranslationRequest, TranslationRouteKind, TranslationSegment};
 use super::capcut_automation_transcription::{transcribe_local, validate_transcript_quality, LocalTranscriptionRequest};
 use crate::services::pipeline::clients::omniroute_client::{ScriptScene, StructuredScript};
-use crate::services::pipeline::voice::{synthesize_voice_with_runtime, VoiceInput};
+use crate::services::pipeline::voice::{configured_tts_model, configured_voice_id, synthesize_voice_with_runtime, VoiceInput};
 use crate::core::state::data_dir::app_data_root::AppDataRoot;
 use crate::services::pipeline::output_policy::OutputPathResolver;
 use serde::{Deserialize, Serialize};
@@ -1163,7 +1163,11 @@ fn run_native_local_stages(app: &AppHandle, ffmpeg: &Path, input: &Path, job_dir
     }
     let scenes = tts_segments.iter().enumerate().map(|(index, segment)| ScriptScene { id: segment.id.clone(), index: index as u32, narration: segment.translated_text.clone().unwrap_or_else(|| segment.text.clone()), caption: segment.translated_text.clone().unwrap_or_else(|| segment.text.clone()), visual_instruction: String::new(), search_keywords: Vec::new(), emotion: String::new(), duration_ms: segment.end_ms.saturating_sub(segment.start_ms) }).collect();
     let script = StructuredScript { title: "CapCut Automation".into(), hook: preset.hook.text.clone(), cta: String::new(), language: preset.target_language.clone(), target_duration_seconds: (input_duration_ms / 1000) as u32, scenes };
-    let input = VoiceInput { script_artifact_id: record.snapshot.lock().map_err(|_| "JOB_MANAGER_LOCK_FAILED".to_string())?.job_id.clone(), script, voice: "vi".into(), language: preset.target_language.clone(), model: "piper".into(), piper_executable: None, piper_model: None };
+    // The provider is persisted with the job. A selected clone must never be
+    // sent to Piper, which cannot resolve a voice-profile ID.
+    let selected_voice = preset.voice_profile_id.as_deref().filter(|value| !value.trim().is_empty()).map(str::to_owned).unwrap_or_else(|| configured_voice_id("vi"));
+    let selected_model = if preset.voice_provider.eq_ignore_ascii_case("ARTCRAFT_SPEECH") { format!("artcraft-speech/{}", preset.voice_model.trim()) } else { configured_tts_model() };
+    let input = VoiceInput { script_artifact_id: record.snapshot.lock().map_err(|_| "JOB_MANAGER_LOCK_FAILED".to_string())?.job_id.clone(), script, voice: selected_voice, language: preset.target_language.clone(), model: selected_model, piper_executable: None, piper_model: None };
     let output = tauri::async_runtime::block_on(synthesize_voice_with_runtime(app, &input, job_dir, Arc::new(AtomicBool::new(false)))).map_err(|error| format!("CAPCUT_TTS_FAILED:{}", error.code))?;
     tts_audio_path = Some(output.audio_path);
     tts_segment_timings = output.timing.segments.into_iter().map(|segment| (segment.scene_id, ((segment.start_seconds * 1_000.0).round() as u64, (segment.end_seconds * 1_000.0).round() as u64))).collect();

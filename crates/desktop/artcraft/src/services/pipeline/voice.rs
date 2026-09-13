@@ -3,6 +3,9 @@ use crate::services::pipeline::contracts::{ArtifactKind, PipelineContext, Pipeli
 use reqwest::Client;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::json;
+use voicestudio_client::{SpeechRequest as VoiceStudioSpeechRequest, VoiceStudioClient};
+
+const ARTCRAFT_SPEECH_BASE_URL: &str = "http://127.0.0.1:3900";
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -87,9 +90,13 @@ pub fn prepare_voice(context: &PipelineContext) -> Result<VoiceInput, PipelineCo
   }
   let bytes = std::fs::read(&artifact.location).map_err(|error| PipelineContractError::InvalidArtifact { artifact_id: artifact.artifact_id.clone(), message: error.to_string() })?;
   let script = serde_json::from_slice::<StructuredScript>(&bytes).map_err(|error| PipelineContractError::InvalidArtifact { artifact_id: artifact.artifact_id.clone(), message: error.to_string() })?;
-  let requested_voice = context.voice_id.as_deref().map(str::trim).filter(|value| !value.is_empty()).map(str::to_string);
-  let named_voice = requested_voice.clone().unwrap_or_else(|| default_voice(&context.language).to_string());
-  let model = env::var("FLOWORD_TTS_MODEL").ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty()).unwrap_or_else(|| "piper".to_string());
+  // A VoiceStudio profile is selected explicitly through the environment so
+  // native CapCut Automation jobs can use a cloned voice without changing the
+  // persisted pipeline contract.  The context voice remains the fallback for
+  // the existing local/OmniRoute providers.
+  let fallback_voice = context.voice_id.as_deref().filter(|value| !value.trim().is_empty()).map(str::to_string).unwrap_or_else(|| default_voice(&context.language).to_string());
+  let named_voice = configured_voice_id(&fallback_voice);
+  let model = configured_tts_model();
   let voice = if model.starts_with("gtts/") { context.language.clone() } else { named_voice };
   Ok(VoiceInput { script_artifact_id: script_id.clone(), script, voice, language: context.language.clone(), model, piper_executable: None, piper_model: None })
 }
@@ -118,28 +125,41 @@ async fn synthesize_voice_with_ffmpeg(input: &VoiceInput, work_dir: &Path, cance
   if input.script.scenes.is_empty() {
     return Err(VoiceError::new("VOICE_INPUT_INVALID", "Script contains no scenes", false));
   }
+  preflight_voicestudio(input, &cancel_flag).await?;
   let voice_dir = work_dir.join("voice");
   let clips_dir = voice_dir.join("clips");
   std::fs::create_dir_all(&clips_dir).map_err(|error| VoiceError::new("VOICE_ARTIFACT_FAILED", error.to_string(), false))?;
   let client = Client::builder().timeout(Duration::from_secs(60)).build().map_err(|error| VoiceError::new("VOICE_TTS_UNAVAILABLE", error.to_string(), true))?;
+  let narrations = input
+    .script
+    .scenes
+    .iter()
+    .enumerate()
+    .map(|(scene_position, scene)| {
+      let narration = normalize_narration_for_tts(scene.narration.trim(), scene_position + 1 == input.script.scenes.len());
+      if narration.is_empty() {
+        Err(VoiceError::new("VOICE_INPUT_INVALID", format!("Scene {} narration is empty", scene.id), false))
+      } else {
+        Ok(narration)
+      }
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+  if cancel_flag.load(Ordering::SeqCst) {
+    return Err(VoiceError::cancelled());
+  }
+  let audio_results = if use_voicestudio_provider(&input.model) {
+    request_voicestudio_batch(input, &narrations, &cancel_flag).await?
+  } else {
+    let mut outputs = Vec::with_capacity(narrations.len());
+    for narration in &narrations {
+      outputs.push(request_speech(&client, input, narration, &cancel_flag).await?);
+    }
+    outputs
+  };
   let mut clip_paths = Vec::with_capacity(input.script.scenes.len());
   let mut measured = Vec::with_capacity(input.script.scenes.len());
 
-  for (scene_position, scene) in input.script.scenes.iter().enumerate() {
-    if cancel_flag.load(Ordering::SeqCst) {
-      return Err(VoiceError::cancelled());
-    }
-    // Piper treats punctuation as prosody.  Translated segments often arrive
-    // without terminal punctuation, so add a light inter-segment pause and a
-    // full stop at the end instead of concatenating words at clip boundaries.
-    let narration = normalize_narration_for_tts(
-      scene.narration.trim(),
-      scene_position + 1 == input.script.scenes.len(),
-    );
-    if narration.is_empty() {
-      return Err(VoiceError::new("VOICE_INPUT_INVALID", format!("Scene {} narration is empty", scene.id), false));
-    }
-    let audio = request_speech(&client, input, &narration, &cancel_flag).await?;
+  for (scene, (narration, audio)) in input.script.scenes.iter().zip(narrations.into_iter().zip(audio_results.into_iter())) {
     let path = clips_dir.join(format!("scene_{:04}.{}", scene.index, audio.extension));
     std::fs::write(&path, &audio.bytes).map_err(|error| VoiceError::new("VOICE_ARTIFACT_FAILED", error.to_string(), false))?;
     let metadata = std::fs::metadata(&path).map_err(|error| VoiceError::new("VOICE_ARTIFACT_FAILED", error.to_string(), false))?;
@@ -181,6 +201,18 @@ async fn synthesize_voice_with_ffmpeg(input: &VoiceInput, work_dir: &Path, cance
   Ok(VoiceRuntimeOutput { audio_path, timing_path, timing, audio_codec: final_probe.audio_codec, size_bytes: file_metadata.len() })
 }
 
+async fn preflight_voicestudio(input: &VoiceInput, cancel_flag: &Arc<AtomicBool>) -> Result<(), VoiceError> {
+  if !use_voicestudio_provider(&input.model) {
+    return Ok(());
+  }
+  if cancel_flag.load(Ordering::SeqCst) {
+    return Err(VoiceError::cancelled());
+  }
+  let client = speech_provider_client(&input.model)?;
+  tokio::time::timeout(Duration::from_secs(5), client.health()).await.map_err(|_| VoiceError::new("VOICE_STUDIO_HEALTH_TIMEOUT", "VoiceStudio health check timed out", true))?.map_err(|error| VoiceError::new("VOICE_STUDIO_UNAVAILABLE", error.to_string(), true))?;
+  Ok(())
+}
+
 struct SpeechAudio {
   bytes: Vec<u8>,
   extension: &'static str,
@@ -189,6 +221,9 @@ struct SpeechAudio {
 async fn request_speech(client: &Client, input: &VoiceInput, text: &str, cancel_flag: &Arc<AtomicBool>) -> Result<SpeechAudio, VoiceError> {
   if input.model == "piper" {
     return request_piper_speech(input, text, cancel_flag).await;
+  }
+  if use_voicestudio_provider(&input.model) {
+    return request_voicestudio_speech(input, text, cancel_flag).await;
   }
   let base_url = env::var("LLM_BASE_URL").unwrap_or_else(|_| DEFAULT_OMNIROUTE_URL.to_string());
   let url = format!("{}/v1/audio/speech", base_url.trim_end_matches('/'));
@@ -230,6 +265,84 @@ async fn request_speech(client: &Client, input: &VoiceInput, text: &str, cancel_
     return Err(VoiceError::new("VOICE_AUDIO_INVALID", "OmniRoute returned an empty audio body", false));
   }
   Ok(SpeechAudio { bytes: bytes.to_vec(), extension })
+}
+
+fn use_voicestudio_provider(model: &str) -> bool {
+  let provider = env::var("FLOWORD_VOICE_PROVIDER").unwrap_or_default();
+  provider.eq_ignore_ascii_case("voicestudio") || model.eq_ignore_ascii_case("voicestudio") || model.to_ascii_lowercase().starts_with("voicestudio/") || use_artcraft_speech_provider(model)
+}
+
+fn use_artcraft_speech_provider(model: &str) -> bool {
+  model.eq_ignore_ascii_case("artcraft-speech") || model.to_ascii_lowercase().starts_with("artcraft-speech/")
+}
+
+fn speech_provider_client(model: &str) -> Result<VoiceStudioClient, VoiceError> {
+  if use_artcraft_speech_provider(model) {
+    VoiceStudioClient::new(ARTCRAFT_SPEECH_BASE_URL, None).map_err(|error| VoiceError::new("ARTCRAFT_SPEECH_UNAVAILABLE", error.to_string(), true))
+  } else {
+    VoiceStudioClient::from_env().map_err(|error| VoiceError::new("VOICE_STUDIO_UNAVAILABLE", error.to_string(), true))
+  }
+}
+
+pub(crate) fn configured_tts_model() -> String {
+  let provider = env::var("FLOWORD_VOICE_PROVIDER").unwrap_or_default();
+  let configured = env::var("FLOWORD_TTS_MODEL").ok().map(|value| value.trim().to_string()).filter(|value| !value.is_empty());
+  if provider.eq_ignore_ascii_case("voicestudio") && configured.as_deref().map(|value| value.eq_ignore_ascii_case("piper")).unwrap_or(true) {
+    "voicestudio".to_string()
+  } else {
+    configured.unwrap_or_else(|| "piper".to_string())
+  }
+}
+
+pub(crate) fn configured_voice_id(fallback: &str) -> String {
+  env::var("VOICESTUDIO_VOICE_ID").ok().or_else(|| env::var("FLOWORD_VOICE_ID").ok()).filter(|value| !value.trim().is_empty()).unwrap_or_else(|| fallback.to_string())
+}
+
+async fn request_voicestudio_speech(input: &VoiceInput, text: &str, cancel_flag: &Arc<AtomicBool>) -> Result<SpeechAudio, VoiceError> {
+  let client = speech_provider_client(&input.model)?;
+  let request = voicestudio_request(input, text, None);
+  let response = tokio::select! {
+    result = client.synthesize(&request) => result,
+    _ = wait_for_cancel(cancel_flag) => return Err(VoiceError::cancelled()),
+  }
+  .map_err(|error| VoiceError::new("VOICE_STUDIO_TTS_FAILED", error.to_string(), true))?;
+  speech_audio_from_voicestudio(response)
+}
+
+async fn request_voicestudio_batch(input: &VoiceInput, narrations: &[String], cancel_flag: &Arc<AtomicBool>) -> Result<Vec<SpeechAudio>, VoiceError> {
+  let client = speech_provider_client(&input.model)?;
+  let requests = narrations
+    .iter()
+    .enumerate()
+    .map(|(index, text)| {
+      let duration = input.script.scenes.get(index).map(|scene| scene.duration_ms as f32 / 1_000.0).filter(|duration| duration.is_finite() && *duration > 0.0);
+      voicestudio_request(input, text, duration)
+    })
+    .collect::<Vec<_>>();
+  let concurrency = env::var("FLOWORD_VOICE_BATCH_CONCURRENCY").ok().and_then(|value| value.trim().parse::<usize>().ok()).map(|value| value.clamp(1, 10)).unwrap_or(3);
+  let responses = tokio::select! {
+    result = client.synthesize_batch(requests, concurrency) => result,
+    _ = wait_for_cancel(cancel_flag) => return Err(VoiceError::cancelled()),
+  }
+  .map_err(|error| VoiceError::new("VOICE_STUDIO_TTS_FAILED", error.to_string(), true))?;
+  responses.into_iter().map(speech_audio_from_voicestudio).collect()
+}
+
+fn voicestudio_request(input: &VoiceInput, text: &str, duration: Option<f32>) -> VoiceStudioSpeechRequest {
+  let model = input.model.strip_prefix("artcraft-speech/").map(str::to_owned).or_else(|| env::var("VOICESTUDIO_TTS_MODEL").ok().filter(|value| !value.trim().is_empty())).unwrap_or_else(|| "omnivoice".to_string());
+  VoiceStudioSpeechRequest { model, input: text.to_string(), voice: input.voice.clone(), response_format: "mp3".to_string(), speed: 1.0, language: Some(input.language.clone()), instruct: None, duration }
+}
+
+fn speech_audio_from_voicestudio(response: voicestudio_client::SpeechResponse) -> Result<SpeechAudio, VoiceError> {
+  let content_type = response.content_type.to_ascii_lowercase();
+  let extension = if content_type.contains("wav") {
+    "wav"
+  } else if content_type.contains("mpeg") || content_type.contains("mp3") {
+    "mp3"
+  } else {
+    return Err(VoiceError::new("VOICE_AUDIO_INVALID", format!("VoiceStudio returned unsupported content type: {}", response.content_type), false));
+  };
+  Ok(SpeechAudio { bytes: response.bytes, extension })
 }
 
 async fn request_piper_speech(input: &VoiceInput, text: &str, cancel_flag: &Arc<AtomicBool>) -> Result<SpeechAudio, VoiceError> {
@@ -291,9 +404,7 @@ fn normalize_narration_for_tts(text: &str, is_last: bool) -> String {
   if normalized.is_empty() {
     return normalized;
   }
-  let has_terminal_punctuation = normalized.chars().last().is_some_and(|character| {
-    ".!?;:,\u{3002}\u{3001}\u{FF01}\u{FF0C}\u{FF1A}\u{FF1B}\u{FF1F}\u{2026}".contains(character)
-  });
+  let has_terminal_punctuation = normalized.chars().last().is_some_and(|character| ".!?;:,\u{3002}\u{3001}\u{FF01}\u{FF0C}\u{FF1A}\u{FF1B}\u{FF1F}\u{2026}".contains(character));
   if !has_terminal_punctuation {
     normalized.push(if is_last { '.' } else { ',' });
   }
@@ -383,6 +494,13 @@ mod tests {
     assert_eq!(provider_voice(&input), "vi");
     input.model = "edgetts/vi-VN-HoaiMyNeural".into();
     assert_eq!(provider_voice(&input), "vi-VN-HoaiMyNeural");
+  }
+
+  #[test]
+  fn voicestudio_model_selects_voice_studio_provider() {
+    assert!(use_voicestudio_provider("voicestudio"));
+    assert!(use_voicestudio_provider("voicestudio/omnivoice"));
+    assert!(!use_voicestudio_provider("piper"));
   }
 
   #[tokio::test]

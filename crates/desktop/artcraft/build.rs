@@ -4,6 +4,8 @@ fn main() {
   // worker even though the source checkout had the PyBind boundary fix.
   println!("cargo:rerun-if-changed=../../../tools/capcut-automation/translation_worker.py");
   println!("cargo:rerun-if-changed=../../../tools/capcut-automation/ocr_rapid_worker.py");
+  println!("cargo:rerun-if-changed=../../../tools/speech-runtime/src/artcraft_speech_runtime.py");
+  println!("cargo:rerun-if-changed=../../../tools/speech-runtime/pyproject.toml");
   let resource_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/capcut-automation/scripts");
   for (name, label) in [("translation_worker.py", "TRANSLATION"), ("ocr_rapid_worker.py", "OCR")] {
     let source = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../tools/capcut-automation").join(name);

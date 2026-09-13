@@ -701,6 +701,7 @@ dependencies = [
  "url_utils",
  "uuid 1.22.0",
  "uuid_utils",
+ "voicestudio_client",
  "vynaro",
  "vynaro-detect",
  "web_base64",
@@ -14499,6 +14500,20 @@ dependencies = [
  "log",
  "mp4",
  "test_utils",
+ "workspace-build-acceleration",
+]
+
+[[package]]
+name = "voicestudio_client"
+version = "0.0.1"
+dependencies = [
+ "async-trait",
+ "futures 0.3.32",
+ "reqwest 0.12.23",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
  "workspace-build-acceleration",
 ]
 

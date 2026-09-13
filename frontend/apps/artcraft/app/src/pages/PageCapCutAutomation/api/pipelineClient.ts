@@ -63,6 +63,11 @@ export interface LocalAutomationPreset {
   ttsAudioMode?: "REPLACE" | "DUCK_ORIGINAL" | "MIX";
   originalAudioGain?: number;
   speakerVoiceAssignments?: Record<string, string>;
+  /** VoiceStudio gallery/profile id for cloned-voice dubbing. */
+  voiceProfileId?: string | null;
+  /** Runtime is persisted per job so a clone never silently falls back. */
+  voiceProvider?: "PIPER" | "ARTCRAFT_SPEECH";
+  voiceModel?: string;
 }
 
 export interface LocalAutomationReceipt {
@@ -230,6 +235,39 @@ export interface LocalSpeakerResponse { engine: string; sampleRate: number; turn
 /** Detect speaker turns with the ArtCraft-owned offline diarization engine. */
 export async function detectSpeakersCapCutAutomationLocal(audioPath: string, numSpeakers = 0): Promise<LocalSpeakerResponse> {
   return invoke<LocalSpeakerResponse>('detect_speakers_capcut_automation_local', { request: { audio_path: audioPath, num_speakers: numSpeakers } });
+}
+
+export type VoiceStudioProfile = Record<string, unknown> & { id?: string; voice_id?: string; name?: string; profile_name?: string };
+
+/** Read VoiceStudio capabilities without coupling the UI to its internal schema. */
+export async function getVoiceStudioCapabilities(): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('get_voice_studio_capabilities');
+}
+
+/** Starts ArtCraft's embedded speech service after verifying its identity. */
+export async function ensureArtcraftSpeechRuntime(acceptModelTerms = false): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('ensure_artcraft_speech_runtime', {
+    request: { accept_model_terms: acceptModelTerms },
+  });
+}
+
+/** List persisted local voice profiles available for cloned-voice synthesis. */
+export async function listVoiceStudioProfiles(): Promise<VoiceStudioProfile[]> {
+  const result = await invoke<unknown>('list_voice_studio_profiles');
+  if (Array.isArray(result)) return result as VoiceStudioProfile[];
+  if (result && typeof result === 'object') {
+    const values = (result as { voices?: unknown; profiles?: unknown }).voices ?? (result as { profiles?: unknown }).profiles;
+    return Array.isArray(values) ? values as VoiceStudioProfile[] : [];
+  }
+  return [];
+}
+
+export async function uploadVoiceStudioClip(request: { path: string; name?: string; reference_text?: string }): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('upload_voice_studio_clip', { request });
+}
+
+export async function saveVoiceStudioProfile(voiceId: string, profileName: string): Promise<Record<string, unknown>> {
+  return invoke<Record<string, unknown>>('save_voice_studio_profile', { request: { voice_id: voiceId, profile_name: profileName } });
 }
 export async function listenNativeAutomationProgress(cb: (payload: NativeAutomationProgressPayload) => void): Promise<UnlistenFn> {
   if (!isTauriAvailable()) return NOOP_UNLISTEN;

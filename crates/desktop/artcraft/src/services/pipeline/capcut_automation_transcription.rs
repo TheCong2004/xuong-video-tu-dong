@@ -11,6 +11,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+use voicestudio_client::{TranscriptionRequest as VoiceStudioTranscriptionRequest, VoiceStudioClient};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct LocalTranscriptionRequest {
@@ -127,6 +128,9 @@ pub fn transcribe_local(manager: &CapcutAutomationEngineManager, request: LocalT
   if !input.is_file() {
     return Err("CAPCUT_TRANSCRIPTION_INPUT_MISSING".to_string());
   }
+  if voicestudio_asr_enabled() {
+    return transcribe_with_voicestudio(request);
+  }
   let engine = manager.resolve_first(CapcutEngineKind::Transcription)?;
   let executable = engine.executable_path.ok_or_else(|| "CAPCUT_TRANSCRIPTION_EXECUTABLE_MISSING".to_string())?;
   let model_sha256 = sha256_file(&engine.resource_path)?;
@@ -192,6 +196,90 @@ pub fn transcribe_local(manager: &CapcutAutomationEngineManager, request: LocalT
   // can be reproduced offline without rerunning the video/Whisper job.  Raw
   // transcript text is never emitted in diagnostics or logs.
   Ok(LocalTranscriptionResponse { engine: engine.spec.id, model_sha256, executable_sha256, segments: parsed.segments })
+}
+
+fn voicestudio_asr_enabled() -> bool {
+  std::env::var("FLOWORD_ASR_PROVIDER").ok().is_some_and(|value| value.trim().eq_ignore_ascii_case("voicestudio"))
+}
+
+/// Execute VoiceStudio ASR from the synchronous native-command boundary.
+/// The CapCut automation commands predate the async VoiceStudio client, so the
+/// request is isolated on a small current-thread runtime instead of blocking
+/// ArtCraft's main async executor. This path is opt-in via
+/// `FLOWORD_ASR_PROVIDER=voicestudio`; the verified local Whisper path remains
+/// the default.
+fn transcribe_with_voicestudio(request: LocalTranscriptionRequest) -> Result<LocalTranscriptionResponse, String> {
+  let input = PathBuf::from(&request.input_path);
+  let workspace = request.workspace_path.as_deref().map(PathBuf::from);
+  let requested_language = request.language.clone().filter(|value| !value.trim().is_empty() && !value.eq_ignore_ascii_case("auto"));
+  let model = std::env::var("VOICESTUDIO_ASR_MODEL").ok().filter(|value| !value.trim().is_empty()).unwrap_or_else(|| "whisper-1".to_string());
+  let input_bytes = std::fs::metadata(&input).map(|metadata| metadata.len()).unwrap_or(0);
+  let input_for_request = input.clone();
+  let language_for_request = requested_language.clone();
+  let model_for_request = model.clone();
+  let response = run_voice_studio_future(async move {
+    let client = VoiceStudioClient::from_env().map_err(|error| error.to_string())?;
+    client.transcribe(&input_for_request, &VoiceStudioTranscriptionRequest { model: Some(model_for_request), language: language_for_request, response_format: "verbose_json".to_string() }).await.map_err(|error| error.to_string())
+  })?;
+  let detected_language = response.language.clone().or(requested_language.clone());
+  let mut segments = response.segments.iter().enumerate().filter_map(|(index, value)| parse_voicestudio_segment(value, index, detected_language.as_deref())).collect::<Vec<_>>();
+  // Some VoiceStudio backends return a valid `text` field while omitting
+  // segment timestamps (for example when word timestamps are unavailable).
+  // Preserve that transcript as one timed segment instead of misclassifying a
+  // successful ASR response as output-missing.
+  if segments.is_empty() && !response.text.trim().is_empty() {
+    let end_ms = response.duration.filter(|value| value.is_finite() && *value > 0.0).map(|value| (value * 1_000.0).round() as u64).unwrap_or(1).max(1);
+    if let Some(segment) = parse_voicestudio_segment(&serde_json::json!({ "id": "segment-1", "text": response.text, "start": 0.0, "end": end_ms as f64 / 1_000.0 }), 0, detected_language.as_deref()) {
+      segments.push(segment);
+    }
+  }
+  if let Some(workspace) = workspace.as_deref() {
+    let diagnostics = serde_json::json!({
+      "provider": "voicestudio",
+      "model": model,
+      "inputBytes": input_bytes,
+      "requestedLanguage": requested_language,
+      "detectedLanguage": detected_language,
+      "segmentCount": segments.len(),
+      "durationSeconds": response.duration,
+    });
+    let _ = std::fs::create_dir_all(workspace);
+    let _ = std::fs::write(workspace.join("voicestudio-transcription-diagnostics.json"), serde_json::to_vec_pretty(&diagnostics).unwrap_or_default());
+  }
+  Ok(LocalTranscriptionResponse { engine: "voicestudio-asr".to_string(), model_sha256: "external:voicestudio".to_string(), executable_sha256: "external:voicestudio".to_string(), segments })
+}
+
+fn parse_voicestudio_segment(value: &serde_json::Value, index: usize, language: Option<&str>) -> Option<TranscriptSegment> {
+  let text = value.get("text").and_then(serde_json::Value::as_str).unwrap_or_default().trim().to_string();
+  if text.is_empty() {
+    return None;
+  }
+  let start_ms = value.get("start").and_then(value_to_millis).or_else(|| value.get("start_ms").and_then(serde_json::Value::as_u64)).unwrap_or(0);
+  let end_ms = value.get("end").and_then(value_to_millis).or_else(|| value.get("end_ms").and_then(serde_json::Value::as_u64)).unwrap_or(start_ms);
+  let duration_ms = end_ms.saturating_sub(start_ms);
+  let quality = assess_transcript_quality(&text, duration_ms);
+  let quality_state = quality_state_with_language_and_whisper_metrics(language, quality.state, None, None, None, &text, duration_ms);
+  Some(TranscriptSegment { id: value.get("id").and_then(serde_json::Value::as_str).map(str::to_string).unwrap_or_else(|| format!("segment-{}", index + 1)), start_ms, end_ms, text: text.clone(), language: language.map(str::to_string), confidence: value.get("confidence").and_then(serde_json::Value::as_f64).map(|value| value as f32), speaker_id: None, quality_state, repetition_ratio: quality.repetition_ratio, token_count: quality.token_count, character_count: quality.character_count, avg_log_prob: None, no_speech_probability: None, compression_ratio: None, duration_ms })
+}
+
+fn value_to_millis(value: &serde_json::Value) -> Option<u64> {
+  let seconds = value.as_f64()?;
+  if !seconds.is_finite() || seconds < 0.0 {
+    return None;
+  }
+  Some((seconds * 1_000.0).round() as u64)
+}
+
+fn run_voice_studio_future<F, T>(future: F) -> Result<T, String>
+where
+  F: std::future::Future<Output = Result<T, String>> + Send + 'static,
+  T: Send + 'static,
+{
+  let join = std::thread::spawn(move || {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().map_err(|error| format!("CAPCUT_VOICESTUDIO_RUNTIME_FAILED:{error}"))?;
+    runtime.block_on(future)
+  });
+  join.join().map_err(|_| "CAPCUT_VOICESTUDIO_REQUEST_PANICKED".to_string())?
 }
 
 fn whisper_language_code(language: &str) -> &str {
@@ -513,6 +601,16 @@ mod tests {
   fn ordinary_sentence_passes_transcript_quality_gate() {
     let quality = assess_transcript_quality("This is a short sentence with useful context.", 4_000);
     assert_eq!(quality.state, "ACCEPTED");
+  }
+
+  #[test]
+  fn parses_voicestudio_verbose_segment_with_second_timestamps() {
+    let value = serde_json::json!({"id": "seg-7", "start": 1.25, "end": 3.5, "text": "繁體字幕", "confidence": 0.91});
+    let segment = parse_voicestudio_segment(&value, 6, Some("zt")).expect("segment should parse");
+    assert_eq!(segment.id, "seg-7");
+    assert_eq!((segment.start_ms, segment.end_ms), (1_250, 3_500));
+    assert_eq!(segment.language.as_deref(), Some("zt"));
+    assert_eq!(segment.text, "繁體字幕");
   }
 
   #[test]

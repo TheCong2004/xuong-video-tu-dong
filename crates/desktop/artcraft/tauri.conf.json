@@ -167,6 +167,7 @@
       "resources/chromex",
       "resources/chromex-extension",
       "resources/capcut-automation",
+      "../../../tools/speech-runtime",
       "resources/runtime-manifest.sha256.json"
     ]
   }
