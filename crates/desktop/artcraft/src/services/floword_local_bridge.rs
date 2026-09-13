@@ -111,7 +111,7 @@ pub struct SceneRenderReceiptV1 {
 
 pub fn compute_idempotency_key(job_id: &str, scene_id: &str, attempt_id: &str, anchor_sha256: &str, compiled_prompt_sha256: &str, provider: SceneRenderProvider) -> String {
   let material = format!("{job_id}|{scene_id}|{attempt_id}|{anchor_sha256}|{compiled_prompt_sha256}|{}", provider.as_str());
-  format!("{:x}", Sha256::digest(material.as_bytes()))
+  Sha256::digest(material.as_bytes()).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 impl SceneRenderRequestV1 {

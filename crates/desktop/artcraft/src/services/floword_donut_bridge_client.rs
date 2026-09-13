@@ -79,7 +79,7 @@ impl DonutBridgeClient {
 
   pub async fn health(&self) -> Result<DonutBridgeHealthV1, String> {
     let output = self.temp_file("health")?;
-    let result = self.run(&["health", "--output", path_arg(&output)]).await;
+    let result = self.run(&["health".to_string(), "--output".to_string(), path_arg(&output)]).await;
     let health = result.and_then(|_| read_json(&output));
     let _ = fs::remove_file(output);
     let health: DonutBridgeHealthV1 = health?;
@@ -94,7 +94,7 @@ impl DonutBridgeClient {
     let input = self.temp_file("request")?;
     let output = self.temp_file("receipt")?;
     write_json(&input, envelope)?;
-    let result = self.run(&["execute", "--input", path_arg(&input), "--output", path_arg(&output)]).await;
+    let result = self.run(&["execute".to_string(), "--input".to_string(), path_arg(&input), "--output".to_string(), path_arg(&output)]).await;
     let receipt = result.and_then(|_| read_json(&output));
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
@@ -108,7 +108,7 @@ impl DonutBridgeClient {
       return Err("idempotencyKey_INVALID".to_string());
     }
     let output = self.temp_file("receipt")?;
-    let result = self.run(&["get-receipt", "--idempotency-key", idempotency_key.to_string(), "--output", path_arg(&output)]).await;
+    let result = self.run(&["get-receipt".to_string(), "--idempotency-key".to_string(), idempotency_key.to_string(), "--output".to_string(), path_arg(&output)]).await;
     let receipt = result.and_then(|_| read_json(&output));
     let _ = fs::remove_file(output);
     receipt
