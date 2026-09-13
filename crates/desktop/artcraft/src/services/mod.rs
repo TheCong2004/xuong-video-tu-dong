@@ -1,5 +1,6 @@
 pub mod grok;
 pub mod floword_local_bridge;
+pub mod floword_donut_bridge_client;
 pub mod midjourney;
 pub mod pipeline;
 pub mod publishing;
