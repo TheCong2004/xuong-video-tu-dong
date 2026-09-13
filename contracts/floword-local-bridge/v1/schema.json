@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://artcraft.local/contracts/floword-local-bridge/1.0/schema.json",
+  "title": "Floword Local Bridge v1",
+  "oneOf": [
+    { "$ref": "#/$defs/SceneRenderRequestV1" },
+    { "$ref": "#/$defs/SceneRenderReceiptV1" }
+  ],
+  "$defs": {
+    "Sha256": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
+    "NonEmptyString": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "\\u0000" }
+    },
+    "Provider": {
+      "const": "grok.image.edit"
+    },
+    "Anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/NonEmptyString" },
+        "sha256": { "$ref": "#/$defs/Sha256" }
+      }
+    },
+    "Metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "aspectRatio": { "enum": ["1:1", "9:16", "16:9"] }
+      }
+    },
+    "RenderedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "mimeType", "bytes"],
+      "properties": {
+        "path": { "$ref": "#/$defs/NonEmptyString" },
+        "sha256": { "$ref": "#/$defs/Sha256" },
+        "mimeType": { "$ref": "#/$defs/NonEmptyString" },
+        "bytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "SceneRenderRequestV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "jobId",
+        "attemptId",
+        "sceneId",
+        "characterId",
+        "characterVersion",
+        "provider",
+        "anchor",
+        "compiledPrompt",
+        "compiledPromptSha256",
+        "idempotencyKey",
+        "metadata",
+        "createdAt"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "requestId": { "type": "string", "format": "uuid" },
+        "jobId": { "type": "string", "format": "uuid" },
+        "attemptId": { "type": "string", "format": "uuid" },
+        "sceneId": { "$ref": "#/$defs/NonEmptyString" },
+        "characterId": { "$ref": "#/$defs/NonEmptyString" },
+        "characterVersion": { "type": "integer", "minimum": 1 },
+        "provider": { "$ref": "#/$defs/Provider" },
+        "anchor": { "$ref": "#/$defs/Anchor" },
+        "compiledPrompt": { "$ref": "#/$defs/NonEmptyString" },
+        "compiledPromptSha256": { "$ref": "#/$defs/Sha256" },
+        "idempotencyKey": { "$ref": "#/$defs/Sha256" },
+        "metadata": { "$ref": "#/$defs/Metadata" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "SceneRenderReceiptV1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "requestId",
+        "jobId",
+        "sceneId",
+        "attemptId",
+        "idempotencyKey",
+        "provider",
+        "providerJobId",
+        "status",
+        "submissionState",
+        "artifact",
+        "submittedAt",
+        "completedAt",
+        "errorCode",
+        "errorMessage"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "requestId": { "type": "string", "format": "uuid" },
+        "jobId": { "type": "string", "format": "uuid" },
+        "sceneId": { "$ref": "#/$defs/NonEmptyString" },
+        "attemptId": { "type": "string", "format": "uuid" },
+        "idempotencyKey": { "$ref": "#/$defs/Sha256" },
+        "provider": { "$ref": "#/$defs/Provider" },
+        "providerJobId": {
+          "oneOf": [{ "$ref": "#/$defs/NonEmptyString" }, { "type": "null" }]
+        },
+        "status": { "enum": ["SUCCEEDED", "FAILED", "REJECTED", "UNKNOWN"] },
+        "submissionState": { "enum": ["NOT_SUBMITTED", "SUBMITTED", "UNKNOWN"] },
+        "artifact": {
+          "oneOf": [{ "$ref": "#/$defs/RenderedArtifact" }, { "type": "null" }]
+        },
+        "submittedAt": {
+          "oneOf": [
+            { "type": "string", "format": "date-time" },
+            { "type": "null" }
+          ]
+        },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "errorCode": {
+          "oneOf": [{ "$ref": "#/$defs/NonEmptyString" }, { "type": "null" }]
+        },
+        "errorMessage": {
+          "oneOf": [
+            { "type": "string", "maxLength": 1024, "not": { "pattern": "\\u0000" } },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  }
+}
