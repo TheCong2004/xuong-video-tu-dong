@@ -7,6 +7,7 @@ import { JobsView } from "./components/views/JobsView";
 import { PagesView } from "./components/views/PagesView";
 import { StudioView } from "./components/views/StudioView";
 import { ProductionPipelineView } from "./components/views/ProductionPipelineView";
+import { ScriptMarketItem, ScriptMarketView } from "./components/views/ScriptMarketView";
 import { BulkImportView } from "./components/views/BulkImportView";
 import { PublishView } from "./components/views/PublishView";
 import { HistoryView } from "./components/views/HistoryView";
@@ -219,6 +220,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
 }) => {
   // Navigation & Shell State
   const [activeView, setActiveView] = useState<FlowordView>("production");
+  const [scriptToLoad, setScriptToLoad] = useState<ScriptMarketItem | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
   const [mobileNavOpen, setMobileNavOpen] = useState<boolean>(false);
   const [configureOpen, setConfigureOpen] = useState<boolean>(false);
@@ -722,7 +724,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
             }
           }}
           onRunWorkflow={
-            activeView === "production"
+            activeView === "production" || activeView === "script_market"
               ? () => toast("Dùng nút Tạo job phim trong Xưởng Phim AI.")
               : running
                 ? handleCancelWorkflow
@@ -749,6 +751,17 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
               onRunWorkflow={handleRunWorkflow}
               onCancelWorkflow={handleCancelWorkflow}
               profiles={profiles}
+              scriptToLoad={scriptToLoad}
+              onScriptLoaded={() => setScriptToLoad(null)}
+            />
+          )}
+
+          {activeView === "script_market" && (
+            <ScriptMarketView
+              onUseScript={(script) => {
+                setScriptToLoad(script);
+                setActiveView("production");
+              }}
             />
           )}
 

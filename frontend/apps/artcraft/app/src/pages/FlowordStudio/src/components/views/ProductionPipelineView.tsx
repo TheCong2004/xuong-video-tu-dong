@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AudioLines,
   CheckCircle2,
@@ -22,6 +22,7 @@ import {
   ingestFlowordSourceImage,
 } from "../../api/flowordClient";
 import { WorkflowInput, WorkflowRun } from "../../services/workflowEngine";
+import { ScriptMarketItem } from "./ScriptMarketView";
 
 type PipelinePhase = {
   id: string;
@@ -126,6 +127,8 @@ interface Props {
   onRunWorkflow: (input: WorkflowInput) => Promise<void>;
   onCancelWorkflow: () => Promise<void>;
   profiles: DonutProfileEnriched[];
+  scriptToLoad?: ScriptMarketItem | null;
+  onScriptLoaded: () => void;
 }
 
 export const ProductionPipelineView: React.FC<Props> = ({
@@ -137,6 +140,8 @@ export const ProductionPipelineView: React.FC<Props> = ({
   onRunWorkflow,
   onCancelWorkflow,
   profiles,
+  scriptToLoad,
+  onScriptLoaded,
 }) => {
   const [brief, setBrief] = useState("");
   const [sources, setSources] = useState("");
@@ -164,6 +169,18 @@ export const ProductionPipelineView: React.FC<Props> = ({
       ),
     [activeRun],
   );
+
+  useEffect(() => {
+    if (!scriptToLoad) return;
+    setBrief(scriptToLoad.brief);
+    setSources(scriptToLoad.sources.join("\n"));
+    setUseTrendResearch(scriptToLoad.useTrendResearch);
+    setSceneCount(scriptToLoad.sceneCount);
+    setDuration(scriptToLoad.duration);
+    setVoiceStyle(scriptToLoad.voiceStyle);
+    onScriptLoaded();
+    toast.success(`Đã nạp kịch bản: ${scriptToLoad.title}`);
+  }, [onScriptLoaded, scriptToLoad]);
 
   const ingestAnchor = useCallback(
     async (file: File) => {

@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Activity,
+  BookOpen,
   Boxes,
   ChevronLeft,
   ChevronRight,
@@ -27,6 +28,7 @@ import { goToApp } from "~/config/appMenu";
 export type FlowordView =
   | "dashboard"
   | "production"
+  | "script_market"
   | "studio"
   | "bulk_import"
   | "jobs"
@@ -58,6 +60,12 @@ const navItems = [
     id: "production" as const,
     label: "Xưởng Phim AI",
     icon: Clapperboard,
+    badge: null,
+  },
+  {
+    id: "script_market" as const,
+    label: "Chợ kịch bản",
+    icon: BookOpen,
     badge: null,
   },
   {
