@@ -328,8 +328,39 @@ export async function listDonutProfilesEnriched(): Promise<DonutProfileEnriched[
   });
 }
 
-export function ingestFlowordSourceImage(request: IngestFlowordSourceImageRequest): Promise<IngestFlowordSourceImageResponse> {
-  return invokeCommand<IngestFlowordSourceImageResponse>('ingest_floword_source_image_command', { request });
+/**
+ * The Rust pipeline keeps integrity fields in artifact.metadata so they travel
+ * with every artifact kind. Normalize that transport shape once here: UI code
+ * must never assume a missing optional field and crash while rendering an
+ * uploaded source/character anchor.
+ */
+export async function ingestFlowordSourceImage(
+  request: IngestFlowordSourceImageRequest,
+): Promise<IngestFlowordSourceImageResponse> {
+  const response = await invokeCommand<IngestFlowordSourceImageResponse>(
+    'ingest_floword_source_image_command',
+    { request },
+  );
+  const metadata = response.artifact.metadata || {};
+  const metadataSha = metadata.sha256;
+  const metadataSize = metadata.size_bytes;
+  const metadataCreatedAt = metadata.created_at;
+
+  return {
+    ...response,
+    artifact: {
+      ...response.artifact,
+      sha256:
+        response.artifact.sha256 ||
+        (typeof metadataSha === 'string' ? metadataSha : ''),
+      size_bytes:
+        response.artifact.size_bytes ||
+        (typeof metadataSize === 'number' ? metadataSize : 0),
+      created_at:
+        response.artifact.created_at ||
+        (typeof metadataCreatedAt === 'string' ? metadataCreatedAt : ''),
+    },
+  };
 }
 
 export function getFlowordSettings(): Promise<FlowordSettingsResponse> {
@@ -1367,6 +1398,5 @@ export async function openDonutBrowserGui(): Promise<boolean> {
     return false;
   }
 }
-
 
 

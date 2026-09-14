@@ -402,7 +402,8 @@ export const ProductionPipelineView: React.FC<Props> = ({
                 {anchor && (
                   <p className="mt-3 break-all font-mono text-[11px] text-emerald-300">
                     Artifact: {anchor.artifact_id} · SHA:{" "}
-                    {anchor.sha256.slice(0, 12)}…
+                    {anchor.sha256?.slice(0, 12) || "chưa có SHA"}
+                    {anchor.sha256 ? "…" : ""}
                   </p>
                 )}
               </div>
