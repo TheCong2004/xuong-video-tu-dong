@@ -126,7 +126,12 @@ function translatePipelineError(message: string): string {
   ) {
     return "Video nguồn không có âm thanh nên không thể nhận dạng hoặc lồng tiếng. Ảnh anchor nhân vật không phải video nguồn; hãy tạo công việc mới sau khi cập nhật màn này.";
   }
-  if (normalized.includes("visual_provider_unavailable")) {
+  if (
+    normalized.includes("visual_provider_unavailable") ||
+    normalized.includes("original creation needs at least one active") ||
+    normalized.includes("video-provider connection") ||
+    normalized.includes("add and test veo")
+  ) {
     return "Chưa có dịch vụ tạo video khả dụng trong OmniRoute. Hãy kết nối và kiểm tra ít nhất một dịch vụ tạo video trước khi chạy.";
   }
   if (normalized.includes("prompt_required")) {
