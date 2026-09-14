@@ -35,19 +35,19 @@ const phases: PipelinePhase[] = [
   {
     id: "research",
     title: "Nguồn & ý tưởng",
-    description: "Trend, link nguồn và tư liệu đầu vào.",
+    description: "Xu hướng, liên kết tham khảo và tư liệu đầu vào.",
     stages: ["RESEARCH", "INGEST", "ANALYZE"],
   },
   {
     id: "script",
     title: "Kịch bản phân cảnh",
-    description: "Brief được chuyển thành kịch bản và scene.",
+    description: "Yêu cầu được chuyển thành kịch bản và từng cảnh.",
     stages: ["SCRIPT", "SCENE"],
   },
   {
     id: "assets",
     title: "Tư liệu & bối cảnh",
-    description: "Ảnh, stock và asset phục vụ từng cảnh.",
+    description: "Ảnh, tư liệu có sẵn và bối cảnh cho từng cảnh.",
     stages: ["MEDIA", "ASSET"],
   },
   {
@@ -59,19 +59,19 @@ const phases: PipelinePhase[] = [
   {
     id: "render",
     title: "Sinh hình & bối cảnh",
-    description: "Visual provider tạo asset theo scene plan đã lưu.",
+    description: "Dịch vụ tạo hình tạo tư liệu theo kế hoạch cảnh đã lưu.",
     stages: ["GROK", "GENERATING", "VIDEO", "MEDIA"],
   },
   {
     id: "voice",
     title: "Giọng nói & phụ đề",
-    description: "Lồng tiếng, nhịp câu và subtitle.",
+    description: "Lồng tiếng, nhịp câu và phụ đề.",
     stages: ["VOICE", "TTS", "CAPTION", "SUBTITLE"],
   },
   {
     id: "assembly",
     title: "Dựng & xuất",
-    description: "Timeline, kiểm tra output và video hoàn chỉnh.",
+    description: "Dòng thời gian, kiểm tra kết quả và video hoàn chỉnh.",
     stages: ["TIMELINE", "DRAFT", "SAVING", "LOCAL"],
   },
 ];
@@ -116,6 +116,29 @@ function parseSources(value: string): string[] {
     .split(/\r?\n|,/)
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function translatePipelineError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("source video has no audio stream") ||
+    normalized.includes("vynaro_audio_missing")
+  ) {
+    return "Video nguồn không có âm thanh nên không thể nhận dạng hoặc lồng tiếng. Ảnh anchor nhân vật không phải video nguồn; hãy tạo công việc mới sau khi cập nhật màn này.";
+  }
+  if (normalized.includes("visual_provider_unavailable")) {
+    return "Chưa có dịch vụ tạo video khả dụng trong OmniRoute. Hãy kết nối và kiểm tra ít nhất một dịch vụ tạo video trước khi chạy.";
+  }
+  if (normalized.includes("prompt_required")) {
+    return "Chưa có nội dung yêu cầu để tạo kịch bản. Hãy nhập brief hoặc chọn một mẫu trong Chợ kịch bản.";
+  }
+  if (normalized.includes("source_required")) {
+    return "Thiếu tư liệu nguồn cho chế độ đang chọn. Hãy nhập brief, liên kết nguồn hoặc đổi sang chế độ tạo nội dung gốc.";
+  }
+  if (normalized.includes("audio") && normalized.includes("missing")) {
+    return "Không tìm thấy âm thanh cần thiết cho bước xử lý giọng nói.";
+  }
+  return "Công việc chưa hoàn tất. Mở Chi tiết kỹ thuật bên dưới nếu cần gửi lỗi để kiểm tra.";
 }
 
 interface Props {
@@ -226,12 +249,14 @@ export const ProductionPipelineView: React.FC<Props> = ({
       return toast.error("Thêm anchor nhân vật trước khi chạy luồng phim AI.");
     await onRunWorkflow({
       workflowName: "floword_feature_film_pipeline",
-      workflowMode: "floword_video_pipeline",
+      workflowMode: "original_creation",
       pageId: page.id,
       prompt: brief.trim(),
       topic: brief.trim(),
       sourceUrls: parseSources(sources),
-      sourceFiles: [anchor.location],
+      // An anchor is a character reference, never a source video. Sending it
+      // as sourceFiles makes the ingest worker try to extract audio from JPG/PNG.
+      sourceFiles: [],
       sourceImageArtifact: anchor,
       targetPlatform: "tiktok",
       targetDurationSeconds: duration,
@@ -538,9 +563,13 @@ export const ProductionPipelineView: React.FC<Props> = ({
           ))}
         </div>
         {activeRun?.errorMessage && (
-          <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
-            {activeRun.errorMessage}
-          </p>
+          <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
+            <p>{translatePipelineError(activeRun.errorMessage)}</p>
+            <details className="mt-2 text-xs text-rose-200/70">
+              <summary className="cursor-pointer">Chi tiết kỹ thuật</summary>
+              <p className="mt-1 break-words font-mono">{activeRun.errorMessage}</p>
+            </details>
+          </div>
         )}
         {video && (
           <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
@@ -650,7 +679,7 @@ function PhaseCard({
             ? "Hoàn tất"
             : state === "failed"
               ? "Cần xử lý"
-              : "Chờ job"}
+              : "Chờ công việc"}
       </p>
     </div>
   );
