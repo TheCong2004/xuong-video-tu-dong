@@ -26,12 +26,12 @@ export function AppBootGate({ children }: { children: ReactNode }) {
   const activeTabId = useTabStore((state) => state.activeTabId);
   const nativeAutomationActive = activeTabId === "CAPCUT_AUTOMATION";
   // Non-Tauri (browser dev) never receives backend events — enter directly.
-  const [status, setStatus] = useState<Status>(isTauri && !nativeAutomationActive ? "waiting" : "ready");
+  const [status, setStatus] = useState<Status>(isTauri && nativeAutomationActive ? "waiting" : "ready");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!isTauri || nativeAutomationActive) {
+    if (!isTauri || !nativeAutomationActive) {
       setStatus("ready");
       setErrorMessage(null);
       return;
