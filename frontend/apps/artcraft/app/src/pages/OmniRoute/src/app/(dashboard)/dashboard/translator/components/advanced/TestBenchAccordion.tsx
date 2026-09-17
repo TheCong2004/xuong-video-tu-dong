@@ -342,7 +342,7 @@ function TestBenchContent() {
                 result?.status === "pass"
                   ? "border-green-500/30"
                   : result?.status === "error"
-                    ? "border-red-500/30"
+                    ? "border-white/10"
                     : ""
               }`}
             >

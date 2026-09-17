@@ -30,7 +30,7 @@ const statusStyle: Record<ServiceHealth['status'], string> = {
 
 function StatusRow({ label, health }: { label: string; health: ServiceHealth }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] py-3 last:border-0">
+    <div className="flex items-center justify-between gap-4 border-b border-white/10 py-3 last:border-0">
       <div className="min-w-0">
         <div className="text-sm font-medium text-zinc-200">{label}</div>
         <div className="mt-1 truncate text-xs text-zinc-500">{health.message || 'No status detail reported.'}</div>
@@ -70,10 +70,10 @@ export const ConfigureDrawer: React.FC<ConfigureDrawerProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="floword-configure-title"
-        className="flex h-full w-full max-w-3xl flex-col border-l border-white/[0.08] bg-[#0f131c] shadow-2xl"
+        className="flex h-full w-full max-w-3xl flex-col border-l border-white/10 bg-[#0f131c] shadow-2xl"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4">
+        <header className="flex items-center justify-between border-b border-white/10 px-5 py-4">
           <div>
             <h2 id="floword-configure-title" className="text-base font-semibold text-white">Cấu Hình Hệ Thống</h2>
             <p className="mt-1 text-xs text-zinc-500">Năng lực runtime và các thiết lập pipeline nâng cao.</p>
@@ -131,7 +131,7 @@ export const ConfigureDrawer: React.FC<ConfigureDrawerProps> = ({
           </details>
         </div>
 
-        <footer className="flex justify-end gap-2 border-t border-white/[0.08] px-5 py-4">
+        <footer className="flex justify-end gap-2 border-t border-white/10 px-5 py-4">
           <button type="button" onClick={onClose} className="floword-button floword-button-secondary text-zinc-300">Close</button>
           <button type="button" onClick={onSave} className="floword-button floword-button-primary"><Save className="h-4 w-4" /> Save</button>
         </footer>

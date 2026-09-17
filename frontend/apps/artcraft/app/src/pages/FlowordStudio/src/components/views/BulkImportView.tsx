@@ -84,8 +84,8 @@ export const BulkImportView: React.FC = () => {
         <div
           className={`p-3 rounded-lg border text-xs font-semibold flex items-center justify-between transition-all ${
             bannerMessage.type === 'success'
-              ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
-              : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+              ? 'bg-emerald-950/80 border-white/10 text-emerald-300'
+              : 'bg-rose-950/80 border-white/10 text-rose-300'
           }`}
         >
           <span>{bannerMessage.text}</span>
@@ -94,9 +94,9 @@ export const BulkImportView: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="bg-[#131926] p-5 rounded-xl border border-slate-800/80 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-white/10 flex items-center justify-center text-indigo-400">
             <FileSpreadsheet className="w-5 h-5" />
           </div>
           <div>
@@ -118,7 +118,7 @@ export const BulkImportView: React.FC = () => {
       </div>
 
       {/* Pages quick reference pill list */}
-      <div className="bg-[#131926] p-3.5 rounded-xl border border-slate-800 flex items-center gap-2 overflow-x-auto text-xs">
+      <div className="bg-[#131926] p-3.5 rounded-xl border border-white/10 flex items-center gap-2 overflow-x-auto text-xs">
         <span className="text-slate-400 font-semibold flex-shrink-0 flex items-center gap-1.5">
           <Layers className="w-3.5 h-3.5 text-indigo-400" />
           <span>Page IDs khả dụng:</span>
@@ -134,7 +134,7 @@ export const BulkImportView: React.FC = () => {
                 showBanner('success', `Đã copy Page ID: ${p.id}`);
               }}
               title="Click để copy ID"
-              className="px-2.5 py-1 rounded bg-[#0b0f17] border border-slate-700 hover:border-indigo-500 text-slate-300 font-mono text-[11px] cursor-pointer transition flex items-center gap-1"
+              className="px-2.5 py-1 rounded bg-[#0b0f17] border border-white/10 hover:border-indigo-500 text-slate-300 font-mono text-[11px] cursor-pointer transition flex items-center gap-1"
             >
               <span>{p.name}</span>
               <span className="text-indigo-400">({p.id})</span>
@@ -144,7 +144,7 @@ export const BulkImportView: React.FC = () => {
       </div>
 
       {/* CSV Input Editor */}
-      <div className="bg-[#131926] p-5 rounded-xl border border-slate-800 shadow space-y-3">
+      <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-3">
         <div className="flex items-center justify-between">
           <div className="text-xs font-bold text-white flex items-center gap-2">
             <FileText className="w-4 h-4 text-indigo-400" />
@@ -158,14 +158,14 @@ export const BulkImportView: React.FC = () => {
           value={csvContent}
           onChange={(e) => setCsvContent(e.target.value)}
           placeholder="Dán nội dung CSV vào đây..."
-          className="w-full bg-[#0b0f17] text-xs font-mono text-slate-200 p-4 rounded-lg border border-slate-700 focus:outline-none focus:border-indigo-500 leading-relaxed"
+          className="w-full bg-[#0b0f17] text-xs font-mono text-slate-200 p-4 rounded-lg border border-white/10 focus:outline-none focus:border-indigo-500 leading-relaxed"
         />
       </div>
 
       {/* Validation Result Box */}
       {validationResult && (
-        <div className="bg-[#131926] p-5 rounded-xl border border-slate-800 shadow space-y-4 animate-in fade-in duration-200">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+        <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-4 animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
             <div>
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-indigo-400" />
@@ -197,7 +197,7 @@ export const BulkImportView: React.FC = () => {
               </h3>
               <div className="space-y-1.5 max-h-48 overflow-y-auto pr-2">
                 {validationResult.errors.map((err, idx) => (
-                  <div key={idx} className="bg-rose-950/30 border border-rose-500/30 p-2.5 rounded-lg text-xs flex items-start gap-3">
+                  <div key={idx} className="bg-rose-950/30 border border-white/10 p-2.5 rounded-lg text-xs flex items-start gap-3">
                     <span className="font-mono font-bold text-rose-400 px-1.5 py-0.5 rounded bg-rose-500/20 text-[10px]">
                       DÒNG {err.row_index}
                     </span>
@@ -219,7 +219,7 @@ export const BulkImportView: React.FC = () => {
                 <Check className="w-3.5 h-3.5" />
                 <span>Xem trước Dòng Hợp lệ Sẽ Tạo ({validationResult.valid_rows.length})</span>
               </h3>
-              <div className="overflow-x-auto border border-slate-800 rounded-lg max-h-56">
+              <div className="overflow-x-auto border border-white/10 rounded-lg max-h-56">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[#0b0f17] text-slate-400 sticky top-0">
                     <tr>
@@ -250,7 +250,7 @@ export const BulkImportView: React.FC = () => {
 
       {/* Success Commit Banner */}
       {commitResult && (
-        <div className="bg-emerald-950/40 border border-emerald-500/40 p-5 rounded-xl text-xs space-y-3 animate-in zoom-in-95 duration-200">
+        <div className="bg-emerald-950/40 border border-white/10 p-5 rounded-xl text-xs space-y-3 animate-in zoom-in-95 duration-200">
           <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
             <CheckCircle2 className="w-5 h-5" />
             <span>Khởi tạo Thành công {commitResult.total_created} Pipeline Jobs Thực tế!</span>

@@ -80,18 +80,18 @@ interface BatchListTabProps {
 // ── Status helpers ────────────────────────────────────────────────────────────
 
 const STATUS_STYLES: Record<string, string> = {
-  completed: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
-  completed_with_failures: "bg-red-500/15 text-red-400 border-red-500/25",
-  failed: "bg-red-500/15 text-red-400 border-red-500/25",
-  in_progress: "bg-blue-500/15 text-blue-400 border-blue-500/25",
+  completed: "bg-emerald-500/15 text-emerald-400 border-white/10",
+  completed_with_failures: "bg-red-500/15 text-red-400 border-white/10",
+  failed: "bg-red-500/15 text-red-400 border-white/10",
+  in_progress: "bg-blue-500/15 text-blue-400 border-white/10",
   in_progress_with_failures: "bg-orange-500/15 text-orange-400 border-orange-500/25",
   finalizing: "bg-violet-500/15 text-violet-400 border-violet-500/25",
   finalizing_with_failures: "bg-orange-500/15 text-orange-400 border-orange-500/25",
-  validating: "bg-yellow-500/15 text-yellow-400 border-yellow-500/25",
+  validating: "bg-yellow-500/15 text-yellow-400 border-white/10",
   cancelling: "bg-orange-500/15 text-orange-400 border-orange-500/25",
-  cancelled: "bg-gray-500/15 text-gray-400 border-gray-500/25",
-  cancelled_with_failures: "bg-red-500/15 text-red-400 border-red-500/25",
-  expired: "bg-gray-500/15 text-gray-400 border-gray-500/25",
+  cancelled: "bg-gray-500/15 text-gray-400 border-white/10",
+  cancelled_with_failures: "bg-red-500/15 text-red-400 border-white/10",
+  expired: "bg-gray-500/15 text-gray-400 border-white/10",
   expired_with_failures: "bg-orange-500/15 text-orange-400 border-orange-500/25",
 };
 
@@ -154,7 +154,7 @@ function effectiveStatus(batch: BatchRecord): string {
 function StatusBadge({ batch }: Readonly<{ batch: BatchRecord }>) {
   const t = useTranslations("common");
   const key = effectiveStatus(batch);
-  const cls = STATUS_STYLES[key] ?? "bg-gray-500/15 text-gray-400 border-gray-500/25";
+  const cls = STATUS_STYLES[key] ?? "bg-gray-500/15 text-gray-400 border-white/10";
   const labelKey = STATUS_LABEL_KEYS[key];
   const label = labelKey ? t(labelKey as Parameters<typeof t>[0]) : key.replaceAll("_", " ");
   return (
@@ -384,7 +384,7 @@ export default function BatchListTab({
         <button
           onClick={handleRemoveCompleted}
           disabled={removingCompleted}
-          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-red-500/10 border border-white/10 text-red-400 hover:text-red-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           title={t("batchListDeleteAllCompletedTitle")}
         >
           <span className="material-symbols-outlined text-[16px]">

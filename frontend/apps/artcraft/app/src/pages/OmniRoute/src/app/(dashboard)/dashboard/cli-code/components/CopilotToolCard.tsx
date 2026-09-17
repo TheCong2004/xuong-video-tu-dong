@@ -210,7 +210,7 @@ export default function CopilotToolCard({
         <div className="mt-6 pt-6 border-t border-border">
           <div className="flex flex-col gap-5">
             {/* Info box */}
-            <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-white/10 rounded-lg">
               <span className="material-symbols-outlined text-blue-500 text-lg">info</span>
               <div className="text-sm text-blue-700 dark:text-blue-300">
                 <p className="font-medium">{t("copilotConfigGenerator")}</p>
@@ -225,7 +225,7 @@ export default function CopilotToolCard({
             </div>
 
             {/* Version compatibility warning */}
-            <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-white/10 rounded-lg">
               <span className="material-symbols-outlined text-yellow-500 text-lg">warning</span>
               <p className="text-xs text-yellow-600 dark:text-yellow-400">
                 {t.rich("copilotCompatibilityWarning", {
@@ -313,7 +313,7 @@ export default function CopilotToolCard({
                   <span>{t("loadingModels")}</span>
                 </div>
               ) : availableModels.length === 0 && allModels.length === 0 ? (
-                <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-white/10 rounded-lg">
                   <span className="material-symbols-outlined text-yellow-500 text-lg">warning</span>
                   <p className="text-sm text-yellow-600 dark:text-yellow-400">
                     {t("noActiveProviders")}

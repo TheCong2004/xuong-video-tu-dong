@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faArrowRotateRight,
-  faBars,
-  faCheck,
-  faChevronRight,
-  faFileExport,
-  faFolderOpen,
-  faHardDrive,
-  faPlus,
-  faTrash,
-} from "@fortawesome/pro-solid-svg-icons";
+  RefreshCw,
+  SlidersHorizontal,
+  Check,
+  ChevronRight,
+  ChevronLeft,
+  FolderOpen,
+  HardDrive,
+  Plus,
+  Trash2,
+  Search,
+  ExternalLink,
+} from "lucide-react";
 import { twMerge } from "tailwind-merge";
 import toast from "react-hot-toast";
 import { useCapCutMate } from "../api/CapCutMateContext";
@@ -79,6 +80,8 @@ export function AllProjectPanel() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
 
   const activePath = mate.localProject.trim();
+  const mateLocalProject = mate.localProject;
+  const setMateLocalProject = mate.setLocalProject;
 
   const refresh = useCallback(
     async (opts?: { drafts_dir?: string; silent?: boolean }) => {
@@ -93,10 +96,10 @@ export function AllProjectPanel() {
         });
         const list = res.projects ?? [];
         setProjects(list);
-        if (list.length > 0 && !mate.localProject) {
+        if (list.length > 0 && !mateLocalProject) {
           const firstPath = (list[0].project || list[0].path || "").replace(/[/\\]draft_content\.json$/i, "");
           if (firstPath) {
-            mate.setLocalProject(firstPath);
+            setMateLocalProject(firstPath);
             setSelectedIds(new Set([firstPath]));
           }
         }
@@ -116,14 +119,14 @@ export function AllProjectPanel() {
         setLoading(false);
       }
     },
-    [customDir, search, mate],
+    [customDir, search, mateLocalProject, setMateLocalProject],
   );
 
   // Auto-scan khi mở panel / BE online
   useEffect(() => {
     if (collapsed) return;
     void refresh({ silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ mount / expand
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collapsed, mate.online]);
 
   useEffect(() => {
@@ -136,53 +139,43 @@ export function AllProjectPanel() {
   }, [width, collapsed]);
 
   const filtered = useMemo(() => {
-    const list = Array.isArray(projects) ? projects : [];
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter((p) => {
-      const blob = `${p?.name || ""} ${p?.folder || ""} ${p?.project || ""} ${p?.root || ""}`.toLowerCase();
-      return blob.includes(q);
+    if (!q) return projects;
+    return projects.filter((p) => {
+      const n = displayName(p).toLowerCase();
+      const path = projectPath(p).toLowerCase();
+      return n.includes(q) || path.includes(q);
     });
   }, [projects, search]);
 
-  const selectProject = (p: LocalProjectItem) => {
-    const path = projectPath(p);
-    if (!path) {
-      toast.error("Project thiếu path");
-      return;
-    }
-    // Ưu tiên folder project (BE field `project`)
-    const folder = (p.project || path).replace(/[/\\]draft_content\.json$/i, "");
-    mate.setLocalProject(folder);
-    setSelectedIds(new Set([folder]));
-    toast.success(`Đã chọn draft local: ${displayName(p)}`);
-  };
-
   const toggleMulti = (p: LocalProjectItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    const path = (p.project || projectPath(p)).replace(
+    const id = (p.project || projectPath(p)).replace(
       /[/\\]draft_content\.json$/i,
       "",
     );
-    if (!path) return;
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-        const remaining = [...next][0] || "";
-        mate.setLocalProject(remaining);
-      } else {
-        next.add(path);
-        mate.setLocalProject(path);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
+  const selectProject = (p: LocalProjectItem) => {
+    const folder = (p.project || projectPath(p)).replace(
+      /[/\\]draft_content\.json$/i,
+      "",
+    );
+    mate.setLocalProject(folder);
+    setSelectedIds(new Set([folder]));
+    toast.success(`Đã chọn: ${displayName(p)}`);
+  };
+
   const useSelectedAsLocal = () => {
-    const first = [...selectedIds][0] || activePath;
+    const first = [...selectedIds][0];
     if (!first) {
-      toast.error("Chọn ít nhất 1 dự án");
+      toast.error("Chưa tick chọn project nào");
       return;
     }
     mate.setLocalProject(first);
@@ -292,7 +285,7 @@ export function AllProjectPanel() {
   if (collapsed) {
     return (
       <aside
-        className="relative flex shrink-0 flex-col items-center border-l border-white/8 bg-[#121317] py-3"
+        className="relative flex shrink-0 flex-col items-center border-l border-white/10 bg-[#10141e] py-4"
         style={{ width: COLLAPSED_WIDTH }}
       >
         <ResizeHandle
@@ -309,18 +302,18 @@ export function AllProjectPanel() {
           type="button"
           title="Mở rộng danh sách dự án"
           onClick={() => setCollapsed(false)}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-white/50 hover:bg-white/5 hover:text-white/80"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white transition"
         >
-          <FontAwesomeIcon icon={faChevronRight} className="rotate-180" />
+          <ChevronLeft className="h-4 w-4" />
         </button>
         <span
-          className="mt-3 origin-center rotate-90 whitespace-nowrap text-[10px] tracking-wide text-white/35"
+          className="mt-4 origin-center rotate-90 whitespace-nowrap text-[10px] font-bold uppercase tracking-wider text-zinc-500"
           style={{ writingMode: "vertical-rl" }}
         >
           Tất cả dự án
         </span>
         {projects.length > 0 && (
-          <span className="mt-2 rounded bg-emerald-500/20 px-1 text-[9px] text-emerald-300">
+          <span className="mt-3 rounded-full bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-bold text-indigo-300">
             {projects.length}
           </span>
         )}
@@ -331,7 +324,7 @@ export function AllProjectPanel() {
   return (
     <aside
       className={twMerge(
-        "relative flex shrink-0 flex-col border-l border-white/8 bg-[#121317]",
+        "relative flex shrink-0 flex-col border-l border-white/10 bg-[#10141e]",
         dragging && "select-none",
       )}
       style={{ width }}
@@ -344,111 +337,119 @@ export function AllProjectPanel() {
         dragging={dragging}
       />
 
-      <div className="flex items-center gap-2 border-b border-white/8 px-3 py-2.5">
-        <button
-          type="button"
-          onClick={() => setCollapsed(true)}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-white/40 hover:bg-white/5 hover:text-white/70"
-          title="Thu gọn panel"
-        >
-          <FontAwesomeIcon icon={faChevronRight} />
-        </button>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="truncate text-[13px] font-semibold text-white/90">
-            Tất cả dự án
+      {/* Header matching Floword Header height & border */}
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 px-3.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white transition"
+            title="Thu gọn panel"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </button>
+          <span className="truncate text-xs font-bold text-white tracking-wide">
+            Dự Án CapCut
           </span>
-          <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/45">
-            {loading ? "…" : `${filtered.length} dự án`}
+          <span className="shrink-0 rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-300">
+            {loading ? "…" : filtered.length}
           </span>
         </div>
-        <IconBtn
-          icon={faTrash}
-          title="Xóa project đã chọn trên đĩa"
-          onClick={() =>
-            void deleteProjects(
-              selectedIds.size
-                ? [...selectedIds]
-                : activePath
-                  ? [activePath]
-                  : [],
-            )
-          }
-        />
-        <IconBtn
-          icon={faFolderOpen}
-          title="Chọn folder CapCut (drafts_dir)"
-          onClick={promptCustomDir}
-        />
-        <IconBtn
-          icon={faPlus}
-          title="Dùng project đã chọn làm Draft local"
-          onClick={useSelectedAsLocal}
-        />
-        <IconBtn
-          icon={faArrowRotateRight}
-          title="Quét lại (BE /local/projects)"
-          onClick={() => void refresh()}
-        />
+
+        <div className="flex items-center gap-1">
+          <IconBtn
+            icon={Trash2}
+            title="Xóa project đã chọn trên đĩa"
+            onClick={() =>
+              void deleteProjects(
+                selectedIds.size
+                  ? [...selectedIds]
+                  : activePath
+                    ? [activePath]
+                    : [],
+              )
+            }
+          />
+          <IconBtn
+            icon={FolderOpen}
+            title="Chọn folder CapCut (drafts_dir)"
+            onClick={promptCustomDir}
+          />
+          <IconBtn
+            icon={Plus}
+            title="Dùng project đã chọn làm Draft local"
+            onClick={useSelectedAsLocal}
+          />
+          <IconBtn
+            icon={RefreshCw}
+            title="Quét lại (BE /local/projects)"
+            onClick={() => void refresh()}
+            spin={loading}
+          />
+        </div>
       </div>
 
-      <div className="px-3 py-2">
-        <input
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") void refresh();
-          }}
-          placeholder="Tìm dự án… (Enter = quét BE)"
-          className="w-full rounded-lg border border-white/10 bg-[#1e2026] px-3 py-2 text-[12px] text-white outline-none placeholder:text-white/30 focus:border-sky-400/40"
-        />
+      {/* Search Bar */}
+      <div className="p-3 border-b border-white/10 space-y-1.5">
+        <div className="relative flex items-center">
+          <Search className="absolute left-2.5 h-3.5 w-3.5 text-zinc-500 pointer-events-none" />
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void refresh();
+            }}
+            placeholder="Tìm dự án… (Enter để quét)"
+            className="w-full rounded-lg border border-white/10 bg-[#0b0f17] pl-8 pr-3 py-1.5 text-xs text-zinc-200 outline-none placeholder:text-zinc-500 focus:border-indigo-400/50"
+          />
+        </div>
         {customDir ? (
-          <p className="mt-1 truncate font-mono text-[9px] text-sky-300/60" title={customDir}>
+          <p className="truncate font-mono text-[9px] text-indigo-300/80 px-1" title={customDir}>
             dir: {customDir}
           </p>
         ) : (
-          <p className="mt-1 text-[9px] text-white/30">
-            Mặc định: CapCut / JianYing / mate output
+          <p className="text-[9px] text-zinc-500 px-1">
+            Mặc định: CapCut / JianYing local drafts
           </p>
         )}
       </div>
 
+      {/* Active Local Project Banner */}
       {activePath ? (
-        <div className="mx-3 mb-2 flex items-start gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-2">
-          <FontAwesomeIcon
-            icon={faHardDrive}
-            className="mt-0.5 text-[11px] text-emerald-400"
-          />
+        <div className="mx-3 my-2 flex items-start gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-2.5 text-xs">
+          <HardDrive className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-medium text-emerald-200/90">
-              Draft local đang dùng
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">
+              Draft Local Đang Dùng
             </div>
-            <div className="truncate font-mono text-[10px] text-emerald-100/70" title={activePath}>
+            <div className="truncate font-mono text-[10px] text-emerald-200/80" title={activePath}>
               {activePath}
             </div>
           </div>
         </div>
       ) : null}
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {/* Projects List */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-2.5 space-y-1.5">
         {loading && (
-          <p className="px-4 py-6 text-center text-[12px] text-white/40">
+          <p className="px-4 py-8 text-center text-xs text-zinc-500">
             Đang quét project…
           </p>
         )}
 
         {!loading && error && (
-          <div className="flex flex-col items-center px-5 py-8 text-center">
-            <p className="text-[13px] font-semibold text-rose-300/90">
-              Không quét được
+          <div className="flex flex-col items-center px-4 py-8 text-center">
+            <p className="text-xs font-semibold text-rose-300">
+              Không quét được project
             </p>
-            <p className="mt-2 max-w-[240px] text-[11px] leading-relaxed text-white/45">
+            <p className="mt-2 max-w-[220px] text-[11px] leading-relaxed text-zinc-400">
               {error}
             </p>
-            <p className="mt-2 text-[10px] text-white/35">
-              BE phải chạy trên máy có CapCut (cùng máy user).
+            <p className="mt-2 text-[10px] text-zinc-500">
+              BE phải chạy trên máy có CapCut (:30000).
             </p>
-            <div className="mt-4 w-full max-w-[220px] space-y-2">
+            <div className="mt-4 w-full max-w-[200px] space-y-2">
               <ActionBtn label="Thử lại" onClick={() => void refresh()} />
               <ActionBtn label="Chọn folder…" onClick={promptCustomDir} />
             </div>
@@ -456,18 +457,14 @@ export function AllProjectPanel() {
         )}
 
         {!loading && !error && filtered.length === 0 && (
-          <div className="flex flex-col items-center px-5 py-8 text-center">
-            <p className="text-[13px] font-semibold text-white/80">
+          <div className="flex flex-col items-center px-4 py-8 text-center">
+            <p className="text-xs font-semibold text-zinc-300">
               Không thấy dự án CapCut
             </p>
-            <p className="mt-2 max-w-[240px] text-[11px] leading-relaxed text-white/40">
-              Mở CapCut Desktop, tạo/lưu project một lần. BE quét:
-              <br />
-              <span className="break-all text-white/30">
-                %LOCALAPPDATA%\CapCut\User Data\Projects\com.lveditor.draft
-              </span>
+            <p className="mt-2 max-w-[220px] text-[11px] leading-relaxed text-zinc-400">
+              Mở CapCut Desktop, tạo/lưu project một lần để BE phát hiện.
             </p>
-            <div className="mt-5 flex w-full max-w-[220px] flex-col gap-2">
+            <div className="mt-4 flex w-full max-w-[200px] flex-col gap-2">
               <ActionBtn
                 label="Tìm folder CapCut"
                 onClick={promptCustomDir}
@@ -508,18 +505,20 @@ export function AllProjectPanel() {
                   .filter(Boolean)
                   .join(" · ")
               : "";
+
             return (
               <button
                 key={path || p.folder}
                 type="button"
                 onClick={() => selectProject(p)}
                 className={twMerge(
-                  "flex w-full items-center gap-2 border-b border-white/5 px-2.5 py-2 text-left transition-colors",
+                  "flex w-full items-center gap-2.5 rounded-xl border p-2 text-left transition",
                   isActive
-                    ? "bg-emerald-500/15 ring-1 ring-inset ring-emerald-400/30"
-                    : "hover:bg-white/5",
+                    ? "border-rose-500/40 bg-rose-500/10 shadow-sm shadow-rose-500/10"
+                    : "border-white/10 bg-white/[0.02] hover:bg-white/[0.05]",
                 )}
               >
+                {/* Selection Checkbox */}
                 <span
                   role="checkbox"
                   aria-checked={isMulti}
@@ -532,16 +531,17 @@ export function AllProjectPanel() {
                     }
                   }}
                   className={twMerge(
-                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border text-[9px]",
+                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition text-[10px]",
                     isMulti
-                      ? "border-sky-400 bg-sky-500 text-white"
-                      : "border-white/25 text-transparent",
+                      ? "border-rose-500 bg-rose-500 text-white"
+                      : "border-white/20 bg-white/[0.04] text-transparent hover:border-white/40",
                   )}
                 >
-                  <FontAwesomeIcon icon={faCheck} />
+                  <Check className="h-3 w-3" />
                 </span>
-                {/* Thumbnail cover — CapCut draft_cover.jpg; mate trống = placeholder */}
-                <div className="relative h-11 w-16 shrink-0 overflow-hidden rounded-md bg-[#1e2026] ring-1 ring-white/10">
+
+                {/* Thumbnail */}
+                <div className="relative h-11 w-16 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-[#0b0f17]">
                   {coverSrc ? (
                     <img
                       src={coverSrc}
@@ -553,50 +553,47 @@ export function AllProjectPanel() {
                       }}
                     />
                   ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center gap-0.5 bg-gradient-to-br from-[#2a2d35] to-[#16171b]">
-                      <FontAwesomeIcon
-                        icon={faFolderOpen}
-                        className="text-[12px] text-white/25"
-                      />
-                      <span className="text-[8px] font-medium uppercase tracking-wide text-white/30">
-                        {isEmpty ? "trống" : "không có ảnh bìa"}
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-0.5 text-zinc-500">
+                      <FolderOpen className="h-3.5 w-3.5" />
+                      <span className="text-[8px] font-medium uppercase tracking-wide">
+                        {isEmpty ? "trống" : "chưa có bìa"}
                       </span>
                     </div>
                   )}
                 </div>
+
+                {/* Info */}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="truncate text-[12px] font-medium text-white/90">
+                    <span className="truncate text-xs font-semibold text-white">
                       {displayName(p)}
                     </span>
                     {isActive && (
-                      <span className="shrink-0 rounded bg-emerald-500/25 px-1 text-[8px] font-bold uppercase text-emerald-200">
+                      <span className="shrink-0 rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[8px] font-bold uppercase text-emerald-300">
                         đang dùng
                       </span>
                     )}
                     {isEmpty && (
-                      <span className="shrink-0 rounded bg-amber-500/15 px-1 text-[8px] font-bold uppercase text-amber-200/80">
+                      <span className="shrink-0 rounded-full bg-amber-500/20 px-1.5 py-0.2 text-[8px] font-bold uppercase text-amber-300">
                         trống
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-white/40">
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[10px] text-zinc-400">
                     <span
                       className={twMerge(
                         "font-mono",
-                        isEmpty ? "text-amber-200/70" : "text-white/55",
+                        isEmpty ? "text-amber-300/80" : "text-zinc-300",
                       )}
                     >
                       {durLabel || "—"}
                     </span>
                     {mediaHint ? (
-                      <span className="text-white/35">{mediaHint}</span>
+                      <span className="text-zinc-500">{mediaHint}</span>
                     ) : null}
                     {p.root && (
-                      <span className="text-white/30" title={path}>
-                        {p.root === "mate-output"
-                          ? "mate (server)"
-                          : p.root}
+                      <span className="text-zinc-500" title={path}>
+                        {p.root === "mate-output" ? "mate" : p.root}
                       </span>
                     )}
                   </div>
@@ -606,18 +603,18 @@ export function AllProjectPanel() {
           })}
       </div>
 
-      <div className="border-t border-white/8 px-3 py-2.5">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] font-medium text-white/70">
-              Đã chọn
-            </span>
-            <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/45">
-              {selectedIds.size || (activePath ? 1 : 0)} dự án
+      {/* Footer */}
+      <div className="border-t border-white/10 bg-[#10141e] px-3.5 py-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-zinc-400 font-medium">Đã chọn:</span>
+            <span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-zinc-200">
+              {selectedIds.size || (activePath ? 1 : 0)}
             </span>
           </div>
+
           <div className="flex items-center gap-2">
-            <span className="text-[11px] text-white/45">Sao lưu</span>
+            <span className="text-xs text-zinc-400 font-medium">Sao lưu</span>
             <button
               type="button"
               role="switch"
@@ -626,13 +623,13 @@ export function AllProjectPanel() {
                 setBackup((v) => !v);
                 toast(
                   backup
-                    ? "Tắt flag sao lưu (Apply vẫn không auto-bak UI)"
-                    : "Bật flag sao lưu — dùng trước batch Apply (local restore/.bak)",
+                    ? "Đã tắt flag sao lưu"
+                    : "Đã bật flag sao lưu (backup .bak trước Apply)",
                 );
               }}
               className={twMerge(
                 "relative h-5 w-9 rounded-full transition-colors",
-                backup ? "bg-sky-400" : "bg-white/15",
+                backup ? "bg-indigo-500" : "bg-white/20",
               )}
             >
               <span
@@ -644,20 +641,13 @@ export function AllProjectPanel() {
             </button>
             <button
               type="button"
-              className="flex h-7 w-7 items-center justify-center rounded-md text-white/35 hover:bg-white/5 hover:text-white/70"
-              title="Dùng lựa chọn"
+              className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white transition"
+              title="Dùng lựa chọn làm draft"
               onClick={useSelectedAsLocal}
             >
-              <FontAwesomeIcon icon={faFileExport} className="text-[11px]" />
+              <ExternalLink className="h-3.5 w-3.5" />
             </button>
           </div>
-        </div>
-        <div className="flex items-center gap-1 text-white/30">
-          <FontAwesomeIcon icon={faBars} className="text-[11px]" />
-          <FontAwesomeIcon icon={faFolderOpen} className="text-[11px]" />
-          <span className="ml-auto text-[10px] text-white/25">
-            {loading ? "đang quét…" : `${Math.round(width)}px`}
-          </span>
         </div>
       </div>
     </aside>
@@ -695,8 +685,8 @@ function ResizeHandle({
       onClick={onClick}
       className={twMerge(
         "absolute top-0 bottom-0 left-0 z-20 w-1.5 -translate-x-1/2 cursor-col-resize touch-none",
-        "hover:bg-sky-400/40",
-        dragging && "bg-sky-400/50",
+        "hover:bg-indigo-400/50",
+        dragging && "bg-indigo-400/70",
         collapsed && "w-2 translate-x-0 left-0",
       )}
     >
@@ -706,22 +696,24 @@ function ResizeHandle({
 }
 
 function IconBtn({
-  icon,
+  icon: Icon,
   title,
   onClick,
+  spin,
 }: {
-  icon: typeof faTrash;
+  icon: React.ElementType;
   title: string;
   onClick?: () => void;
+  spin?: boolean;
 }) {
   return (
     <button
       type="button"
       title={title}
       onClick={onClick}
-      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/40 hover:bg-white/5 hover:text-white/75"
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white transition"
     >
-      <FontAwesomeIcon icon={icon} className="text-[11px]" />
+      <Icon className={`h-3.5 w-3.5 ${spin ? "animate-spin" : ""}`} />
     </button>
   );
 }
@@ -737,7 +729,7 @@ function ActionBtn({
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-lg border border-white/10 bg-[#1e2026] px-3 py-2 text-[12px] font-medium text-white/70 hover:bg-[#252830] hover:text-white/90"
+      className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-300 hover:bg-white/[0.08] hover:text-white transition"
     >
       {label}
     </button>

@@ -274,7 +274,7 @@ export default function ModelCompatPopover({
   }, [open, updatePortalPanelRect]);
 
   const panelChromeClass =
-    "flex max-h-[min(82vh,42rem)] flex-col overflow-hidden rounded-xl border-2 border-zinc-200 bg-white shadow-2xl dark:border-zinc-600 dark:bg-zinc-950";
+    "flex max-h-[min(82vh,42rem)] flex-col overflow-hidden rounded-xl border-2 border-white/10 bg-white shadow-2xl dark:border-white/10 dark:bg-zinc-950";
 
   return (
     <div className="relative inline-flex" ref={ref}>
@@ -305,7 +305,7 @@ export default function ModelCompatPopover({
               zIndex: 10040,
             }}
           >
-            <div className="shrink-0 border-b-2 border-zinc-200 bg-zinc-100 px-3 py-2.5 dark:border-zinc-600 dark:bg-zinc-900">
+            <div className="shrink-0 border-b-2 border-white/10 bg-zinc-100 px-3 py-2.5 dark:border-white/10 dark:bg-zinc-900">
               <p className="text-xs font-semibold text-text-main">{t("compatAdjustmentsTitle")}</p>
               <p className="text-[11px] text-text-muted mt-1 leading-relaxed">
                 {t("compatProtocolHint")}
@@ -319,7 +319,7 @@ export default function ModelCompatPopover({
                 value={protocol}
                 onChange={(e) => setProtocol(e.target.value)}
                 disabled={disabled}
-                className="mb-4 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-2 text-xs text-text-main focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-900"
+                className="mb-4 w-full rounded-lg border border-white/10 bg-white px-2.5 py-2 text-xs text-text-main focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 dark:border-white/10 dark:bg-zinc-900"
               >
                 {MODEL_COMPAT_PROTOCOL_KEYS.map((p) => (
                   <option key={p} value={p}>
@@ -366,7 +366,7 @@ export default function ModelCompatPopover({
                     onBlur={() => saveModelParamFilters()}
                     placeholder={t("compatBlockedParamsPlaceholder")}
                     disabled={disabled}
-                    className="mb-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-mono text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-900"
+                    className="mb-1 w-full rounded-lg border border-white/10 bg-white px-2.5 py-1.5 text-[11px] font-mono text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 dark:border-white/10 dark:bg-zinc-900"
                   />
                   <p className="text-[10px] text-text-muted">
                     {t("compatBlockedParamsHint") ?? "Blocked params (stripped from requests)"}
@@ -384,7 +384,7 @@ export default function ModelCompatPopover({
                     onBlur={() => saveModelParamFilters()}
                     placeholder={t("compatAllowedParamsPlaceholder")}
                     disabled={disabled}
-                    className="mb-1 w-full rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-[11px] font-mono text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 dark:border-zinc-600 dark:bg-zinc-900"
+                    className="mb-1 w-full rounded-lg border border-white/10 bg-white px-2.5 py-1.5 text-[11px] font-mono text-text-main placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 dark:border-white/10 dark:bg-zinc-900"
                   />
                   <p className="text-[10px] text-text-muted">
                     {t("compatAllowedParamsHint") ?? "Allowed params (re-added after deny)"}
@@ -392,7 +392,7 @@ export default function ModelCompatPopover({
                 </div>
               </div>
 
-              <div className="mt-4 rounded-lg border-2 border-zinc-200 bg-zinc-100 p-3 dark:border-zinc-600 dark:bg-zinc-900">
+              <div className="mt-4 rounded-lg border-2 border-white/10 bg-zinc-100 p-3 dark:border-white/10 dark:bg-zinc-900">
                 <label className="block text-[11px] font-semibold text-text-main mb-1">
                   {t("compatUpstreamHeadersLabel")}
                 </label>

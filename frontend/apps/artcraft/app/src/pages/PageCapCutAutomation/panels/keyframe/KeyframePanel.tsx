@@ -258,7 +258,7 @@ export function KeyframePanel() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Tạo / áp keyframe scale, vị trí, xoay cho clip (animate chuyển động)."
         how="① Chỉnh editor hoặc chọn template · ② Apply. Ưu tiên draft local; mate cần segment_id."
@@ -273,8 +273,8 @@ export function KeyframePanel() {
           mate.localProject.trim() || mate.draftUrl ? "default" : "warn"
         }
       />
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/8 bg-[#15161a] px-3 py-2">
-        <span className="text-[11px] text-white/45">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#10141e]/50 px-6 py-2.5">
+        <span className="text-xs text-zinc-400">
           {mate.localProject.trim()
             ? "Mode: local /keyframe"
             : "Mode: mate add_keyframes — segment_id:"}
@@ -350,7 +350,7 @@ export function KeyframePanel() {
         }
       />
       {applying && (
-        <div className="border-t border-white/6 px-3 py-1 text-center text-[11px] text-cyan-300/80">
+        <div className="border-t border-white/10 px-3 py-1 text-center text-[11px] text-cyan-300/80">
           Đang ghi keyframe…
         </div>
       )}

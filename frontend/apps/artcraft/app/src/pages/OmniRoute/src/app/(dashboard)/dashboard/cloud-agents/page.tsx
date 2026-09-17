@@ -391,7 +391,7 @@ export default function CloudAgentsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <Card className="border-purple-500/20 bg-purple-500/5">
+      <Card className="border-white/10 bg-purple-500/5">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-sm font-semibold text-text-main">{t("aboutTitle")}</h2>
@@ -418,7 +418,7 @@ export default function CloudAgentsPage() {
             onClick={() => setActiveTab(tab.id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
               activeTab === tab.id
-                ? "border-purple-500 text-purple-500"
+                ? "border-white/10 text-purple-500"
                 : "border-transparent text-text-muted hover:text-text-main"
             }`}
           >
@@ -571,7 +571,7 @@ export default function CloudAgentsPage() {
                       hover
                       className={`transition-all ${
                         selectedTask?.id === task.id
-                          ? "!border-purple-500 ring-1 ring-purple-500/20"
+                          ? "!border-white/10 ring-1 ring-purple-500/20"
                           : ""
                       }`}
                       onClick={() => setSelectedTask(task)}
@@ -633,7 +633,7 @@ export default function CloudAgentsPage() {
 
                   {/* Awaiting approval: show plan */}
                   {selectedTask.status === "awaiting_approval" && getPlanText(selectedTask) && (
-                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                    <div className="rounded-lg border border-white/10 bg-amber-500/5 p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="material-symbols-outlined text-[16px] text-amber-600">
                           description
@@ -687,7 +687,7 @@ export default function CloudAgentsPage() {
 
                   {/* Result with PR link */}
                   {selectedTask.result && (
-                    <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+                    <div className="rounded-lg border border-white/10 bg-emerald-500/5 p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="material-symbols-outlined text-[16px] text-emerald-600">
                           check_circle
@@ -715,7 +715,7 @@ export default function CloudAgentsPage() {
 
                   {/* Error */}
                   {selectedTask.error && (
-                    <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                    <div className="rounded-lg border border-white/10 bg-red-500/5 p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <span className="material-symbols-outlined text-[16px] text-red-500">
                           error

@@ -31,14 +31,16 @@ export const APP_DESCRIPTORS: AppDescriptor[] = [
     id: "FLOWORD_STUDIO",
     label: "Floword Studio",
     icon: faSparkles,
-    description: "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng).",
+    description:
+      "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng).",
     large: true,
   },
   {
     id: "CAPCUT_AUTOMATION",
-    label: "CapCut Automation",
+    label: "Xưởng Sản Xuất Video",
     icon: faClapperboardPlay,
-    description: "Local CapCut automation for drafts, subtitles, effects, and rendering.",
+    description:
+      "Xưởng tự động hóa sản xuất video, phụ đề, hiệu ứng và xuất video cục bộ.",
     large: true,
   },
   {
@@ -89,32 +91,32 @@ interface AppCardPalette {
 const APP_CARD_PALETTES: Record<string, AppCardPalette> = {
   "floword-studio": {
     accent: "from-purple-500/20 to-purple-500/0",
-    iconBg: "bg-purple-500/20 border-purple-400/30",
+    iconBg: "bg-purple-500/20 border-white/10",
     iconColor: "text-purple-300",
   },
   "capcut-automation": {
     accent: "from-cyan-500/20 to-cyan-500/0",
-    iconBg: "bg-cyan-500/20 border-cyan-400/30",
+    iconBg: "bg-cyan-500/20 border-white/10",
     iconColor: "text-cyan-300",
   },
   "omni-route": {
     accent: "from-indigo-500/20 to-indigo-500/0",
-    iconBg: "bg-indigo-500/20 border-indigo-400/30",
+    iconBg: "bg-indigo-500/20 border-white/10",
     iconColor: "text-indigo-300",
   },
   youwee: {
     accent: "from-sky-500/20 to-emerald-500/0",
-    iconBg: "bg-sky-500/20 border-sky-400/30",
+    iconBg: "bg-sky-500/20 border-white/10",
     iconColor: "text-sky-300",
   },
   "media-crawler": {
     accent: "from-cyan-500/20 to-cyan-500/0",
-    iconBg: "bg-cyan-500/20 border-cyan-400/30",
+    iconBg: "bg-cyan-500/20 border-white/10",
     iconColor: "text-cyan-300",
   },
   inkos: {
     accent: "from-purple-500/20 to-purple-500/0",
-    iconBg: "bg-purple-500/20 border-purple-400/30",
+    iconBg: "bg-purple-500/20 border-white/10",
     iconColor: "text-purple-300",
   },
 };
@@ -132,7 +134,8 @@ export const ALL_APPS: FullAppItem[] = [
   {
     id: "floword-studio",
     label: "Floword Studio",
-    description: "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng)",
+    description:
+      "STIEN Content Transformation Engine (Quy trình tự động hóa CapCut 6 tầng)",
     icon: faSparkles,
     category: "generate",
     action: "FLOWORD_STUDIO",
@@ -141,8 +144,9 @@ export const ALL_APPS: FullAppItem[] = [
   },
   {
     id: "capcut-automation",
-    label: "CapCut Automation",
-    description: "Local automation for CapCut drafts, subtitles, effects, and rendering",
+    label: "Xưởng Sản Xuất Video",
+    description:
+      "Xưởng tự động hóa sản xuất video, phụ đề, hiệu ứng và xuất video cục bộ",
     icon: faClapperboardPlay,
     category: "edit",
     action: "CAPCUT_AUTOMATION",

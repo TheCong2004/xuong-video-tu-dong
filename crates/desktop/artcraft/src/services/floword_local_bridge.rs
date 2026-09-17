@@ -294,6 +294,8 @@ mod tests {
   #[test]
   fn embedded_schema_has_the_expected_fingerprint() {
     let schema = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../contracts/floword-local-bridge/v1/schema.json"));
-    assert_eq!(format!("{:x}", Sha256::digest(schema.as_bytes())), FLOWORD_LOCAL_BRIDGE_SCHEMA_SHA256);
+    let digest = Sha256::digest(schema.as_bytes());
+    let digest_hex = digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    assert_eq!(digest_hex, FLOWORD_LOCAL_BRIDGE_SCHEMA_SHA256);
   }
 }

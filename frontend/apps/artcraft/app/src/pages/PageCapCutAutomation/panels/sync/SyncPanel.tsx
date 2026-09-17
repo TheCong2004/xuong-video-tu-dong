@@ -148,7 +148,7 @@ export function SyncPanel() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Đồng bộ timeline: footage↔audio, phụ đề, detect scene trên draft CapCut local."
         how="① Draft local → path · ② chọn tab (footage/subs/scene) · ③ tùy chọn mode · ④ RUN."
@@ -168,18 +168,18 @@ export function SyncPanel() {
           <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
       {(isSubtitleMatch || syncTab === "subs-audio") &&
         captionSource === "external-srt" && (
-          <div className="border-b border-white/8 bg-[#15161a] px-3 py-2">
+          <div className="border-b border-white/10 bg-[#10141e] px-4 py-2.5">
             <textarea
               value={srtPaste}
               onChange={(e) => setSrtPaste(e.target.value)}
               placeholder="Dán nội dung SRT (hoặc dùng path qua nút pick)…"
               rows={3}
-              className="w-full rounded-lg border border-white/10 bg-[#252830] px-3 py-2 font-mono text-[11px] text-white outline-none focus:border-sky-400/40"
+              className="w-full rounded-lg border border-white/10 bg-[#0b0f17] px-3 py-2 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             />
           </div>
         )}
       {/* Tabs */}
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-white/8 bg-[#1a1b1f] px-3 py-2">
+      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-white/10 bg-[#10141e]/50 px-6 py-2.5">
         {SYNC_TABS.map((tab) => {
           const active = syncTab === tab.id;
           return (
@@ -188,10 +188,10 @@ export function SyncPanel() {
               type="button"
               onClick={() => setSyncTab(tab.id)}
               className={twMerge(
-                "flex shrink-0 items-center gap-2 rounded-full px-3.5 py-1.5 text-[12px] transition-colors",
+                "flex shrink-0 items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs transition",
                 active
-                  ? "bg-[#2a3140] text-sky-300 ring-1 ring-sky-400/40"
-                  : "text-white/55 hover:bg-white/5 hover:text-white/80",
+                  ? "border border-white/10 bg-rose-500/10 text-white shadow-md shadow-rose-500/5 font-semibold"
+                  : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100",
               )}
             >
               <FontAwesomeIcon icon={tab.icon} className="text-[11px]" />
@@ -278,9 +278,9 @@ export function SyncPanel() {
                           Math.max(0.1, Number(e.target.value) || 0),
                         )
                       }
-                      className="w-16 rounded-md border border-white/15 bg-[#1a1b1f] px-2 py-1 text-center text-[13px] text-white outline-none focus:border-white/20"
+                      className="w-16 rounded-md border border-white/10 bg-[#0b0f17] px-2 py-1 text-center text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
                     />
-                    <span className="text-white/50">second/each footage</span>
+                    <span className="text-zinc-400">giây / clip</span>
                   </span>
                 </span>
               </RadioCard>
@@ -331,7 +331,7 @@ export function SyncPanel() {
 
             {syncTab === "scene-list" && showSceneTable && (
               <div className="relative mb-4 ml-20 max-w-lg">
-                <div className="overflow-hidden rounded-lg border border-white/12 bg-[#e8e8ea] text-[#1a1b1f] shadow-xl">
+                <div className="overflow-hidden rounded-lg border border-white/10 bg-[#e8e8ea] text-[#1a1b1f] shadow-xl">
                   <div className="flex items-center justify-between bg-white/90 px-3 py-1.5 text-[12px] font-medium">
                     <span>Scenes (từ BE detect / segments)</span>
                     <button

@@ -206,7 +206,7 @@ export default function QdrantConfigCard() {
       </div>
 
       {/* Tier 1 vs Tier 2 guidance */}
-      <div className="mb-4 p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/20 text-xs text-text-muted leading-relaxed">
+      <div className="mb-4 p-3 rounded-lg bg-emerald-500/5 border border-white/10 text-xs text-text-muted leading-relaxed">
         {t("qdrant.banner")}
       </div>
 

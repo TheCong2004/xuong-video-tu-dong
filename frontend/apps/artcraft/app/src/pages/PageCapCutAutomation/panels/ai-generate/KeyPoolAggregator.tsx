@@ -206,7 +206,7 @@ export function KeyPoolAggregator({
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-[#1a1b1f] px-6 py-5 text-white">
       {/* Header Banner */}
-      <div className="mb-6 rounded-xl border border-sky-500/20 bg-gradient-to-r from-sky-950/40 via-[#182338] to-[#1a1b1f] p-5 shadow-lg">
+      <div className="mb-6 rounded-xl border border-white/10 bg-gradient-to-r from-sky-950/40 via-[#182338] to-[#1a1b1f] p-5 shadow-lg">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sky-500/20 text-sky-400">
             <FontAwesomeIcon icon={faLayerGroup} className="text-lg" />
@@ -223,8 +223,8 @@ export function KeyPoolAggregator({
       </div>
 
       {/* 1. Master Unified API Key Card */}
-      <div className="mb-6 rounded-xl border border-white/12 bg-[#21232b] p-5 shadow-md">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/8 pb-3">
+      <div className="mb-6 rounded-xl border border-white/10 bg-[#21232b] p-5 shadow-md">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <FontAwesomeIcon icon={faKey} className="text-sky-400" />
             <h3 className="text-sm font-semibold text-white">
@@ -372,7 +372,7 @@ sk-proj-... (OpenAI Key)`}
 
       {/* 3. Managed Keys List */}
       <div className="rounded-xl border border-white/10 bg-[#21232b] p-5 shadow-md">
-        <div className="mb-3 flex items-center justify-between border-b border-white/8 pb-3">
+        <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <FontAwesomeIcon icon={faShieldHalved} className="text-emerald-400" />
             <h3 className="text-sm font-semibold text-white">
@@ -399,7 +399,7 @@ sk-proj-... (OpenAI Key)`}
             {keys.map((item) => (
               <div
                 key={item.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/8 bg-[#17181d] px-3.5 py-2.5 transition-colors hover:border-white/15"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-[#17181d] px-3.5 py-2.5 transition-colors hover:border-white/15"
               >
                 <div className="flex items-center gap-3">
                   <span

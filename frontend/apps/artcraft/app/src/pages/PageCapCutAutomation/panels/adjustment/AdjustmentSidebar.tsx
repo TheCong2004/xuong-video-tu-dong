@@ -40,7 +40,7 @@ export function AdjustmentSidebar({
   const empty = selected.length === 0;
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/8 bg-[#16171b]">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/10 bg-[#16171b]">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <h2 className="text-[14px] font-semibold text-white/90">
           Selected LUTs
@@ -87,7 +87,7 @@ export function AdjustmentSidebar({
         </button>
       </div>
 
-      <div className="min-h-[80px] max-h-[120px] overflow-y-auto border-b border-white/6 px-2 py-1">
+      <div className="min-h-[80px] max-h-[120px] overflow-y-auto border-b border-white/10 px-2 py-1">
         {empty ? (
           <div className="h-full min-h-[80px]" />
         ) : (
@@ -128,7 +128,7 @@ export function AdjustmentSidebar({
             type="checkbox"
             checked={replaceExisting}
             onChange={(e) => onReplaceExistingChange(e.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+            className="mt-0.5 h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
           />
           <span>
             Replace existing adjustments

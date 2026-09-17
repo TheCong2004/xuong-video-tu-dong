@@ -156,7 +156,7 @@ export function TransitionsPanel() {
         tone={mate.localProject.trim() ? "default" : "warn"}
       />
       {loadingLib && (
-        <div className="border-b border-white/6 px-3 py-1 text-[11px] text-white/40">
+        <div className="border-b border-white/10 px-3 py-1 text-[11px] text-white/40">
           Đang tải transitions từ BE /local/enums…
         </div>
       )}
@@ -192,7 +192,7 @@ export function TransitionsPanel() {
         }
       />
       {applying && (
-        <div className="border-t border-white/6 px-3 py-1 text-center text-[11px] text-indigo-300/80">
+        <div className="border-t border-white/10 px-3 py-1 text-center text-[11px] text-indigo-300/80">
           Đang gọi local/transition…
         </div>
       )}

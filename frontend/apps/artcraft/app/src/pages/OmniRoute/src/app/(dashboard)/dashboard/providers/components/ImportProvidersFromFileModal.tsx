@@ -26,7 +26,7 @@ const PARSE_ERROR_REASON_KEYS = [
 function ParseErrorsList({ errors, t }: { errors: ProviderImportParseError[]; t: Translator }) {
   if (errors.length === 0) return null;
   return (
-    <div className="max-h-28 overflow-y-auto rounded border border-red-500/30 bg-red-500/10 p-2">
+    <div className="max-h-28 overflow-y-auto rounded border border-white/10 bg-red-500/10 p-2">
       {errors.map((err, idx) => (
         <div key={idx} className="text-xs text-red-400">
           {t("importFromFileErrorLine", {
@@ -147,7 +147,7 @@ export function ImportProvidersFromFileModal({
         <EntriesTable entries={s.entries} selected={s.selected} onToggleRow={s.toggleRow} onToggleAll={s.toggleAll} t={t} />
 
         {s.result && (
-          <div className="px-3 py-2 rounded border border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-400">
+          <div className="px-3 py-2 rounded border border-white/10 bg-emerald-500/10 text-sm text-emerald-400">
             {t("importFromFileResult", { success: s.result.success, failed: s.result.failed })}
           </div>
         )}

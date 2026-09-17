@@ -73,10 +73,15 @@ function purpose(index: number, total: number): "hook" | "development" | "payoff
 export function buildFlowordStoryPlan(input: FlowordStoryPlanInput) {
   const prompt = input.prompt?.trim();
   if (!prompt) throw new Error("prompt is required");
-  const originalCreation = input.workflowMode === "original" || input.workflowMode === "original_creation";
-  if (!originalCreation && (!Array.isArray(input.inputArtifactIds) || input.inputArtifactIds.length < 2)) {
-    throw new Error("at least source_metadata and scenes artifact IDs are required");
-  }
+  const originalCreation =
+    input.workflowMode === "original" ||
+    input.workflowMode === "original_creation" ||
+    input.workflowMode === "grok_content_pipeline" ||
+    input.workflowMode === "grok_image_edit" ||
+    input.workflowMode === "grok_video_generate" ||
+    input.workflowMode === "prompt_only" ||
+    !Array.isArray(input.inputArtifactIds) ||
+    input.inputArtifactIds.length < 2;
   const sceneSpans = originalCreation
     ? originalSceneSpans(input.targetDurationSeconds)
     : parseScenes(input.scenes);

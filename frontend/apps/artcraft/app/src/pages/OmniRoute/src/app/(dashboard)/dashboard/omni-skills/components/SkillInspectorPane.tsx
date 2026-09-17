@@ -271,10 +271,10 @@ export function SkillInspectorPane({
             className={`flex-1 text-xs px-2 py-1.5 rounded border transition-colors ${
               effectiveMode === mode
                 ? mode === "on"
-                  ? "border-emerald-500 text-emerald-400 bg-emerald-500/5"
+                  ? "border-white/10 text-emerald-400 bg-emerald-500/5"
                   : mode === "auto"
-                    ? "border-amber-500 text-amber-400 bg-amber-500/5"
-                    : "border-red-500 text-red-400 bg-red-500/5"
+                    ? "border-white/10 text-amber-400 bg-amber-500/5"
+                    : "border-white/10 text-red-400 bg-red-500/5"
                 : "border-border text-text-muted hover:border-border/80"
             }`}
           >

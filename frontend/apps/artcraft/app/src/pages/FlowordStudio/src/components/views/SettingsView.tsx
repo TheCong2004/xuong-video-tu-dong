@@ -175,8 +175,8 @@ export const SettingsView: React.FC = () => {
         <div
           className={`p-3 rounded-lg border text-xs font-semibold flex items-center justify-between transition-all ${
             statusMessage.type === 'success'
-              ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
-              : 'bg-rose-950/80 border-rose-500/50 text-rose-300'
+              ? 'bg-emerald-950/80 border-white/10 text-emerald-300'
+              : 'bg-rose-950/80 border-white/10 text-rose-300'
           }`}
         >
           <span>{statusMessage.text}</span>
@@ -185,9 +185,9 @@ export const SettingsView: React.FC = () => {
       )}
 
       {/* Top Header */}
-      <div className="bg-[#131926] p-5 rounded-xl border border-slate-800/80 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow-lg flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-white/10 flex items-center justify-center text-indigo-400">
             <Settings className="w-5 h-5" />
           </div>
           <div>
@@ -207,7 +207,7 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {/* Real System Readiness Probes */}
-      <div className="bg-[#131926] p-5 rounded-xl border border-slate-800 shadow space-y-4">
+      <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
@@ -217,19 +217,19 @@ export const SettingsView: React.FC = () => {
           </div>
           {readiness && (
             <div className="flex items-center gap-2 text-xs">
-              <div className="px-2.5 py-1 rounded bg-black/40 border border-slate-800 flex items-center gap-1.5">
+              <div className="px-2.5 py-1 rounded bg-black/40 border border-white/10 flex items-center gap-1.5">
                 <span className="text-slate-400 text-[11px]">Core Production:</span>
                 <span className={`font-bold text-[11px] ${readiness.core_generation_ready ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {readiness.core_generation_ready ? 'READY' : 'NOT READY'}
                 </span>
               </div>
-              <div className="px-2.5 py-1 rounded bg-black/40 border border-slate-800 flex items-center gap-1.5">
+              <div className="px-2.5 py-1 rounded bg-black/40 border border-white/10 flex items-center gap-1.5">
                 <span className="text-slate-400 text-[11px]">Publishing Orchestrator:</span>
                 <span className={`font-bold text-[11px] ${readiness.publishing_orchestrator_ready ? 'text-emerald-400' : 'text-rose-400'}`}>
                   {readiness.publishing_orchestrator_ready ? 'READY' : 'NOT READY'}
                 </span>
               </div>
-              <div className="px-2.5 py-1 rounded bg-black/40 border border-slate-800 flex items-center gap-1.5">
+              <div className="px-2.5 py-1 rounded bg-black/40 border border-white/10 flex items-center gap-1.5">
                 <span className="text-slate-400 text-[11px]">System:</span>
                 <span className={`font-bold text-[11px] ${readiness.overall_ready ? 'text-emerald-400' : 'text-amber-400'}`}>
                   {readiness.overall_ready ? 'READY' : 'DEGRADED'}
@@ -241,10 +241,10 @@ export const SettingsView: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           {readiness?.details?.map((probe, idx) => (
-            <div key={idx} className="bg-[#0b0f17] p-3.5 rounded-lg border border-slate-800 flex flex-col justify-between gap-2">
+            <div key={idx} className="bg-[#0b0f17] p-3.5 rounded-lg border border-white/10 flex flex-col justify-between gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-300">{probe.service}</span>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${probe.ready ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}`}>
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${probe.ready ? 'bg-emerald-500/10 text-emerald-400 border-white/10' : 'bg-rose-500/10 text-rose-400 border-white/10'}`}>
                   {probe.ready ? 'ONLINE' : 'DEGRADED'}
                 </span>
               </div>
@@ -261,7 +261,7 @@ export const SettingsView: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Scale & Concurrency Controller */}
-        <div className="bg-[#131926] p-5 rounded-xl border border-slate-800 shadow space-y-4">
+        <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Cpu className="w-4 h-4 text-indigo-400" />
@@ -311,7 +311,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {/* Notifications Setting */}
-        <div className="bg-[#131926] p-5 rounded-xl border border-slate-800 shadow space-y-4">
+        <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
               <Bell className="w-4 h-4 text-amber-400" />
@@ -320,7 +320,7 @@ export const SettingsView: React.FC = () => {
           </div>
 
           <div className="space-y-3 text-xs">
-            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 hover:border-slate-700">
+            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-white/10 hover:border-slate-700">
               <input
                 type="checkbox"
                 checked={notifyJobFailed}
@@ -330,7 +330,7 @@ export const SettingsView: React.FC = () => {
               <span className="text-slate-300">Thông báo khi Job bị lỗi (Job Failed)</span>
             </label>
 
-            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 hover:border-slate-700">
+            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-white/10 hover:border-slate-700">
               <input
                 type="checkbox"
                 checked={notifyAuthRequired}
@@ -340,7 +340,7 @@ export const SettingsView: React.FC = () => {
               <span className="text-slate-300">Thông báo khi phiên đăng nhập hết hạn (Auth Required)</span>
             </label>
 
-            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 hover:border-slate-700">
+            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-white/10 hover:border-slate-700">
               <input
                 type="checkbox"
                 checked={notifyPostFailed}
@@ -350,7 +350,7 @@ export const SettingsView: React.FC = () => {
               <span className="text-slate-300">Thông báo khi xuất bản mạng xã hội thất bại (Publish Failed)</span>
             </label>
 
-            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 hover:border-slate-700">
+            <label className="flex items-center gap-2.5 cursor-pointer bg-[#0b0f17] p-2.5 rounded-lg border border-white/10 hover:border-slate-700">
               <input
                 type="checkbox"
                 checked={notifyBatchCompleted}
@@ -372,7 +372,7 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {/* Prompt Templates Manager */}
-      <div className="bg-[#131926] p-5 rounded-xl border border-slate-800 shadow space-y-4">
+      <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-sm font-bold text-white flex items-center gap-2">
@@ -401,7 +401,7 @@ export const SettingsView: React.FC = () => {
         {/* Template List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {templates.map((tpl) => (
-            <div key={tpl.id} className="bg-[#0b0f17] p-3.5 rounded-lg border border-slate-800 flex flex-col justify-between gap-2 text-xs">
+            <div key={tpl.id} className="bg-[#0b0f17] p-3.5 rounded-lg border border-white/10 flex flex-col justify-between gap-2 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-white text-sm">{tpl.name}</span>
                 <div className="flex items-center gap-1">
@@ -429,7 +429,7 @@ export const SettingsView: React.FC = () => {
       {/* Edit Template Modal */}
       {editingTemplate && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#131926] border border-slate-700 rounded-xl p-6 max-w-lg w-full space-y-4 text-xs shadow-2xl">
+          <div className="bg-[#131926] border border-white/10 rounded-xl p-6 max-w-lg w-full space-y-4 text-xs shadow-2xl">
             <h3 className="text-sm font-bold text-white">
               {editingTemplate.id ? 'Chỉnh sửa Template' : 'Thêm Template Mới'}
             </h3>
@@ -441,7 +441,7 @@ export const SettingsView: React.FC = () => {
                   type="text"
                   value={editingTemplate.name || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
-                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-slate-700 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-white/10 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -451,7 +451,7 @@ export const SettingsView: React.FC = () => {
                   rows={2}
                   value={editingTemplate.image_prompt || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate, image_prompt: e.target.value })}
-                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-slate-700 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-white/10 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -461,7 +461,7 @@ export const SettingsView: React.FC = () => {
                   rows={2}
                   value={editingTemplate.expand_prompt || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate, expand_prompt: e.target.value })}
-                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-slate-700 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-white/10 focus:outline-none focus:border-indigo-500"
                 />
               </div>
 
@@ -471,12 +471,12 @@ export const SettingsView: React.FC = () => {
                   rows={3}
                   value={editingTemplate.video_prompt || ''}
                   onChange={(e) => setEditingTemplate({ ...editingTemplate, video_prompt: e.target.value })}
-                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-slate-700 focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-[#0b0f17] text-slate-200 p-2 rounded border border-white/10 focus:outline-none focus:border-indigo-500"
                 />
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
               <button
                 onClick={() => setEditingTemplate(null)}
                 className="px-4 py-2 rounded bg-slate-800 text-slate-300 hover:bg-slate-700"

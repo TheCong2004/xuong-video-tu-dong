@@ -506,7 +506,11 @@ pub async fn release_lease(lease_id: &str) -> Result<ReleaseLeaseResponse, Strin
 }
 
 pub async fn list_workers() -> Result<ListWorkersResponse, String> {
-  Err("ARTCRAFT_LOCAL_RUNTIME_WORKER_UNAVAILABLE".to_string())
+  // The Donut runtime owns the worker registry.  This facade deliberately
+  // delegates to the established client instead of returning a migration
+  // placeholder: Floword uses this live status to decide whether a running
+  // Grok profile is safe to receive a production job.
+  super::browser_runtime_client::list_workers().await
 }
 
 #[cfg(test)]

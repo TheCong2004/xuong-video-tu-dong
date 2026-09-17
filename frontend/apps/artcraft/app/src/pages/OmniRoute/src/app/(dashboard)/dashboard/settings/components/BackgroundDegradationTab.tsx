@@ -130,7 +130,7 @@ export default function BackgroundDegradationTab() {
 
       {/* Stats */}
       {config.stats && config.stats.detected > 0 && (
-        <div className="flex items-center gap-4 p-3 rounded-lg bg-sky-500/5 border border-sky-500/20 mb-4">
+        <div className="flex items-center gap-4 p-3 rounded-lg bg-sky-500/5 border border-white/10 mb-4">
           <div className="flex items-center gap-2">
             <span className="material-symbols-outlined text-[16px] text-sky-400">analytics</span>
             <span className="text-xs text-text-muted">
@@ -233,7 +233,7 @@ export default function BackgroundDegradationTab() {
               {(config.detectionPatterns || []).map((pattern, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-sky-500/10 text-sky-400 border border-sky-500/20"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-sky-500/10 text-sky-400 border border-white/10"
                 >
                   {pattern}
                   <button

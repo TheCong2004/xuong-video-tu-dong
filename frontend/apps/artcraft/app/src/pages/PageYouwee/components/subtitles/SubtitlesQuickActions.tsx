@@ -82,7 +82,7 @@ export function SubtitlesQuickActions({
                 item.accent === 'primary' &&
                   'border-primary/40 bg-primary/5 hover:bg-primary/10 text-primary',
                 item.accent === 'ai' &&
-                  'border-purple-500/40 bg-primary/5 hover:bg-primary/10 text-primary',
+                  'border-white/10 bg-primary/5 hover:bg-primary/10 text-primary',
                 !item.accent && 'border-border text-foreground',
               )}
             >
@@ -118,7 +118,7 @@ export function SubtitlesQuickActions({
               item.accent === 'primary' &&
                 'border-primary/40 bg-primary/5 text-primary hover:bg-primary/10',
               item.accent === 'ai' &&
-                'border-purple-500/40 bg-primary/5 text-primary hover:bg-primary/10 dark:text-purple-400',
+                'border-white/10 bg-primary/5 text-primary hover:bg-primary/10 dark:text-purple-400',
               !item.accent && 'border-border text-muted-foreground hover:text-foreground',
             )}
             title={item.hint}

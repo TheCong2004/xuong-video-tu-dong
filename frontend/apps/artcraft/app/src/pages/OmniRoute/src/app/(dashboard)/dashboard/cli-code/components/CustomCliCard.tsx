@@ -144,7 +144,7 @@ export default function CustomCliCard({
 
       {isExpanded && (
         <div className="mt-6 pt-6 border-t border-border space-y-5">
-          <div className="flex items-start gap-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-emerald-500/10 border border-white/10 rounded-lg">
             <span className="material-symbols-outlined text-emerald-500 text-lg">
               tips_and_updates
             </span>
@@ -162,7 +162,7 @@ export default function CustomCliCard({
           </div>
 
           {!hasActiveProviders && (
-            <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-white/10 rounded-lg">
               <span className="material-symbols-outlined text-yellow-500 text-lg">warning</span>
               <div>
                 <p className="text-sm font-medium text-yellow-700 dark:text-yellow-300">

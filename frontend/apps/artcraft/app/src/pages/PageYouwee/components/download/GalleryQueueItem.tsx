@@ -112,7 +112,7 @@ export function GalleryQueueItem({
               <button
                 type="button"
                 onClick={handleOpenFolder}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-dashed border-blue-500/30 text-blue-600 dark:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-colors font-medium"
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-dashed border-white/10 text-blue-600 dark:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-colors font-medium"
               >
                 <FolderOpen className="w-3 h-3" />
                 {t('queue.openFolder')}

@@ -62,15 +62,15 @@ export const HistoryView: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0b0f17] text-slate-100 overflow-hidden">
       {historyError && (
-        <div className="px-4 py-2.5 bg-rose-950/90 border-b border-rose-500/50 text-rose-300 text-xs flex items-center justify-between">
+        <div className="px-4 py-2.5 bg-rose-950/90 border-b border-white/10 text-rose-300 text-xs flex items-center justify-between">
           <span>{historyError}</span>
           <button onClick={() => setHistoryError(null)} className="text-slate-400 hover:text-white">✕</button>
         </div>
       )}
       {/* Header & Tabs */}
-      <div className="p-4 bg-[#131926] border-b border-slate-800 flex flex-wrap items-center justify-between gap-4 shadow-md">
+      <div className="p-4 bg-[#131926] border-b border-white/10 flex flex-wrap items-center justify-between gap-4 shadow-md">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-white/10 flex items-center justify-center text-indigo-400">
             <History className="w-5 h-5" />
           </div>
           <div>
@@ -80,7 +80,7 @@ export const HistoryView: React.FC = () => {
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex items-center bg-[#0b0f17] p-1 rounded-lg border border-slate-800 text-xs">
+        <div className="flex items-center bg-[#0b0f17] p-1 rounded-lg border border-white/10 text-xs">
           <button
             onClick={() => setTab('publishing')}
             className={`px-3 py-1.5 rounded-md font-semibold transition ${tab === 'publishing' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
@@ -91,10 +91,10 @@ export const HistoryView: React.FC = () => {
       </div>
 
       {/* Filter Bar */}
-      <div className="p-3 bg-[#101522] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="p-3 bg-[#101522] border-b border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex flex-wrap items-center gap-2">
           {/* Page Filter */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={selectedPageId}
@@ -109,7 +109,7 @@ export const HistoryView: React.FC = () => {
           </div>
 
           {/* Platform Filter */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10">
             <Globe className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={platformFilter}
@@ -124,7 +124,7 @@ export const HistoryView: React.FC = () => {
           </div>
 
           {/* Status Filter */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={statusFilter}
@@ -155,7 +155,7 @@ export const HistoryView: React.FC = () => {
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-[#101522] border-b border-slate-800 text-slate-400 sticky top-0 z-10 select-none">
+            <tr className="bg-[#101522] border-b border-white/10 text-slate-400 sticky top-0 z-10 select-none">
               <th className="py-3 px-4 font-semibold">RECORD ID</th>
               <th className="py-3 px-4 font-semibold">PAGE & PLATFORM</th>
               <th className="py-3 px-4 font-semibold">JOB ID</th>
@@ -184,14 +184,14 @@ export const HistoryView: React.FC = () => {
                 const page = pages.find((p) => p.id === pub.page_id);
                 const statusColor =
                   pub.status === 'POSTED'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-white/10'
                     : pub.status === 'POSTING'
-                    ? 'bg-sky-500/10 text-sky-400 border-sky-500/30 animate-pulse'
+                    ? 'bg-sky-500/10 text-sky-400 border-white/10 animate-pulse'
                     : pub.status === 'SCHEDULED'
-                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    ? 'bg-amber-500/10 text-amber-400 border-white/10'
                     : pub.status === 'FAILED'
-                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                    : 'bg-slate-800 text-slate-400 border-slate-700';
+                    ? 'bg-rose-500/10 text-rose-400 border-white/10'
+                    : 'bg-slate-800 text-slate-400 border-white/10';
 
                 return (
                   <tr key={pub.id} className="hover:bg-[#131926]/80 transition">
@@ -251,7 +251,7 @@ export const HistoryView: React.FC = () => {
                       {pub.status === 'FAILED' && (
                         <button
                           onClick={() => handleRetryPub(pub.id)}
-                          className="px-2.5 py-1 rounded bg-indigo-950 hover:bg-indigo-900 border border-indigo-500/30 text-indigo-300 text-[11px] font-semibold transition"
+                          className="px-2.5 py-1 rounded bg-indigo-950 hover:bg-indigo-900 border border-white/10 text-indigo-300 text-[11px] font-semibold transition"
                         >
                           <RotateCcw className="w-3 h-3 inline mr-1" />
                           <span>Retry</span>

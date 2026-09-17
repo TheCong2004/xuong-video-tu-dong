@@ -45,11 +45,11 @@ export type ModelCompatSavePatch = {
 function getModelSourceBadgeClass(source?: string): string {
   switch (normalizeModelCatalogSource(source)) {
     case "imported":
-      return "border-sky-500/30 bg-sky-500/10 text-sky-300";
+      return "border-white/10 bg-sky-500/10 text-sky-300";
     case "custom":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+      return "border-white/10 bg-emerald-500/10 text-emerald-300";
     case "fallback":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+      return "border-white/10 bg-amber-500/10 text-amber-300";
     case "alias":
       return "border-violet-500/30 bg-violet-500/10 text-violet-300";
     case "system":

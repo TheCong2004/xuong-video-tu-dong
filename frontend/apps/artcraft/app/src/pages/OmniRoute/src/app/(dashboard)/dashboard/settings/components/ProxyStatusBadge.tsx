@@ -10,8 +10,8 @@ export function ProxyStatusBadge({ status }: ProxyStatusBadgeProps) {
     <span
       className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded border ${
         isInactive
-          ? "border-red-500/30 bg-red-500/10 text-red-400"
-          : "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+          ? "border-white/10 bg-red-500/10 text-red-400"
+          : "border-white/10 bg-emerald-500/10 text-emerald-400"
       }`}
     >
       <span

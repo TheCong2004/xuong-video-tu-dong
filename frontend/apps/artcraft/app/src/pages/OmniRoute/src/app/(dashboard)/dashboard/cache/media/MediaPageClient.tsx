@@ -692,7 +692,7 @@ export default function MediaPageClient() {
   return (
     <div className="space-y-6">
       {/* Modality Tabs */}
-      <div className="flex flex-wrap gap-2 p-1 bg-surface/50 rounded-xl border border-black/5 dark:border-white/5">
+      <div className="flex flex-wrap gap-2 p-1 bg-surface/50 rounded-xl border border-black/5 dark:border-white/10">
         {(Object.keys(MODALITY_CONFIG) as Modality[]).map((key) => {
           const cfg = MODALITY_CONFIG[key];
           const isActive = key === activeTab;
@@ -714,7 +714,7 @@ export default function MediaPageClient() {
       </div>
 
       {/* Generation Form */}
-      <div className="bg-surface/30 rounded-xl border border-black/5 dark:border-white/5 p-6 space-y-4">
+      <div className="bg-surface/30 rounded-xl border border-black/5 dark:border-white/10 p-6 space-y-4">
         {/* Provider + Model row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Provider dropdown */}
@@ -949,7 +949,7 @@ export default function MediaPageClient() {
       {/* Error */}
       {error && (
         <div
-          className={`rounded-xl p-4 flex items-start gap-3 ${isCredentialsError ? "bg-amber-500/10 border border-amber-500/20" : "bg-red-500/10 border border-red-500/20"}`}
+          className={`rounded-xl p-4 flex items-start gap-3 ${isCredentialsError ? "bg-amber-500/10 border border-white/10" : "bg-red-500/10 border border-white/10"}`}
         >
           <span
             className={`material-symbols-outlined text-[20px] mt-0.5 ${isCredentialsError ? "text-amber-500" : "text-red-500"}`}
@@ -978,7 +978,7 @@ export default function MediaPageClient() {
 
       {/* Result */}
       {result && (
-        <div className="bg-surface/30 rounded-xl border border-black/5 dark:border-white/5 p-6">
+        <div className="bg-surface/30 rounded-xl border border-black/5 dark:border-white/10 p-6">
           <div className="flex items-center gap-2 mb-4">
             <span
               className={`material-symbols-outlined text-[20px] bg-gradient-to-r ${config.color} bg-clip-text text-transparent`}
@@ -1039,7 +1039,7 @@ export default function MediaPageClient() {
           return (
             <div
               key={key}
-              className="bg-surface/30 rounded-xl border border-black/5 dark:border-white/5 p-4"
+              className="bg-surface/30 rounded-xl border border-black/5 dark:border-white/10 p-4"
             >
               <div className="flex items-center gap-2 mb-2">
                 <div

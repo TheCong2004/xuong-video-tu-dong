@@ -235,7 +235,7 @@ export function HistoryDialog({
         );
       case 'failed':
         return (
-          <Badge variant="outline" className="bg-red-500/10 text-red-500 border-red-500/20">
+          <Badge variant="outline" className="bg-red-500/10 text-red-500 border-white/10">
             {t('processing.historyDialog.status.failed')}
           </Badge>
         );
@@ -243,7 +243,7 @@ export function HistoryDialog({
         return (
           <Badge
             variant="outline"
-            className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+            className="bg-yellow-500/10 text-yellow-500 border-white/10"
           >
             {t('processing.historyDialog.status.cancelled')}
           </Badge>
@@ -726,7 +726,7 @@ export function HistoryDialog({
                         <AlertCircle className="w-4 h-4" />
                         {t('processing.historyDialog.error')}
                       </div>
-                      <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <div className="p-3 rounded-lg bg-red-500/10 border border-white/10">
                         <p className="text-sm text-red-500 break-words whitespace-pre-wrap">
                           {selectedJob.error_message}
                         </p>

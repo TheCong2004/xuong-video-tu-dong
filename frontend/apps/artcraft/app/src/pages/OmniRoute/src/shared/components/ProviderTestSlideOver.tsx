@@ -146,7 +146,7 @@ function SlideOverHeader({
   onClose: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-black/5 dark:border-white/5 shrink-0">
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-black/5 dark:border-white/10 shrink-0">
       <div
         className="size-9 rounded-lg flex items-center justify-center shrink-0"
         style={{ backgroundColor: `${color}15` }}
@@ -214,7 +214,7 @@ function TestToolbar({
 }) {
   const hasMessages = controls?.hasMessages ?? false;
   return (
-    <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-black/5 dark:border-white/5 bg-bg-subtle/30 shrink-0">
+    <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-black/5 dark:border-white/10 bg-bg-subtle/30 shrink-0">
       <div className="flex items-center gap-1.5 min-w-0 flex-1">
         <label className="text-[11px] text-text-muted shrink-0">Model:</label>
         <select
@@ -266,7 +266,7 @@ function SlideOverTabs({ tab, onChange }: { tab: TabKey; onChange: (next: TabKey
   return (
     <div
       role="tablist"
-      className="flex items-center gap-1 px-4 pt-2 border-b border-black/5 dark:border-white/5 shrink-0"
+      className="flex items-center gap-1 px-4 pt-2 border-b border-black/5 dark:border-white/10 shrink-0"
     >
       {TABS.map((t) => {
         const active = t.key === tab;
@@ -420,7 +420,7 @@ function LogsTab({ providerId }: { providerId: string }) {
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-2 border-b border-black/5 dark:border-white/5 shrink-0">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-black/5 dark:border-white/10 shrink-0">
         <span className="inline-flex items-center gap-2 text-[10px] uppercase tracking-wider text-text-muted font-medium">
           <span className="inline-flex items-center gap-1.5">
             <span className="relative inline-flex h-2 w-2">
@@ -494,7 +494,7 @@ function LogsTab({ providerId }: { providerId: string }) {
           );
         })}
       </ul>
-      <div className="px-4 py-2 border-t border-black/5 dark:border-white/5 text-[10px] text-text-muted text-center shrink-0">
+      <div className="px-4 py-2 border-t border-black/5 dark:border-white/10 text-[10px] text-text-muted text-center shrink-0">
         <a
           href={`/dashboard/logs?connection=${encodeURIComponent(providerId)}`}
           className="inline-flex items-center gap-1 hover:text-text-main hover:underline"
@@ -528,7 +528,7 @@ function LogDetail({ log }: { log: LogEntry }) {
     },
   ];
   return (
-    <dl className="px-4 py-3 bg-bg-subtle/40 border-t border-black/5 dark:border-white/5 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[11px]">
+    <dl className="px-4 py-3 bg-bg-subtle/40 border-t border-black/5 dark:border-white/10 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-[11px]">
       {rows.map((row) => (
         <div key={row.label} className="contents">
           <dt className="text-text-muted uppercase tracking-wider text-[10px] font-medium">

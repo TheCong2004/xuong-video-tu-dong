@@ -97,7 +97,7 @@ export default function AutoDisableCard() {
                 checked={editMode ? draft.enabled : data.enabled}
                 onChange={(e) => setDraft((prev) => ({ ...prev, enabled: e.target.checked }))}
                 disabled={!editMode}
-                className="w-4 h-4 text-primary bg-surface/50 border-white/20 rounded focus:ring-primary/50"
+                className="w-4 h-4 text-primary bg-surface/50 border-white/10 rounded focus:ring-primary/50"
               />
               <span className="text-sm font-medium">{t("autoDisableBannedAccounts")}</span>
             </label>

@@ -280,7 +280,7 @@ export function SplitMediaDialog({
 
         <div className="space-y-4 px-5 py-4">
           {ffmpegInstalled === false ? (
-            <div className="rounded-md border border-amber-500/25 bg-amber-500/10 p-4">
+            <div className="rounded-md border border-white/10 bg-amber-500/10 p-4">
               <div className="flex gap-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                 <div>

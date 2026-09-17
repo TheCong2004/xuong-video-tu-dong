@@ -5,9 +5,11 @@ import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "
 import Image from "next/image";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import dynamic from "next/dynamic";
 
-import { Badge, Card, Toggle } from "@/shared/components";
-import ProviderTestSlideOver from "@/shared/components/ProviderTestSlideOver";
+import Badge from "@/shared/components/Badge";
+import Card from "@/shared/components/Card";
+import Toggle from "@/shared/components/Toggle";
 import ProviderIcon from "@/shared/components/ProviderIcon";
 import {
   isAnthropicCompatibleProvider,
@@ -17,6 +19,12 @@ import {
 
 import { CategoryDot } from "./CategoryDot";
 import { isKimiPartnerProviderId } from "../featuredProviders";
+
+// Keep the normal OmniRoute playground code split.  ArtCraft's embedded
+// provider surface explicitly does not render this control.
+const ProviderTestSlideOver = dynamic(() => import("@/shared/components/ProviderTestSlideOver"), {
+  ssr: false,
+});
 
 interface ProviderStats {
   total?: number;
@@ -75,6 +83,10 @@ interface ProviderCardProps {
   authType?: string;
   onToggle: (active: boolean) => void;
   onCardClick?: (id: string) => void;
+  /** Opens the existing key modal without leaving ArtCraft's internal surface. */
+  onConfigure?: (id: string) => void;
+  /** ArtCraft only exposes credential management, not OmniRoute's chat playground. */
+  hideTestingTools?: boolean;
 }
 
 const DOT_COLORS: Record<string, string> = {
@@ -160,7 +172,16 @@ export type ProviderCardHandle = {
 };
 
 const ProviderCard = forwardRef<ProviderCardHandle, ProviderCardProps>(function ProviderCard(
-  { providerId, provider, stats, authType = "apikey", onToggle, onCardClick },
+  {
+    providerId,
+    provider,
+    stats,
+    authType = "apikey",
+    onToggle,
+    onCardClick,
+    onConfigure,
+    hideTestingTools = false,
+  },
   ref
 ) {
   const t = useTranslations("providers");
@@ -299,13 +320,24 @@ const ProviderCard = forwardRef<ProviderCardHandle, ProviderCardProps>(function 
     onCardClick?.(providerId);
   }, [onCardClick, providerId]);
 
+  const providerHref = `/dashboard/providers/${providerId}`;
+
+  const handleProviderOpen = (event: MouseEvent<HTMLAnchorElement>) => {
+    event.preventDefault();
+    if (onConfigure) {
+      onConfigure(providerId);
+      return;
+    }
+    handleCardClick();
+  };
+
   return (
     <div ref={innerRef} id={`provider-${providerId}`} className="flex flex-col h-full">
       <Link
         ref={linkElementRef}
-        href={`/dashboard/providers/${providerId}`}
+        href={providerHref}
         className="group flex-1 flex flex-col focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary/60"
-        onClick={handleCardClick}
+        onClick={handleProviderOpen}
       >
         <Card
           padding="xs"
@@ -471,7 +503,7 @@ const ProviderCard = forwardRef<ProviderCardHandle, ProviderCardProps>(function 
                     />
                   </div>
                 )}
-                {isLlmProvider && (
+                {isLlmProvider && !hideTestingTools && (
                   <button
                     type="button"
                     onClick={handleTestClick}
@@ -484,7 +516,7 @@ const ProviderCard = forwardRef<ProviderCardHandle, ProviderCardProps>(function 
                     {tp("testLabel")}
                   </button>
                 )}
-                {!isLlmProvider && (
+                {(!isLlmProvider || hideTestingTools) && (
                   <span className="material-symbols-outlined text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
                     chevron_right
                   </span>
@@ -494,7 +526,7 @@ const ProviderCard = forwardRef<ProviderCardHandle, ProviderCardProps>(function 
           </div>
         </Card>
       </Link>
-      {isLlmProvider && (
+      {isLlmProvider && !hideTestingTools && (
         <ProviderTestSlideOver
           isOpen={testExpanded}
           onClose={() => setTestExpanded(false)}

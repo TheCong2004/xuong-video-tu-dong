@@ -70,7 +70,7 @@ export function StickersPanel() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b1f]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Tìm sticker CapCut theo từ khóa và gắn vào timeline draft mate."
         how="① Tạo draft · ② gõ từ khóa → Tìm · ③ chỉnh duration/scale · ④ Thêm (+) sticker."
@@ -88,7 +88,7 @@ export function StickersPanel() {
         maxWidth={420}
         left={
           <div className="flex h-full min-h-0 flex-1 flex-col">
-            <div className="flex items-center gap-2 border-b border-white/6 px-4 py-3">
+            <div className="flex items-center gap-2 border-b border-white/10 px-4 py-3">
               <div className="relative min-w-0 flex-1">
                 <FontAwesomeIcon
                   icon={faMagnifyingGlass}
@@ -126,7 +126,7 @@ export function StickersPanel() {
                     return (
                       <div
                         key={item.sticker_id}
-                        className="flex flex-col overflow-hidden rounded-lg border border-white/8 bg-[#16171b]"
+                        className="flex flex-col overflow-hidden rounded-lg border border-white/10 bg-[#16171b]"
                       >
                         <div className="flex aspect-square items-center justify-center bg-[#0e0f12]">
                           {thumb ? (
@@ -170,7 +170,7 @@ export function StickersPanel() {
           </div>
         }
         right={
-          <aside className="flex h-full min-h-0 w-full flex-col border-l border-white/8 bg-[#16171b] px-4 py-4">
+          <aside className="flex h-full min-h-0 w-full flex-col border-l border-white/10 bg-[#16171b] px-4 py-4">
             <h2 className="mb-3 text-[14px] font-semibold text-white/90">
               Tuỳ chọn gắn
             </h2>

@@ -365,7 +365,7 @@ export default function MemorySkillsTab() {
         {/* Token-cost warning — memory injection is billed (PRD-2026-06-19) */}
         {config.enabled && (
           <div
-            className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 mb-4 text-amber-600 dark:text-amber-400"
+            className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-white/10 mb-4 text-amber-600 dark:text-amber-400"
             role="note"
             data-testid="memory-token-cost-warning"
           >
@@ -857,7 +857,7 @@ export default function MemorySkillsTab() {
             onClick={() => saveSkillsProvider("skillsmp")}
             className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all ${
               skillsProvider === "skillsmp"
-                ? "border-indigo-500/50 bg-indigo-500/5 ring-1 ring-indigo-500/20"
+                ? "border-white/10 bg-indigo-500/5 ring-1 ring-indigo-500/20"
                 : "border-border/50 hover:border-border hover:bg-surface/30"
             }`}
           >
@@ -877,7 +877,7 @@ export default function MemorySkillsTab() {
             onClick={() => saveSkillsProvider("skillssh")}
             className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all ${
               skillsProvider === "skillssh"
-                ? "border-indigo-500/50 bg-indigo-500/5 ring-1 ring-indigo-500/20"
+                ? "border-white/10 bg-indigo-500/5 ring-1 ring-indigo-500/20"
                 : "border-border/50 hover:border-border hover:bg-surface/30"
             }`}
           >

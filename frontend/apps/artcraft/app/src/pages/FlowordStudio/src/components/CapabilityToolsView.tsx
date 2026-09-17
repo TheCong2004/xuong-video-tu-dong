@@ -34,7 +34,7 @@ interface CapabilityToolsViewProps {
   onVariantChange?: (variant: 'mainland' | 'international') => void;
 }
 
-const fieldClass = 'w-full rounded-[9px] border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-white/20';
+const fieldClass = 'w-full rounded-[9px] border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-white outline-none focus:border-white/20';
 const buttonClass = 'rounded-[9px] bg-[#e54d5e] px-4 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50';
 
 function errorText(error: unknown): string {
@@ -44,7 +44,7 @@ function errorText(error: unknown): string {
 function ResultBlock({ value }: { value: unknown }) {
   if (value === null || value === undefined) return null;
   return (
-    <pre className="mt-4 max-h-72 overflow-auto rounded-[9px] border border-white/[0.08] bg-black/20 p-4 text-xs leading-5 text-zinc-300">
+    <pre className="mt-4 max-h-72 overflow-auto rounded-[9px] border border-white/10 bg-black/20 p-4 text-xs leading-5 text-zinc-300">
       {JSON.stringify(value, null, 2)}
     </pre>
   );
@@ -250,12 +250,12 @@ function ResearchSessionTool({
         )}
         <div><label className="mb-1.5 block text-xs text-zinc-400">Authentication</label><select className={fieldClass} value={authMethod} onChange={(event) => setAuthMethod(event.target.value as ResearchSession['auth_method'])}><option value="browser">Browser Session</option><option value="qrcode">QR Code</option><option value="cookie">Cookie compatibility fallback</option></select></div>
       </div>
-      <div className="mt-4 rounded-lg border border-white/[0.08] bg-black/20 p-4">
+      <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-4">
         <div className="flex items-center justify-between gap-3"><div><div className="text-sm font-medium text-white">Session</div><div className="mt-1 text-xs text-zinc-500">{session?.profile_id ?? `mediacrawler:${platform}${platform === 'xhs' && variant === 'international' ? ':international' : ''}`}</div></div><span className={connected ? 'text-sm text-green-400' : 'text-sm text-zinc-400'}>{connected ? '● Connected' : `○ ${session?.status ?? 'Loading'}`}</span></div>
         {session?.last_verified_at && <div className="mt-2 text-xs text-zinc-500">Last verified: {new Date(session.last_verified_at).toLocaleString()}</div>}
         {session?.error && <div className="mt-2 text-xs text-rose-400">{session.error.code}: {session.error.message}</div>}
       </div>
-      <div className="mt-4 flex flex-wrap gap-2"><button type="button" className={buttonClass} onClick={login} disabled={busy}>{busy ? 'Working…' : 'Login'}</button><button type="button" className="rounded-[9px] border border-white/10 px-3 py-2 text-xs text-zinc-200" onClick={verify} disabled={busy}>Verify</button><button type="button" className="rounded-[9px] border border-white/10 px-3 py-2 text-xs text-zinc-200" onClick={reconnect} disabled={busy}>Reconnect</button><button type="button" className="rounded-[9px] border border-rose-500/30 px-3 py-2 text-xs text-rose-300" onClick={clear} disabled={busy}>Clear local session</button></div>
+      <div className="mt-4 flex flex-wrap gap-2"><button type="button" className={buttonClass} onClick={login} disabled={busy}>{busy ? 'Working…' : 'Login'}</button><button type="button" className="rounded-[9px] border border-white/10 px-3 py-2 text-xs text-zinc-200" onClick={verify} disabled={busy}>Verify</button><button type="button" className="rounded-[9px] border border-white/10 px-3 py-2 text-xs text-zinc-200" onClick={reconnect} disabled={busy}>Reconnect</button><button type="button" className="rounded-[9px] border border-white/10 px-3 py-2 text-xs text-rose-300" onClick={clear} disabled={busy}>Clear local session</button></div>
       <p className="mt-3 text-xs leading-5 text-zinc-500">Browser/QR uses MediaCrawler's canonical CDP profile. Clear removes only local authentication state; it does not claim remote logout. Phone login remains unavailable because the core requires its external Redis SMS-code flow.</p>
       {error && <p role="alert" className="mt-4 text-sm text-red-400">{error}</p>}
     </section>
@@ -308,7 +308,7 @@ function ProvidersTool() {
   useEffect(() => { void refresh(); }, []);
   const summary = useMemo(() => ({ providers: providers.length, models: modelCount }), [providers.length, modelCount]);
   return (
-    <section className="floword-card max-w-4xl overflow-hidden"><div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4"><div><h2 className="text-sm font-semibold text-white">OmniRoute Providers</h2><p className="mt-1 text-xs text-zinc-500">{summary.providers} providers · {summary.models} models. Credentials are never displayed.</p></div><button type="button" className="rounded-[9px] border border-white/10 px-3 py-2 text-xs text-zinc-200" onClick={refresh} disabled={busy}>{busy ? 'Loading…' : 'Refresh'}</button></div>{providers.map((provider) => <div key={provider.id} className="flex items-center justify-between gap-4 border-b border-white/[0.06] px-5 py-4 last:border-0"><div><div className="text-sm font-medium text-white">{provider.name}</div><div className="mt-1 font-mono text-xs text-zinc-500">{provider.id}</div></div><span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-400">{provider.status}</span></div>)}{!busy && providers.length === 0 && !error && <div className="p-8 text-center text-sm text-zinc-500">No provider records returned.</div>}{error && <p role="alert" className="p-5 text-sm text-red-400">{error}</p>}</section>
+    <section className="floword-card max-w-4xl overflow-hidden"><div className="flex items-center justify-between border-b border-white/10 px-5 py-4"><div><h2 className="text-sm font-semibold text-white">OmniRoute Providers</h2><p className="mt-1 text-xs text-zinc-500">{summary.providers} providers · {summary.models} models. Credentials are never displayed.</p></div><button type="button" className="rounded-[9px] border border-white/10 px-3 py-2 text-xs text-zinc-200" onClick={refresh} disabled={busy}>{busy ? 'Loading…' : 'Refresh'}</button></div>{providers.map((provider) => <div key={provider.id} className="flex items-center justify-between gap-4 border-b border-white/10 px-5 py-4 last:border-0"><div><div className="text-sm font-medium text-white">{provider.name}</div><div className="mt-1 font-mono text-xs text-zinc-500">{provider.id}</div></div><span className="rounded-full bg-white/[0.05] px-2.5 py-1 text-xs text-zinc-400">{provider.status}</span></div>)}{!busy && providers.length === 0 && !error && <div className="p-8 text-center text-sm text-zinc-500">No provider records returned.</div>}{error && <p role="alert" className="p-5 text-sm text-red-400">{error}</p>}</section>
   );
 }
 

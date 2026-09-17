@@ -22,7 +22,7 @@ export default function BootstrapBanner() {
   return (
     <div
       role="alert"
-      className="flex items-start gap-3 rounded-lg border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200 mb-4"
+      className="flex items-start gap-3 rounded-lg border border-white/10 dark:border-white/10 bg-amber-50 dark:bg-amber-500/10 px-4 py-3 text-sm text-amber-900 dark:text-amber-200 mb-4"
     >
       <span className="text-amber-500 dark:text-amber-400 text-base shrink-0 mt-0.5">⚠️</span>
       <div className="flex-1 min-w-0">

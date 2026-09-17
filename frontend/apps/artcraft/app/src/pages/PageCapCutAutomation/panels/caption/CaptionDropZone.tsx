@@ -38,7 +38,7 @@ export function CaptionDropZone({
   };
 
   return (
-    <div className="shrink-0 border-b border-white/8">
+    <div className="shrink-0 border-b border-white/10">
       <div className="flex items-center gap-1 px-3 pt-3">
         {(
           [
@@ -102,8 +102,8 @@ export function CaptionDropZone({
             className={twMerge(
               "flex cursor-pointer items-center gap-3 rounded-xl border border-dashed px-4 py-3 transition-colors",
               dragOver
-                ? "border-sky-400/50 bg-sky-500/10"
-                : "border-white/12 bg-[#1c1e24] hover:border-white/20 hover:bg-[#22252c]",
+                ? "border-white/10 bg-sky-500/10"
+                : "border-white/10 bg-[#1c1e24] hover:border-white/20 hover:bg-[#22252c]",
             )}
           >
             <FontAwesomeIcon
@@ -122,7 +122,7 @@ export function CaptionDropZone({
           </div>
 
           {fileName ? (
-            <div className="mt-2 flex items-center gap-2 rounded-lg border border-white/8 bg-[#16171b] px-3 py-2">
+            <div className="mt-2 flex items-center gap-2 rounded-lg border border-white/10 bg-[#16171b] px-3 py-2">
               <FontAwesomeIcon
                 icon={faFileLines}
                 className="text-[12px] text-violet-300/80"

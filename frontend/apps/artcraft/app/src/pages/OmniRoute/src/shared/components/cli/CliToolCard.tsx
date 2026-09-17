@@ -78,7 +78,7 @@ export default function CliToolCard({
       href={detailHref}
       className={cn(
         "block min-h-[180px]",
-        "bg-surface border border-black/5 dark:border-white/5 rounded-lg shadow-sm",
+        "bg-surface border border-black/5 dark:border-white/10 rounded-lg shadow-sm",
         "hover:shadow-md hover:border-primary/30 transition-all",
         "p-4 flex flex-col gap-3"
       )}

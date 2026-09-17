@@ -19,6 +19,7 @@ export interface WorkflowInput {
   language: string;
   tone: 'professional' | 'storytelling' | 'educational' | 'review' | 'viral';
   aspectRatio: '9:16' | '16:9' | '1:1';
+  editingPreset?: import('../api/flowordClient').EditingPreset;
   scriptMode: 'original' | 'source_based' | 'commentary' | 'remix';
   contentSource?: 'auto' | 'prompt_only' | 'trend_research' | 'web_story' | 'video_url' | 'local_media';
   storyUrl?: string;

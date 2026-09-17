@@ -6,6 +6,7 @@ use crate::core::lifecycle::startup::tasks::spawn_auxiliary_backends::spawn_auxi
 use crate::core::lifecycle::startup::tasks::spawn_discord_presence_thread::spawn_discord_presence_thread;
 use crate::core::lifecycle::startup::tasks::spawn_main_window_thread::spawn_main_window_thread;
 use crate::core::lifecycle::startup::tasks::spawn_omniroute_backend::{health_ready as omniroute_health_ready, spawn_omniroute_backend};
+use crate::core::lifecycle::startup::tasks::runtime_supervisor::{ensure_donut_desktop, start_attach_only_sidecar};
 use crate::core::lifecycle::startup::tasks::spawn_sora_task_polling_thread::spawn_sora_task_polling_thread;
 use crate::core::lifecycle::startup::tasks::spawn_storyteller_threads::spawn_storyteller_threads;
 use crate::core::providers::credentials::provider_credential_loading_cache::ProviderCredentialLoadingCache;
@@ -53,6 +54,16 @@ pub async fn handle_tauri_startup(app: AppHandle, root: AppDataRoot, app_env_con
   {
     let app_for_omniroute = app.clone();
     std::thread::spawn(move || spawn_omniroute_backend(&app_for_omniroute));
+
+    // OmniBridge is the browser automation transport for Floword.  It starts
+    // the attach-only Playwright sidecar after the Donut manager is available;
+    // it neither loads nor needs a browser extension.
+    let app_for_omnibridge = app.clone();
+    std::thread::spawn(move || {
+      if ensure_donut_desktop() {
+        start_attach_only_sidecar(&app_for_omnibridge);
+      }
+    });
 
     let app_for_auxiliary = app.clone();
     std::thread::spawn(move || {

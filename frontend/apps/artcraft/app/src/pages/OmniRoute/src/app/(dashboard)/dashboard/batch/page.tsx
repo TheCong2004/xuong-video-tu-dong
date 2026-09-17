@@ -253,7 +253,7 @@ export default function BatchPage() {
       {createdBanner && (
         <div
           role="status"
-          className="flex items-center justify-between gap-3 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2"
+          className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-emerald-500/10 px-3 py-2"
         >
           <div className="flex items-center gap-2 text-sm text-emerald-400">
             <span className="material-symbols-outlined text-[16px]">check_circle</span>

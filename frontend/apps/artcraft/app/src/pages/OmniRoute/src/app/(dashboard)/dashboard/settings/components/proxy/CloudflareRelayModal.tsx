@@ -144,7 +144,7 @@ export default function CloudflareRelayModal({
         </div>
 
         {error && (
-          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2">
+          <div className="text-sm text-red-400 bg-red-500/10 border border-white/10 rounded p-2">
             {error}
           </div>
         )}

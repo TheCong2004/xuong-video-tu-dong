@@ -545,7 +545,7 @@ export function UniversalQueueItem({
                     ? t('queue.outputFolder', { path: outputPath })
                     : t('queue.changeOutputFolder')
                 }
-                className="inline-flex max-w-[180px] items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-dashed border-blue-500/30 text-blue-600 dark:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex max-w-[180px] items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-dashed border-white/10 text-blue-600 dark:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FolderOpen className="w-3 h-3 flex-shrink-0" />
                 <span className="truncate">
@@ -562,7 +562,7 @@ export function UniversalQueueItem({
                 className={cn(
                   'inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border transition-colors font-medium',
                   hasTimeRange
-                    ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20'
+                    ? 'border-white/10 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20'
                     : 'border-dashed border-muted-foreground/30 text-muted-foreground hover:border-muted-foreground/50 hover:text-foreground hover:bg-muted/50',
                 )}
               >
@@ -589,7 +589,7 @@ export function UniversalQueueItem({
               <button
                 type="button"
                 onClick={handleOpenCompletedFileLocation}
-                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-dashed border-blue-500/30 text-blue-600 dark:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-colors font-medium"
+                className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-dashed border-white/10 text-blue-600 dark:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10 transition-colors font-medium"
               >
                 <FolderOpen className="w-3 h-3" />
                 {t('queue.openFolder')}
@@ -613,7 +613,7 @@ export function UniversalQueueItem({
         {(summary || summaryError) && (
           <div className="mt-2">
             {summary ? (
-              <div className="p-2 rounded-lg bg-purple-500/5 border border-purple-500/10">
+              <div className="p-2 rounded-lg bg-purple-500/5 border border-white/10">
                 <div className="flex items-start gap-2">
                   <Sparkles className="w-3.5 h-3.5 text-purple-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0">
@@ -668,7 +668,7 @@ export function UniversalQueueItem({
 
         {/* Time Range Inline Panel */}
         {showTimeRange && isPending && (
-          <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
+          <div className="flex items-center gap-2 mt-2 p-2 rounded-lg bg-amber-500/5 border border-white/10">
             <Scissors className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
             <input
               type="text"
@@ -682,7 +682,7 @@ export function UniversalQueueItem({
                 'placeholder:text-muted-foreground/40',
                 timeStart &&
                   (!isStartValid || !isRangeValid) &&
-                  'border-red-500/60 focus:ring-red-500/50 focus:border-red-500/50',
+                  'border-white/10 focus:ring-red-500/50 focus:border-red-500/50',
               )}
             />
             <span className="text-xs text-muted-foreground">-</span>
@@ -698,7 +698,7 @@ export function UniversalQueueItem({
                 'placeholder:text-muted-foreground/40',
                 timeEnd &&
                   (!isEndValid || !isRangeValid) &&
-                  'border-red-500/60 focus:ring-red-500/50 focus:border-red-500/50',
+                  'border-white/10 focus:ring-red-500/50 focus:border-red-500/50',
               )}
             />
             {durationSeconds > 0 && (

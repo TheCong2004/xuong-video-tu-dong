@@ -387,7 +387,7 @@ function AboutSettingsContent({
           </div>
           <div className="space-y-2.5 text-xs leading-relaxed text-muted-foreground">
             <p>{tCommon('legalDisclaimer.description')}</p>
-            <div className="rounded-md border-l-2 border-amber-500/70 bg-background px-3 py-2">
+            <div className="rounded-md border-l-2 border-white/10 bg-background px-3 py-2">
               <p className="font-medium text-foreground/90">{tCommon('legalDisclaimer.notice')}</p>
             </div>
             <p>{tCommon('legalDisclaimer.responsibility')}</p>

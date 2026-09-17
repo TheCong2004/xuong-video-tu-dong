@@ -79,7 +79,7 @@ export const PageInkOS: React.FC = () => {
   if (status === "failed") {
     return (
       <div className="flex h-full w-full items-center justify-center bg-[#0f1015] p-6 text-slate-300">
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-red-500/20 bg-[#161822] p-6 max-w-md text-center">
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-white/10 bg-[#161822] p-6 max-w-md text-center">
           <p className="text-xs text-red-400 font-medium leading-relaxed">{error || "InkOS startup failed"}</p>
           <button
             onClick={handleStart}
@@ -95,7 +95,7 @@ export const PageInkOS: React.FC = () => {
 
   return (
     <div className="flex h-full w-full items-center justify-center bg-[#0f1015] text-slate-300">
-      <div className="flex items-center gap-3 rounded-xl border border-purple-500/20 bg-[#161822] px-5 py-3 shadow-lg">
+      <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#161822] px-5 py-3 shadow-lg">
         <Loader2 className="h-4 w-4 animate-spin text-purple-400" />
         <span className="text-xs font-medium text-slate-200">Starting InkOS...</span>
       </div>

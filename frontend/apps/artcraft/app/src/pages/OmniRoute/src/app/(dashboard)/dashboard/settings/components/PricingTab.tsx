@@ -53,11 +53,11 @@ interface PricingCatalogProvider {
 function getSourceTone(source: PricingSource): string {
   switch (source) {
     case "user":
-      return "bg-amber-500/15 text-amber-400 border border-amber-500/25";
+      return "bg-amber-500/15 text-amber-400 border border-white/10";
     case "modelsDev":
-      return "bg-sky-500/15 text-sky-400 border border-sky-500/25";
+      return "bg-sky-500/15 text-sky-400 border border-white/10";
     case "litellm":
-      return "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25";
+      return "bg-emerald-500/15 text-emerald-400 border border-white/10";
     default:
       return "bg-bg-subtle text-text-muted border border-border/40";
   }
@@ -563,10 +563,10 @@ export default function PricingTab() {
         <div
           className={`px-3 py-2 rounded-lg border text-sm ${
             statusMessage.tone === "success"
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+              ? "bg-emerald-500/10 border-white/10 text-emerald-400"
               : statusMessage.tone === "error"
-                ? "bg-red-500/10 border-red-500/20 text-red-400"
-                : "bg-sky-500/10 border-sky-500/20 text-sky-400"
+                ? "bg-red-500/10 border-white/10 text-red-400"
+                : "bg-sky-500/10 border-white/10 text-sky-400"
           }`}
         >
           {statusMessage.message}
@@ -636,7 +636,7 @@ export default function PricingTab() {
             onClick={() => setCoverageFilter(coverageFilter === "lt50" ? "all" : "lt50")}
             className={`inline-flex items-center gap-1 px-2 py-1 rounded-md border text-xs transition-colors cursor-pointer ${
               coverageFilter === "lt50"
-                ? "bg-amber-500/15 border-amber-500/30 text-amber-400"
+                ? "bg-amber-500/15 border-white/10 text-amber-400"
                 : "bg-bg-subtle border-border text-text-muted hover:text-text-main"
             }`}
           >
@@ -819,7 +819,7 @@ function ProviderSection({
   return (
     <div
       className={`border rounded-lg overflow-hidden transition-colors ${
-        isEdited ? "border-yellow-500/40 bg-yellow-500/5" : "border-border"
+        isEdited ? "border-white/10 bg-yellow-500/5" : "border-border"
       }`}
     >
       <button
@@ -848,7 +848,7 @@ function ProviderSection({
           <span
             className={`px-1.5 py-0.5 text-[9px] rounded uppercase font-semibold shrink-0 ${
               provider.authType === "oauth"
-                ? "bg-sky-500/15 text-sky-400 border border-sky-500/25"
+                ? "bg-sky-500/15 text-sky-400 border border-white/10"
                 : provider.authType === "apikey"
                   ? "bg-violet-500/15 text-violet-400 border border-violet-500/25"
                   : "bg-bg-subtle text-text-muted border border-border/40"
@@ -915,7 +915,7 @@ function ProviderSection({
                   event.stopPropagation();
                   onReset();
                 }}
-                className="px-2.5 py-1 text-[11px] text-red-400 hover:bg-red-500/10 rounded border border-red-500/20 transition-colors"
+                className="px-2.5 py-1 text-[11px] text-red-400 hover:bg-red-500/10 rounded border border-white/10 transition-colors"
               >
                 {t("resetDefaults")}
               </button>
@@ -989,7 +989,7 @@ function ModelRow({
           />
           <span className="font-medium text-xs">{model.name}</span>
           {model.custom && (
-            <span className="px-1 py-0.5 text-[8px] font-bold bg-blue-500/15 text-blue-400 border border-blue-500/20 rounded uppercase">
+            <span className="px-1 py-0.5 text-[8px] font-bold bg-blue-500/15 text-blue-400 border border-white/10 rounded uppercase">
               {t("custom")}
             </span>
           )}

@@ -461,7 +461,7 @@ export function AISection({ highlightId }: AISectionProps) {
                     className={cn(
                       'flex items-center gap-2.5 text-xs p-3 rounded-lg border transition-all animate-in slide-in-from-top-2 duration-300',
                       ai.testResult.success
-                        ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                        ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-white/10 text-emerald-500'
                         : 'bg-destructive/5 dark:bg-destructive/10 border-destructive/20 text-destructive',
                     )}
                   >
@@ -519,7 +519,7 @@ export function AISection({ highlightId }: AISectionProps) {
                     className={cn(
                       'flex items-center gap-2.5 text-xs p-3 rounded-lg border transition-all animate-in slide-in-from-top-2 duration-300',
                       ai.testResult.success
-                        ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                        ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-white/10 text-emerald-500'
                         : 'bg-destructive/5 dark:bg-destructive/10 border-destructive/20 text-destructive',
                     )}
                   >
@@ -577,7 +577,7 @@ export function AISection({ highlightId }: AISectionProps) {
                     className={cn(
                       'flex items-center gap-2.5 text-xs p-3 rounded-lg border transition-all animate-in slide-in-from-top-2 duration-300',
                       ai.testResult.success
-                        ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                        ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-white/10 text-emerald-500'
                         : 'bg-destructive/5 dark:bg-destructive/10 border-destructive/20 text-destructive',
                     )}
                   >
@@ -1079,7 +1079,7 @@ export function AISection({ highlightId }: AISectionProps) {
                   // Default OpenAI Whisper
                   <div className="space-y-3 bg-muted/20 p-3 rounded-lg">
                     {ai.config.provider === 'openai' ? (
-                      <div className="flex items-center gap-2 text-xs p-2.5 rounded-lg bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">
+                      <div className="flex items-center gap-2 text-xs p-2.5 rounded-lg bg-emerald-500/5 dark:bg-emerald-500/10 border border-white/10 text-emerald-500">
                         <Check className="w-4 h-4 flex-shrink-0" />
                         <span className="font-medium">{t('ai.usingOpenAI')}</span>
                       </div>

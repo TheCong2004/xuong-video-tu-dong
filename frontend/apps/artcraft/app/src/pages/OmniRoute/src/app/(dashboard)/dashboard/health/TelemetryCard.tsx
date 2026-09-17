@@ -278,7 +278,7 @@ export default function TelemetryCard() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
+        <div className="mb-4 rounded-lg border border-white/10 bg-amber-500/10 px-3 py-2 text-sm text-amber-600">
           {t("partialData", { error })}
         </div>
       )}

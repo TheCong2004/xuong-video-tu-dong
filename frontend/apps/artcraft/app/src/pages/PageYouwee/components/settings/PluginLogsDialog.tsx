@@ -111,7 +111,7 @@ export function PluginLogsDialog({
         <ScrollArea className="flex-1">
           <div className="space-y-3 px-6 py-5">
             {error && (
-              <div className="rounded-md border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+              <div className="rounded-md border border-white/10 bg-red-500/10 px-4 py-3 text-sm text-red-500">
                 {error}
               </div>
             )}

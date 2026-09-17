@@ -97,7 +97,7 @@ function OAuthRemoteAccessNotices({
   return (
     <>
       {isGoogleOAuth && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+        <div className="rounded-lg border border-white/10 bg-amber-500/10 p-3 text-xs text-amber-200">
           <span className="material-symbols-outlined text-sm align-middle mr-1">warning</span>
           <strong>
             {t.rich("googleOAuthWarning", {
@@ -116,7 +116,7 @@ function OAuthRemoteAccessNotices({
           </strong>
         </div>
       )}
-      <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-3 text-xs text-blue-200">
+      <div className="rounded-lg border border-white/10 bg-blue-500/10 p-3 text-xs text-blue-200">
         <span className="material-symbols-outlined text-sm align-middle mr-1">info</span>
         {t("remoteAccessInfo")}
       </div>

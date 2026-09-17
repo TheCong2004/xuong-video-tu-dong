@@ -538,7 +538,7 @@ export default function ConnectionsListPanel({
             <div
               key={tag || "__untagged__"}
               className={
-                gi > 0 ? "border-t border-black/[0.06] dark:border-white/[0.06] mt-1 pt-1" : ""
+                gi > 0 ? "border-t border-black/[0.06] dark:border-white/10 mt-1 pt-1" : ""
               }
             >
               {tag && (

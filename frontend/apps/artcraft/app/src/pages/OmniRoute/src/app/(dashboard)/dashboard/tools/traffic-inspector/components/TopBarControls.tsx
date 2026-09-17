@@ -209,7 +209,7 @@ export function TopBarControls({
             {total}/{maxSize}
           </span>
           {paused && pendingCount > 0 && (
-            <span className="inline-flex items-center rounded bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-400 border border-yellow-500/40">
+            <span className="inline-flex items-center rounded bg-yellow-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-yellow-400 border border-white/10">
               {t("pausedNewBadge", { count: pendingCount })}
             </span>
           )}

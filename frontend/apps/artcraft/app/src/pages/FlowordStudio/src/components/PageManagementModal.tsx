@@ -315,8 +315,8 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl border border-white/[0.1] bg-[#12161f] shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-4 shrink-0">
+      <div className="w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl border border-white/10 bg-[#12161f] shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 shrink-0">
           <div className="flex items-center gap-2 text-white font-semibold text-base">
             <Layers className="h-5 w-5 text-indigo-400" />
             {pageToEdit ? 'Edit Content Page & Publish Targets' : 'Create New Content Page'}
@@ -342,7 +342,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
 
         <form onSubmit={handleSubmit} className="p-5 space-y-5 overflow-y-auto flex-1 text-xs">
           {error && (
-            <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3 text-xs text-red-400">
+            <div className="rounded-lg bg-red-500/10 border border-white/10 p-3 text-xs text-red-400">
               {error}
             </div>
           )}
@@ -358,7 +358,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Stage & Screen Feed, Hollywood Flash"
-                className="w-full rounded-lg border border-white/[0.1] bg-black/40 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none"
                 required
               />
             </div>
@@ -373,7 +373,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                   value={outputRoot}
                   onChange={(e) => setOutputRoot(e.target.value)}
                   placeholder="e.g. D:\ or D:\FlowordOutputs"
-                  className="w-full rounded-lg border border-white/[0.1] bg-black/40 pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none font-mono text-xs"
+                  className="w-full rounded-lg border border-white/10 bg-black/40 pl-9 pr-3 py-2 text-sm text-white placeholder-zinc-500 focus:border-indigo-500 focus:outline-none font-mono text-xs"
                   required
                 />
                 <Folder className="absolute left-3 top-2.5 h-4 w-4 text-zinc-500" />
@@ -385,7 +385,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
           </div>
 
           {/* PRODUCTION BROWSER PROFILE (Tier 1 — for Grok image/video generation) */}
-          <div className="border border-indigo-500/20 rounded-xl p-4 bg-indigo-500/[0.04] space-y-3">
+          <div className="border border-white/10 rounded-xl p-4 bg-indigo-500/[0.04] space-y-3">
             <div className="text-xs font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1.5">
               <Monitor className="h-4 w-4" />
               Production Browser Profile
@@ -397,7 +397,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
               <select
                 value={browserProfileId}
                 onChange={(e) => setBrowserProfileId(e.target.value)}
-                className="w-full px-2.5 py-2 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                className="w-full px-2.5 py-2 rounded-lg bg-[#1a202c] border border-white/10 text-white text-xs font-mono focus:border-indigo-500 focus:outline-none"
               >
                 <option value="">-- Chưa gán Production Profile --</option>
                 {profiles.map((p) => (
@@ -431,14 +431,14 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
           </div>
 
           {/* PUBLISH TARGETS CONFIGURATION */}
-          <div className="border border-white/[0.08] rounded-xl p-4 bg-white/[0.02] space-y-4">
+          <div className="border border-white/10 rounded-xl p-4 bg-white/[0.02] space-y-4">
             <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
               <Share2 className="h-4 w-4" />
               Multi-Platform Publish Targets
             </div>
 
             {/* Facebook Target */}
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.05] space-y-2">
+            <div className="p-3 rounded-xl bg-black/30 border border-white/10 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 font-bold text-zinc-200">
                   <input
@@ -452,7 +452,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 <select
                   value={fbMode}
                   onChange={(e) => setFbMode(e.target.value as any)}
-                  className="px-2 py-1 rounded bg-[#1a202c] border border-white/[0.1] text-zinc-300 text-[11px]"
+                  className="px-2 py-1 rounded bg-[#1a202c] border border-white/10 text-zinc-300 text-[11px]"
                 >
                   <option value="review">Review Before Post</option>
                   <option value="auto">Auto-Post Immediately</option>
@@ -467,7 +467,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                     value={fbDestination}
                     onChange={(e) => setFbDestination(e.target.value)}
                     placeholder="e.g. 104829384918239 or Page Name"
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.1] text-white text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white text-xs font-mono"
                   />
                 </div>
                 <div>
@@ -475,7 +475,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                   <select
                     value={fbProfile}
                     onChange={(e) => setFbProfile(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/10 text-white text-xs font-mono"
                   >
                     <option value="">-- Inherit Production Profile --</option>
                     {profiles.map((p) => (
@@ -489,7 +489,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
             </div>
 
             {/* TikTok Target */}
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.05] space-y-2">
+            <div className="p-3 rounded-xl bg-black/30 border border-white/10 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 font-bold text-zinc-200">
                   <input
@@ -503,7 +503,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 <select
                   value={ttMode}
                   onChange={(e) => setTtMode(e.target.value as any)}
-                  className="px-2 py-1 rounded bg-[#1a202c] border border-white/[0.1] text-zinc-300 text-[11px]"
+                  className="px-2 py-1 rounded bg-[#1a202c] border border-white/10 text-zinc-300 text-[11px]"
                 >
                   <option value="review">Review Before Post</option>
                   <option value="auto">Auto-Post Immediately</option>
@@ -518,7 +518,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                     value={ttDestination}
                     onChange={(e) => setTtDestination(e.target.value)}
                     placeholder="e.g. @movie_cinema_vn"
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.1] text-white text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white text-xs font-mono"
                   />
                 </div>
                 <div>
@@ -526,7 +526,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                   <select
                     value={ttProfile}
                     onChange={(e) => setTtProfile(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/10 text-white text-xs font-mono"
                   >
                     <option value="">-- Inherit Production Profile --</option>
                     {profiles.map((p) => (
@@ -540,7 +540,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
             </div>
 
             {/* YouTube Target */}
-            <div className="p-3 rounded-xl bg-black/30 border border-white/[0.05] space-y-2">
+            <div className="p-3 rounded-xl bg-black/30 border border-white/10 space-y-2">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 font-bold text-zinc-200">
                   <input
@@ -554,7 +554,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 <select
                   value={ytMode}
                   onChange={(e) => setYtMode(e.target.value as any)}
-                  className="px-2 py-1 rounded bg-[#1a202c] border border-white/[0.1] text-zinc-300 text-[11px]"
+                  className="px-2 py-1 rounded bg-[#1a202c] border border-white/10 text-zinc-300 text-[11px]"
                 >
                   <option value="review">Review Before Post</option>
                   <option value="auto">Auto-Post Immediately</option>
@@ -569,7 +569,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                     value={ytDestination}
                     onChange={(e) => setYtDestination(e.target.value)}
                     placeholder="e.g. UCxxxxxx or Channel Name"
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/[0.1] text-white text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-black/40 border border-white/10 text-white text-xs font-mono"
                   />
                 </div>
                 <div>
@@ -577,7 +577,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                   <select
                     value={ytProfile}
                     onChange={(e) => setYtProfile(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/[0.1] text-white text-xs font-mono"
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#1a202c] border border-white/10 text-white text-xs font-mono"
                   >
                     <option value="">-- Inherit Production Profile --</option>
                     {profiles.map((p) => (
@@ -592,7 +592,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
           </div>
 
           {/* DEFAULT PROMPT TEMPLATES */}
-          <div className="border-t border-white/[0.08] pt-3 space-y-3">
+          <div className="border-t border-white/10 pt-3 space-y-3">
             <div className="text-xs font-semibold text-indigo-300">Grok Pipeline Default Prompts</div>
 
             <div>
@@ -602,7 +602,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 value={defaultImagePrompt}
                 onChange={(e) => setDefaultImagePrompt(e.target.value)}
                 placeholder="Default fallback prompt when creating/editing Grok images for this page"
-                className="w-full rounded-lg border border-white/[0.1] bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
+                className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
               />
             </div>
 
@@ -613,7 +613,7 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 value={defaultExpand916Prompt}
                 onChange={(e) => setDefaultExpand916Prompt(e.target.value)}
                 placeholder="Default fallback for 9:16 vertical expansion"
-                className="w-full rounded-lg border border-white/[0.1] bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
+                className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
               />
             </div>
 
@@ -624,13 +624,13 @@ export const PageManagementModal: React.FC<PageManagementModalProps> = ({
                 value={defaultVideoPrompt}
                 onChange={(e) => setDefaultVideoPrompt(e.target.value)}
                 placeholder="Default fallback for Grok video animation"
-                className="w-full rounded-lg border border-white/[0.1] bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
+                className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:border-indigo-500 focus:outline-none resize-none font-mono"
               />
             </div>
           </div>
 
           {/* MODAL FOOTER */}
-          <div className="flex items-center justify-between pt-3 border-t border-white/[0.08]">
+          <div className="flex items-center justify-between pt-3 border-t border-white/10">
             {pageToEdit && onArchivePage ? (
               <button
                 type="button"

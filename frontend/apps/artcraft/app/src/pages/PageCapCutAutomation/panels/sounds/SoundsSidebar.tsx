@@ -60,7 +60,7 @@ export function SoundsSidebar({
   const volumeSlider = ((volumeDb + 12) / 24) * 100;
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/8 bg-[#16171b]">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/10 bg-[#16171b]">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <div className="flex items-center gap-2">
           <h2 className="text-[14px] font-semibold text-white/90">
@@ -107,7 +107,7 @@ export function SoundsSidebar({
         </button>
       </div>
 
-      <div className="min-h-[100px] max-h-[160px] flex-1 overflow-y-auto border-b border-white/6 px-2 py-1">
+      <div className="min-h-[100px] max-h-[160px] flex-1 overflow-y-auto border-b border-white/10 px-2 py-1">
         {empty ? (
           <div className="h-full min-h-[100px]" />
         ) : (

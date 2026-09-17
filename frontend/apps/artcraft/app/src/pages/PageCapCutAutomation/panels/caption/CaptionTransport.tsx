@@ -9,7 +9,7 @@ import {
 
 export function CaptionTransport() {
   return (
-    <div className="shrink-0 border-t border-white/8 bg-[#121317] px-4 py-3">
+    <div className="shrink-0 border-t border-white/10 bg-[#121317] px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
         <div className="font-mono text-[12px] text-white/50">
           00:00:00:00{" "}
@@ -39,7 +39,7 @@ export function CaptionTransport() {
         </div>
       </div>
 
-      <div className="flex h-16 flex-col justify-center rounded-md border border-white/8 bg-[#0e0f12] px-3">
+      <div className="flex h-16 flex-col justify-center rounded-md border border-white/10 bg-[#0e0f12] px-3">
         <div className="mb-1 h-1.5 w-full rounded-full bg-white/10" />
         <div className="text-center text-[11px] text-white/25">
           Waveform preview

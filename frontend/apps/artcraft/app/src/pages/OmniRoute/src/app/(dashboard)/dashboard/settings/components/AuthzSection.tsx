@@ -253,7 +253,7 @@ export default function AuthzSection() {
         <div
           data-testid="cors-wildcard-banner"
           role="alert"
-          className="flex items-start gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-amber-700 dark:text-amber-300"
+          className="flex items-start gap-3 rounded-lg border border-white/10 bg-amber-500/10 px-4 py-3 text-amber-700 dark:text-amber-300"
         >
           <span className="material-symbols-outlined text-[20px] mt-0.5" aria-hidden="true">
             warning
@@ -333,7 +333,7 @@ export default function AuthzSection() {
               .map((prefix) => (
                 <li
                   key={`locked:${prefix}`}
-                  className="flex items-center justify-between gap-3 rounded-md border border-red-500/30 bg-red-500/[0.04] px-3 py-2 opacity-80"
+                  className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-red-500/[0.04] px-3 py-2 opacity-80"
                 >
                   <div className="flex flex-col">
                     <code className="text-xs font-mono">{prefix}</code>

@@ -62,7 +62,7 @@ export function ChaosBasicSettingsFields({
           onClick={() => onChange({ enabled: !settings.enabled })}
           className={`inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
             settings.enabled
-              ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+              ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-white/10"
               : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
           }`}
         >

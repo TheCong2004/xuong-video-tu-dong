@@ -278,8 +278,10 @@ pub fn ensure_donut_desktop() -> bool {
   if port_open_at(PORT) {
     return true;
   }
-  if let Ok(output) = Command::new("tasklist").args(["/FI", "IMAGENAME eq donutbrowser.exe", "/FO", "CSV", "/NH"]).output() {
-    if String::from_utf8_lossy(&output.stdout).to_ascii_lowercase().contains("donutbrowser.exe") {
+  // Check if either donutbrowser.exe or Nexora.exe is running
+  if let Ok(output) = Command::new("tasklist").args(["/FO", "CSV", "/NH"]).output() {
+    let list = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
+    if list.contains("donutbrowser.exe") || list.contains("nexora.exe") {
       return true;
     }
   }
@@ -287,25 +289,65 @@ pub fn ensure_donut_desktop() -> bool {
   if let Some(path) = std::env::var_os("FLOWORD_DONUT_DESKTOP_EXE") {
     candidates.push(PathBuf::from(path));
   }
+
+  // Nexora registers its bundled bridge under LocalAppData.  The bridge and
+  // desktop executable are installed beside each other, so this manifest is
+  // the authoritative cross-application discovery mechanism and also works
+  // when the user selects a non-default installation directory.
+  candidates.extend(installed_donut_desktop_candidates());
+
+  // Check standard user installation locations (Local AppData & Program Files)
+  if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+    let base = PathBuf::from(local_app_data);
+    candidates.push(base.join("Programs/Nexora/Nexora.exe"));
+    candidates.push(base.join("Programs/Nexora/nexora.exe"));
+    candidates.push(base.join("Programs/donutbrowser/donutbrowser.exe"));
+    candidates.push(base.join("Programs/DonutBrowser/donutbrowser.exe"));
+  }
+  if let Ok(program_files) = std::env::var("ProgramFiles") {
+    let base = PathBuf::from(program_files);
+    candidates.push(base.join("Nexora/Nexora.exe"));
+    candidates.push(base.join("donutbrowser/donutbrowser.exe"));
+  }
+  if let Ok(program_files_x86) = std::env::var("ProgramFiles(x86)") {
+    let base = PathBuf::from(program_files_x86);
+    candidates.push(base.join("Nexora/Nexora.exe"));
+    candidates.push(base.join("donutbrowser/donutbrowser.exe"));
+  }
+
+  // Check paths relative to current executable (portable bundle / local deployment)
   if let Ok(exe) = std::env::current_exe() {
     if let Some(dir) = exe.parent() {
+      candidates.push(dir.join("Nexora.exe"));
+      candidates.push(dir.join("nexora.exe"));
       candidates.push(dir.join("donutbrowser.exe"));
+      candidates.push(dir.join("resources/Nexora.exe"));
       candidates.push(dir.join("resources/donutbrowser.exe"));
+      candidates.push(dir.join("../Nexora/Nexora.exe"));
+      candidates.push(dir.join("../Nexora/nexora.exe"));
+      candidates.push(dir.join("../donutbrowser/donutbrowser.exe"));
+      candidates.push(dir.join("../donutbrowser/Nexora.exe"));
     }
   }
+
+  // Check repository / development ancestors
   if let Ok(cwd) = std::env::current_dir() {
     for ancestor in cwd.ancestors() {
+      candidates.push(ancestor.join("donutbrowser/src-tauri/target/release/Nexora.exe"));
+      candidates.push(ancestor.join("donutbrowser/src-tauri/target/release/donutbrowser.exe"));
+      candidates.push(ancestor.join("donutbrowser/src-tauri/target/debug/Nexora.exe"));
       candidates.push(ancestor.join("donutbrowser/src-tauri/target/debug/donutbrowser.exe"));
+      candidates.push(ancestor.join("donutbrowser/target/release/Nexora.exe"));
       candidates.push(ancestor.join("donutbrowser/target/debug/donutbrowser.exe"));
     }
   }
   let Some(executable) = candidates.into_iter().find(|path| path.is_file()) else {
-    warn!("DONUT_LOCAL_MANAGER_NOT_READY: Donut Desktop executable not found");
+    warn!("DONUT_LOCAL_MANAGER_NOT_READY: Donut/Nexora Desktop executable not found");
     return false;
   };
   match Command::new(&executable).spawn() {
     Ok(_) => {
-      info!("Donut Desktop manager started: {}", executable.display());
+      info!("Donut/Nexora Desktop manager started: {}", executable.display());
       true
     },
     Err(error) => {
@@ -313,6 +355,36 @@ pub fn ensure_donut_desktop() -> bool {
       false
     },
   }
+}
+
+fn installed_donut_desktop_candidates() -> Vec<PathBuf> {
+  let Some(local_app_data) = std::env::var_os("LOCALAPPDATA") else {
+    return Vec::new();
+  };
+  let manifest = PathBuf::from(local_app_data)
+    .join("Floword")
+    .join("DonutBridge")
+    .join("donut-browser-install-v1.json");
+  let Ok(body) = std::fs::read_to_string(manifest) else {
+    return Vec::new();
+  };
+  let Ok(value) = serde_json::from_str::<serde_json::Value>(&body) else {
+    return Vec::new();
+  };
+  let Some(bridge) = value.get("bridgeExecutable").and_then(serde_json::Value::as_str).map(PathBuf::from) else {
+    return Vec::new();
+  };
+  desktop_candidates_beside_bridge(&bridge)
+}
+
+fn desktop_candidates_beside_bridge(bridge: &Path) -> Vec<PathBuf> {
+  let Some(directory) = bridge.parent() else {
+    return Vec::new();
+  };
+  ["Nexora.exe", "nexora.exe", "nexorabrowser.exe", "donutbrowser.exe"]
+    .into_iter()
+    .map(|name| directory.join(name))
+    .collect()
 }
 
 /// Start only the attach-only Sidecar after Donut Desktop is already healthy.
@@ -341,10 +413,6 @@ pub fn start_attach_only_sidecar(app: &AppHandle) {
     return;
   }
   let resource_dir = resolve_runtime_resource_root(app);
-  if !runtime_manifest_ready(app) {
-    warn!("Playwright runtime not started: runtime manifest is not ready (resource_dir={:?})", resource_dir);
-    return;
-  }
   let sidecar = std::env::var_os("FLOWORD_PLAYWRIGHT_SIDECAR").map(PathBuf::from).or_else(|| resource_dir.as_ref().map(|root| root.join("playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| resource_dir.as_ref().map(|root| root.join("resources/playwright-sidecar/src/server.js")).filter(|path| path.is_file())).or_else(|| std::env::current_exe().ok().and_then(|exe| exe.parent().map(|dir| dir.join("resources/playwright-sidecar/src/server.js"))).filter(|path| path.is_file())).or_else(|| {
     let cwd = std::env::current_dir().ok()?;
     [cwd.join("tools/playwright-sidecar/src/server.js"), cwd.join("resources/playwright-sidecar/server.js"), cwd.join("..\\..\\..\\tools\\playwright-sidecar\\src\\server.js")].into_iter().find(|path| path.is_file())
@@ -353,6 +421,16 @@ pub fn start_attach_only_sidecar(app: &AppHandle) {
     warn!("Playwright sidecar entrypoint not found; Floword will report PLAYWRIGHT_RUNTIME_OFFLINE");
     return;
   };
+  // Packaged builds must use the verified runtime tree.  A dev build can use
+  // the checked-out sidecar only when its own npm dependencies are present;
+  // otherwise Floword would misleadingly report a logged-out Grok session
+  // simply because no bridge was ever started.
+  let staged_runtime_ready = runtime_manifest_ready(app);
+  let source_runtime_ready = cfg!(debug_assertions) && sidecar.parent().and_then(Path::parent).is_some_and(|root| root.join("node_modules/express/package.json").is_file() && root.join("node_modules/playwright/package.json").is_file());
+  if !staged_runtime_ready && !source_runtime_ready {
+    warn!("Playwright runtime not started: no verified packaged runtime or usable dev sidecar (resource_dir={:?})", resource_dir);
+    return;
+  }
   info!("Playwright sidecar entrypoint selected: {} (resource_dir={:?})", sidecar.display(), resource_dir);
   let node = normalize_process_path(resolve_playwright_node(app));
   info!("Playwright Node executable selected: {}", node.display());
@@ -377,16 +455,8 @@ pub fn start_attach_only_sidecar(app: &AppHandle) {
   };
   let mut command = background_command(Command::new(node));
   command.arg(&sidecar).current_dir(sidecar.parent().unwrap_or(Path::new("."))).env("PLAYWRIGHT_SIDECAR_PORT", PLAYWRIGHT_PORT.to_string()).env("FLOWORD_PARENT_PID", std::process::id().to_string()).stdin(Stdio::null()).stdout(Stdio::from(stdout)).stderr(Stdio::from(stderr));
-  if std::env::var_os("FLOWORD_CHROMEX_EXTENSION_PATH").is_none() {
-    if let Some(path) = resource_dir.as_ref().map(|root| root.join("chromex-extension")).filter(|path| path.join("manifest.json").is_file()) {
-      command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path);
-    }
-  }
-  if std::env::var_os("FLOWORD_CHROMEX_EXTENSION_PATH").is_none() {
-    if let Some(path) = std::env::current_dir().ok().and_then(|cwd| [cwd.join("resources/chromex-extension"), cwd.join("..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod"), cwd.join("..\\..\\..\\..\\chromex\\packages\\extension\\build\\chrome-mv3-prod")].into_iter().find(|path| path.join("manifest.json").is_file())) {
-      command.env("FLOWORD_CHROMEX_EXTENSION_PATH", path);
-    }
-  }
+  // The sidecar controls Grok through the already-running Donut profile's
+  // Playwright/CDP endpoint. Do not inject or depend on a browser extension.
   let child = match command.spawn() {
     Ok(child) => child,
     Err(error) => {
@@ -717,5 +787,16 @@ mod tests {
     write_manifest(&root, REQUIRED_RUNTIME_ARTIFACTS);
     assert!(verify_runtime_manifest(&root).is_ok());
     let _ = std::fs::remove_dir_all(root);
+  }
+
+  #[test]
+  fn derives_nexora_desktop_from_registered_bridge() {
+    let candidates = desktop_candidates_beside_bridge(Path::new(
+      r"C:\Program Files\Nexora\floword-donut-bridge.exe",
+    ));
+    assert!(candidates.contains(&PathBuf::from(r"C:\Program Files\Nexora\Nexora.exe")));
+    assert!(candidates.contains(&PathBuf::from(
+      r"C:\Program Files\Nexora\nexorabrowser.exe"
+    )));
   }
 }

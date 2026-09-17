@@ -211,7 +211,7 @@ export default function UsageAnalytics() {
 
           {/* Period Selector + Custom */}
           <div
-            className="relative flex items-center gap-1 bg-black/[0.03] dark:bg-white/[0.03] rounded-lg p-1 border border-black/5 dark:border-white/5"
+            className="relative flex items-center gap-1 bg-black/[0.03] dark:bg-white/[0.03] rounded-lg p-1 border border-black/5 dark:border-white/10"
             ref={customPickerAnchorRef}
           >
             {ranges.map((r) => (

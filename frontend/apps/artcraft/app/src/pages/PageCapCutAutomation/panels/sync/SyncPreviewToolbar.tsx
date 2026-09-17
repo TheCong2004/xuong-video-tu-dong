@@ -47,7 +47,7 @@ export function SyncPreviewToolbar({ onRunSmall }: SyncPreviewToolbarProps) {
         <button
           type="button"
           onClick={onRunSmall}
-          className="rounded-full border border-white/15 bg-[#252830] px-4 py-1.5 text-[12px] font-medium text-white/70 hover:bg-[#2a2d35] hover:text-white"
+          className="rounded-full border border-white/10 bg-[#252830] px-4 py-1.5 text-[12px] font-medium text-white/70 hover:bg-[#2a2d35] hover:text-white"
         >
           Run
         </button>

@@ -80,7 +80,7 @@ export function DetailsPanel({ request, allRequests }: DetailsPanelProps) {
               className={cn(
                 "inline-flex items-center gap-1 h-8 px-2 text-xs rounded-t border-b-2 transition-colors focus-ring",
                 selected
-                  ? "border-blue-500 text-blue-400 bg-surface"
+                  ? "border-white/10 text-blue-400 bg-surface"
                   : "border-transparent text-text-muted hover:text-text-main hover:bg-surface/50"
               )}
             >

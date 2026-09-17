@@ -132,7 +132,7 @@ export default function PlaygroundTab() {
 
       {/* Error */}
       {error && (
-        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400">
+        <div className="p-3 rounded-lg bg-red-500/10 border border-white/10 text-xs text-red-400">
           {error}
         </div>
       )}

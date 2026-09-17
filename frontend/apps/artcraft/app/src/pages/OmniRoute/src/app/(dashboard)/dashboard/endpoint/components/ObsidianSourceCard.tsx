@@ -211,7 +211,7 @@ export default function ObsidianSourceCard() {
               {webdavEnabled && (
                 <Badge
                   variant="success"
-                  className="bg-blue-500/20 text-blue-400 border-blue-500/30"
+                  className="bg-blue-500/20 text-blue-400 border-white/10"
                 >
                   {t("obsidianWebdavSync")}
                 </Badge>
@@ -233,7 +233,7 @@ export default function ObsidianSourceCard() {
                 className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
                   message.type === "success"
                     ? "border-green-500/30 bg-green-500/10 text-green-400"
-                    : "border-red-500/30 bg-red-500/10 text-red-400"
+                    : "border-white/10 bg-red-500/10 text-red-400"
                 }`}
               >
                 <span className="material-symbols-outlined text-[18px]">
@@ -273,7 +273,7 @@ export default function ObsidianSourceCard() {
                   className="font-mono text-sm"
                 />
                 {baseUrl.includes(":27124") && (
-                  <div className="flex items-center gap-1.5 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-2.5 py-1.5 text-[10px] text-yellow-300">
+                  <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-yellow-500/10 px-2.5 py-1.5 text-[10px] text-yellow-300">
                     <span className="material-symbols-outlined text-[14px]">warning</span>
                     <span>{t("obsidianPortWarning")}</span>
                   </div>
@@ -293,7 +293,7 @@ export default function ObsidianSourceCard() {
                     loading={busy}
                     variant="secondary"
                     size="sm"
-                    className="border-red-500/30! text-red-400! hover:bg-red-500/10!"
+                    className="border-white/10! text-red-400! hover:bg-red-500/10!"
                   >
                     {t("obsidianDisconnect")}
                   </Button>
@@ -333,7 +333,7 @@ export default function ObsidianSourceCard() {
                     </div>
                   ) : (
                     <div className="flex flex-col gap-3">
-                      <div className="flex items-center gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2">
+                      <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-blue-500/10 px-3 py-2">
                         <span className="material-symbols-outlined text-[18px] text-blue-400">
                           cloud_sync
                         </span>
@@ -350,7 +350,7 @@ export default function ObsidianSourceCard() {
                           loading={webdavBusy}
                           variant="secondary"
                           size="sm"
-                          className="border-red-500/30! text-red-400! hover:bg-red-500/10! shrink-0"
+                          className="border-white/10! text-red-400! hover:bg-red-500/10! shrink-0"
                         >
                           {t("obsidianDisable")}
                         </Button>

@@ -42,11 +42,11 @@ interface TryItResult {
 }
 
 const METHOD_COLORS: Record<string, string> = {
-  GET: "bg-emerald-500/15 text-emerald-500 border-emerald-500/30",
-  POST: "bg-blue-500/15 text-blue-500 border-blue-500/30",
-  PUT: "bg-amber-500/15 text-amber-500 border-amber-500/30",
+  GET: "bg-emerald-500/15 text-emerald-500 border-white/10",
+  POST: "bg-blue-500/15 text-blue-500 border-white/10",
+  PUT: "bg-amber-500/15 text-amber-500 border-white/10",
   PATCH: "bg-orange-500/15 text-orange-500 border-orange-500/30",
-  DELETE: "bg-red-500/15 text-red-500 border-red-500/30",
+  DELETE: "bg-red-500/15 text-red-500 border-white/10",
 };
 
 /* ─── Main Component ─────────────────────────────────── */
@@ -59,7 +59,7 @@ export default function ApiEndpointsTab() {
       <div className="flex items-center gap-1 shrink-0">
         {ep.loopbackOnly && (
           <span
-            className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500 border border-blue-500/30"
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-500 border border-white/10"
             title={t("badgeLoopbackTooltip")}
           >
             {t("badgeLocal")}
@@ -67,7 +67,7 @@ export default function ApiEndpointsTab() {
         )}
         {ep.alwaysProtected && (
           <span
-            className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 border border-red-500/30"
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/15 text-red-500 border border-white/10"
             title={t("badgeAlwaysProtectedTooltip")}
           >
             {t("badgeProtected")}
@@ -75,7 +75,7 @@ export default function ApiEndpointsTab() {
         )}
         {ep.internal && (
           <span
-            className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-500/15 text-gray-400 border border-gray-500/30"
+            className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-500/15 text-gray-400 border border-white/10"
             title={t("badgeInternalTooltip")}
           >
             {t("badgeInternal")}
@@ -492,7 +492,7 @@ export default function ApiEndpointsTab() {
           {/* Endpoint groups */}
           {Object.entries(groupedEndpoints).map(([tag, endpoints]) => (
             <Card key={tag} className="overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-black/5 dark:border-white/5">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-black/5 dark:border-white/10">
                 <span className="material-symbols-outlined text-[14px] text-primary">folder</span>
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
                   {tag}

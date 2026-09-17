@@ -145,7 +145,7 @@ export default function ClaudeFastModeTab() {
                       checked={checked}
                       onChange={(e) => toggleModel(modelId, e.target.checked)}
                       disabled={loading || saving}
-                      className="h-4 w-4 rounded border-black/20 dark:border-white/20"
+                      className="h-4 w-4 rounded border-black/20 dark:border-white/10"
                       aria-label={t("claudeFastModeModelCheckbox", { model: modelId })}
                     />
                     <span className="font-mono text-xs">{modelId}</span>

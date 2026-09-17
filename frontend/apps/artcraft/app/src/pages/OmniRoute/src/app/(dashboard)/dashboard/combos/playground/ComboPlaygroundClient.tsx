@@ -238,9 +238,9 @@ export default function ComboPlaygroundClient() {
                         target.status === "available"
                           ? "border-green-500/30 bg-green-500/5"
                           : target.status === "error"
-                            ? "border-red-500/30 bg-red-500/5"
+                            ? "border-white/10 bg-red-500/5"
                             : target.status === "unknown"
-                              ? "border-yellow-500/30 bg-yellow-500/5"
+                              ? "border-white/10 bg-yellow-500/5"
                               : "border-border bg-surface/50"
                       }`}
                     >

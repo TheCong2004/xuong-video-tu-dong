@@ -95,7 +95,7 @@ export function EffectsLibrary({
         })}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto border-t border-white/6">
+      <div className="min-h-0 flex-1 overflow-y-auto border-t border-white/10">
         {effects.length === 0 ? (
           <div className="px-4 py-10 text-center text-[13px] text-white/40">
             {emptyHint || "Không có dữ liệu từ BE / không khớp tìm kiếm."}
@@ -106,7 +106,7 @@ export function EffectsLibrary({
             return (
               <div
                 key={effect.id}
-                className="group flex items-center gap-3 border-b border-white/6 px-4 py-2.5 hover:bg-white/5"
+                className="group flex items-center gap-3 border-b border-white/10 px-4 py-2.5 hover:bg-white/5"
               >
                 <div
                   className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-white/10"

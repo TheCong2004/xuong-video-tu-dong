@@ -83,7 +83,7 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
             onRefreshReadiness();
             listBrowserWorkers().then(setWorkers).catch(() => {});
           }}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs font-medium border border-white/[0.08] transition"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300 text-xs font-medium border border-white/10 transition"
         >
           <RefreshCw className="h-3.5 w-3.5" />
           Test All Services
@@ -91,7 +91,7 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
       </div>
 
       {/* Tabs Navigation */}
-      <div className="flex items-center gap-2 border-b border-white/[0.08] pb-2 text-xs font-medium overflow-x-auto">
+      <div className="flex items-center gap-2 border-b border-white/10 pb-2 text-xs font-medium overflow-x-auto">
         <button
           type="button"
           onClick={() => setActiveTab('general')}
@@ -123,7 +123,7 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
           onClick={() => setActiveTab('diagnostics')}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl transition ${
             activeTab === 'diagnostics'
-              ? 'bg-rose-500/20 text-rose-300 font-semibold border border-rose-500/30'
+              ? 'bg-rose-500/20 text-rose-300 font-semibold border border-white/10'
               : 'text-zinc-400 hover:text-zinc-200'
           }`}
         >
@@ -134,11 +134,11 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
 
       {/* Tab Contents */}
       {activeTab === 'general' && (
-        <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-5 text-xs">
+        <div className="rounded-2xl bg-[#121622] border border-white/10 p-6 space-y-5 text-xs">
           <h3 className="text-sm font-bold text-white">Production Scheduler Configuration</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-3">
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-3">
               <div>
                 <span className="font-semibold text-white">Bounded Concurrent Job Scheduler (P0)</span>
                 <p className="text-zinc-400 text-[11px] mt-0.5">
@@ -151,7 +151,7 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
                   value={maxConcurrency}
                   onChange={(e) => handleSaveConcurrency(Number(e.target.value))}
                   disabled={savingSettings}
-                  className="px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.1] text-white font-semibold text-xs focus:outline-none focus:border-rose-500"
+                  className="px-3 py-2 rounded-xl bg-[#171b26] border border-white/10 text-white font-semibold text-xs focus:outline-none focus:border-rose-500"
                 >
                   <option value={1}>1 Job (Serial execution)</option>
                   <option value={2}>2 Concurrent Jobs</option>
@@ -167,12 +167,12 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] space-y-2">
+            <div className="p-4 rounded-xl bg-white/[0.02] border border-white/10 space-y-2">
               <span className="font-semibold text-white">Output Root Path Policy</span>
               <p className="text-zinc-400 text-[11px]">
                 Quy tắc lưu trữ tự động của hệ thống:
               </p>
-              <div className="p-2.5 rounded-lg bg-black/40 border border-white/[0.05] font-mono text-[10px] text-zinc-300">
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/10 font-mono text-[10px] text-zinc-300">
                 &lt;page.output_root&gt;\&lt;DD-MM-YYYY&gt;\&lt;filename&gt;
               </div>
               <p className="text-[10px] text-zinc-500">
@@ -184,34 +184,34 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
       )}
 
       {activeTab === 'workers' && (
-        <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-5 text-xs">
+        <div className="rounded-2xl bg-[#121622] border border-white/10 p-6 space-y-5 text-xs">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold text-white">Active Donut Browser Worker Profiles</h3>
               <p className="text-zinc-400 text-[11px]">Danh sách các browser worker đang chạy và kết nối với Donut Browser runtime.</p>
             </div>
-            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-400 border border-white/10">
               {workers.length} Workers Trực tuyến
             </span>
           </div>
 
           <div className="space-y-3">
             {workers.length === 0 ? (
-              <div className="p-8 rounded-xl bg-white/[0.02] border border-white/[0.05] text-center text-xs text-zinc-500">
+              <div className="p-8 rounded-xl bg-white/[0.02] border border-white/10 text-center text-xs text-zinc-500">
                 {loadingWorkers ? 'Đang truy vấn Donut Browser runtime...' : 'Không có browser worker nào trực tuyến. Hãy khởi động Donut Browser.'}
               </div>
             ) : (
               workers.map((w) => (
-                <div key={w.worker_id} className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+                <div key={w.worker_id} className="flex items-center justify-between p-3.5 rounded-xl bg-white/[0.02] border border-white/10">
                   <div className="flex items-center gap-3">
                     <span className={`h-2.5 w-2.5 rounded-full ${w.grok_logged_in ? 'bg-emerald-400' : 'bg-amber-400'}`} />
                     <div>
                       <div className="font-semibold text-white flex items-center gap-2">
                         {w.profile_name || w.profile_id || w.worker_id}
                         {w.grok_logged_in ? (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Grok Logged In</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-emerald-500/10 text-emerald-400 border border-white/10">Grok Logged In</span>
                         ) : (
-                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/10 text-amber-400 border border-amber-500/20">Auth Required</span>
+                          <span className="px-1.5 py-0.2 rounded text-[9px] bg-amber-500/10 text-amber-400 border border-white/10">Auth Required</span>
                         )}
                       </div>
                       <div className="text-[10px] text-zinc-500 font-mono">
@@ -230,12 +230,12 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
       )}
 
       {activeTab === 'diagnostics' && (
-        <div className="rounded-2xl bg-[#121622] border border-white/[0.08] p-6 space-y-4 text-xs">
+        <div className="rounded-2xl bg-[#121622] border border-white/10 p-6 space-y-4 text-xs">
           <h3 className="text-sm font-bold text-white">Backend Readiness Probes</h3>
 
           <div className="space-y-2">
             {readiness.services.map((svc) => (
-              <div key={svc.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/[0.05]">
+              <div key={svc.id} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/10">
                 <div className="flex items-center gap-2.5">
                   <span className={`h-2 w-2 rounded-full ${
                     svc.status === 'ready' ? 'bg-emerald-400' : svc.status === 'auth_required' ? 'bg-amber-400' : 'bg-zinc-600'
@@ -249,10 +249,10 @@ export const SettingsDevView: React.FC<SettingsDevViewProps> = ({
                   <span className="text-[10px] font-mono text-zinc-500">{svc.latency_ms}ms</span>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
                     svc.status === 'ready'
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                      ? 'bg-emerald-500/10 text-emerald-400 border border-white/10'
                       : svc.status === 'auth_required'
-                      ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-                      : 'bg-zinc-800 text-zinc-500 border border-zinc-700'
+                      ? 'bg-amber-500/10 text-amber-400 border border-white/10'
+                      : 'bg-zinc-800 text-zinc-500 border border-white/10'
                   }`}>
                     {svc.status}
                   </span>

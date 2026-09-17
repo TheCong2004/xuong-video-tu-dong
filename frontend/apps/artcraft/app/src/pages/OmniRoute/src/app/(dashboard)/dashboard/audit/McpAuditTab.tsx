@@ -247,8 +247,8 @@ export default function McpAuditTab() {
                       <span
                         className={`rounded-full border px-2 py-1 text-xs font-medium ${
                           entry.success
-                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
-                            : "border-red-500/30 bg-red-500/10 text-red-600"
+                            ? "border-white/10 bg-emerald-500/10 text-emerald-600"
+                            : "border-white/10 bg-red-500/10 text-red-600"
                         }`}
                       >
                         {entry.success ? t("success") : entry.errorCode || t("failure")}

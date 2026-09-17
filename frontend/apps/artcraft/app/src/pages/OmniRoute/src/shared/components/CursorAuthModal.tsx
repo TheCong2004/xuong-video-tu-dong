@@ -131,7 +131,7 @@ export default function CursorAuthModal({
 
             {/* Info message if not auto-detected */}
             {!autoDetected && !error && (
-              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-white/10 dark:border-white/10">
                 <div className="flex gap-2">
                   <span className="material-symbols-outlined text-blue-600 dark:text-blue-400">
                     info
@@ -172,7 +172,7 @@ export default function CursorAuthModal({
 
             {/* Error Display */}
             {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-white/10 dark:border-white/10">
                 <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
               </div>
             )}

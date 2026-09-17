@@ -542,7 +542,7 @@ export default function ProxyConfigModal({
         <div className="flex flex-col gap-5">
           {/* Inheritance indicator */}
           {level !== "global" && !hasOwnProxy && inheritedFrom && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/20 text-sm">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-500/10 border border-white/10 text-sm">
               <span className="material-symbols-outlined text-blue-400 text-base">
                 subdirectory_arrow_right
               </span>
@@ -699,7 +699,7 @@ export default function ProxyConfigModal({
 
           {/* Test Result */}
           {formError && (
-            <div className="px-4 py-3 rounded-lg border border-red-500/30 bg-red-500/10 text-sm text-red-400">
+            <div className="px-4 py-3 rounded-lg border border-white/10 bg-red-500/10 text-sm text-red-400">
               {formError}
             </div>
           )}
@@ -708,8 +708,8 @@ export default function ProxyConfigModal({
             <div
               className={`flex items-center gap-3 px-4 py-3 rounded-lg border ${
                 testResult.success
-                  ? "bg-emerald-500/10 border-emerald-500/30"
-                  : "bg-red-500/10 border-red-500/30"
+                  ? "bg-emerald-500/10 border-white/10"
+                  : "bg-red-500/10 border-white/10"
               }`}
             >
               <span

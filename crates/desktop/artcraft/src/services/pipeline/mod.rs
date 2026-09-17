@@ -2,6 +2,7 @@ pub mod artifact_store;
 pub mod bulk_import_service;
 pub mod caption_segmenter;
 pub mod capcut;
+pub mod capcut_draft_engine;
 pub mod clients;
 pub mod contracts;
 pub mod events;

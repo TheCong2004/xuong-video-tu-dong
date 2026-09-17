@@ -266,7 +266,7 @@ export function NetworkSection({ highlightId }: NetworkSectionProps) {
 
               {/* macOS Permission Warning */}
               {navigator.platform.includes('Mac') && (
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-white/10">
                   <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 text-xs">
                     <p className="font-medium text-amber-500">{t('network.fullDiskAccess')}</p>
@@ -296,7 +296,7 @@ export function NetworkSection({ highlightId }: NetworkSectionProps) {
 
               {/* Windows Browser Lock Warning */}
               {navigator.platform.includes('Win') && (
-                <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-500/10 border border-white/10">
                   <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                   <div className="flex-1 text-xs">
                     <p className="font-medium text-amber-500">{t('network.browserMustBeClosed')}</p>

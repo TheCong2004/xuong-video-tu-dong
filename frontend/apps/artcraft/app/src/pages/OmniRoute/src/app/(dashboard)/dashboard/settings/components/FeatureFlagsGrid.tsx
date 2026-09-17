@@ -318,7 +318,7 @@ export default function FeatureFlagsGrid() {
       {/* Pending-restart banner — shown when at least one requiresRestart flag
           was toggled in this session. */}
       {pendingRestartKeys.size > 0 && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/40 dark:bg-amber-500/10">
+        <div className="rounded-xl border border-white/10 bg-amber-50 p-4 dark:border-white/10 dark:bg-amber-500/10">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-start gap-3">
               <span className="material-symbols-outlined text-amber-600 dark:text-amber-300">
@@ -336,7 +336,7 @@ export default function FeatureFlagsGrid() {
             {!showRestartConfirm ? (
               <button
                 onClick={() => setShowRestartConfirm(true)}
-                className="shrink-0 rounded-lg border border-amber-300 bg-white/70 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-400/40 dark:bg-transparent dark:text-amber-300 dark:hover:bg-amber-500/20"
+                className="shrink-0 rounded-lg border border-white/10 bg-white/70 px-4 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100 dark:border-white/10 dark:bg-transparent dark:text-amber-300 dark:hover:bg-amber-500/20"
               >
                 {t("restartServer")}
               </button>
@@ -364,7 +364,7 @@ export default function FeatureFlagsGrid() {
 
       {/* Explanation banner for the synthetic "Requires Restart" view */}
       {category === "__restart" && (
-        <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-200">
+        <div className="rounded-xl border border-white/10 bg-sky-50 p-3 text-sm text-sky-800 dark:border-white/10 dark:bg-blue-500/10 dark:text-blue-200">
           <div className="flex items-start gap-2">
             <span className="material-symbols-outlined text-sky-600 dark:text-blue-300">info</span>
             <p>
@@ -391,7 +391,7 @@ export default function FeatureFlagsGrid() {
 
       {/* Error state */}
       {!loading && error && (
-        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-500/30 dark:bg-red-500/10">
+        <div className="flex items-center justify-between rounded-xl border border-white/10 bg-red-50 p-4 dark:border-white/10 dark:bg-red-500/10">
           <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
           <button
             onClick={loadFlags}
@@ -441,7 +441,7 @@ export default function FeatureFlagsGrid() {
               {!showResetConfirm ? (
                 <button
                   onClick={() => setShowResetConfirm(true)}
-                  className="rounded-lg border border-red-200 bg-red-50/60 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-red-500/40 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-500/10"
+                  className="rounded-lg border border-white/10 bg-red-50/60 px-4 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-100 dark:border-white/10 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-500/10"
                 >
                   {t("resetAllOverrides")}
                 </button>

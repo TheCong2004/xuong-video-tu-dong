@@ -10,11 +10,11 @@ interface CaptionEngineBarProps {
 
 export function CaptionEngineBar({ onGenerate }: CaptionEngineBarProps) {
   return (
-    <div className="shrink-0 space-y-3 border-t border-white/8 bg-[#1a1b1f] px-4 py-3">
+    <div className="shrink-0 space-y-3 border-t border-white/10 bg-[#10141e] px-4 py-3">
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="flex flex-1 items-center justify-between rounded-lg border border-white/10 bg-[#252830] px-3 py-2 text-left text-[13px] text-white/60 hover:border-white/20"
+          className="flex flex-1 items-center justify-between rounded-lg border border-white/10 bg-[#0b0f17] px-3 py-2 text-left text-xs text-zinc-300 hover:border-white/20"
         >
           <span>Choose preset...</span>
           <FontAwesomeIcon
@@ -24,7 +24,7 @@ export function CaptionEngineBar({ onGenerate }: CaptionEngineBarProps) {
         </button>
         <button
           type="button"
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-[#252830] text-white/55 hover:bg-[#2a2d35]"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-[#0b0f17] text-zinc-400 hover:bg-white/[0.04]"
         >
           <FontAwesomeIcon icon={faBars} />
         </button>

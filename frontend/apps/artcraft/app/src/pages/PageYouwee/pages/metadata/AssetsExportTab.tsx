@@ -377,7 +377,7 @@ export function AssetsExportTab() {
                     className={cn(
                       'flex items-center gap-3 p-3 rounded-md border bg-card/50 transition-colors',
                       item.status === 'completed' && 'border-green-500/30 bg-green-500/5',
-                      item.status === 'error' && 'border-red-500/30 bg-red-500/5',
+                      item.status === 'error' && 'border-white/10 bg-red-500/5',
                       item.status === 'fetching' && 'border-primary/30 bg-primary/5',
                     )}
                   >

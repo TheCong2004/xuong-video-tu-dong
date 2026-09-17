@@ -89,12 +89,3 @@ pub fn init_vynaro(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri:
   ])
 }
 
-/// Tauri 入口（mobile 端另开 entry point）
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-  vynaro_core::init_logging();
-
-  let builder = tauri::Builder::default().plugin(tauri_plugin_opener::init()).plugin(tauri_plugin_dialog::init());
-
-  init_vynaro(builder).run(tauri::generate_context!()).expect("error while running tauri application");
-}

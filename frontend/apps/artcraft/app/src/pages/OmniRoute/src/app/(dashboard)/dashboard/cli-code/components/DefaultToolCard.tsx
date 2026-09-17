@@ -421,18 +421,18 @@ export default function DefaultToolCard({
           const isWarning = note.type === "warning";
           const isError = note.type === "cloudCheck" && !cloudEnabled;
 
-          let bgClass = "bg-blue-500/10 border-blue-500/30";
+          let bgClass = "bg-blue-500/10 border-white/10";
           let textClass = "text-blue-600 dark:text-blue-400";
           let iconClass = "text-blue-500";
           let icon = "info";
 
           if (isWarning) {
-            bgClass = "bg-yellow-500/10 border-yellow-500/30";
+            bgClass = "bg-yellow-500/10 border-white/10";
             textClass = "text-yellow-600 dark:text-yellow-400";
             iconClass = "text-yellow-500";
             icon = "warning";
           } else if (isError) {
-            bgClass = "bg-red-500/10 border-red-500/30";
+            bgClass = "bg-red-500/10 border-white/10";
             textClass = "text-red-600 dark:text-red-400";
             iconClass = "text-red-500";
             icon = "error";
@@ -470,7 +470,7 @@ export default function DefaultToolCard({
           </div>
         )}
         {!checkingRuntime && runtimeStatus && !runtimeStatus.error && (
-          <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-blue-500/10 border border-white/10 rounded-lg">
             <span className="material-symbols-outlined text-blue-500 text-lg">
               {runtimeStatus.reason === "not_required"
                 ? "info"
@@ -510,7 +510,7 @@ export default function DefaultToolCard({
           </div>
         )}
         {!checkingRuntime && runtimeStatus?.error && (
-          <div className="flex items-start gap-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-red-500/10 border border-white/10 rounded-lg">
             <span className="material-symbols-outlined text-red-500 text-lg">error</span>
             <p className="text-sm text-red-600 dark:text-red-400">
               {t("failedCheckRuntimeStatus")}

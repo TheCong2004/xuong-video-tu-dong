@@ -70,14 +70,14 @@ export const FlowordPipelineVisualizer: React.FC<FlowordPipelineVisualizerProps>
             >
               {/* Optional Header Image Thumbnail */}
               {step.imageUrl && (
-                <div className="relative h-24 w-full -mt-4 -mx-4 mb-3 overflow-hidden rounded-t-2xl border-b border-slate-800">
+                <div className="relative h-24 w-full -mt-4 -mx-4 mb-3 overflow-hidden rounded-t-2xl border-b border-white/10">
                   <img
                     src={step.imageUrl}
                     alt={step.title}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-80"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#181b24] via-transparent to-black/30" />
-                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-amber-300 font-mono font-bold text-[10px] border border-amber-500/30">
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm text-amber-300 font-mono font-bold text-[10px] border border-white/10">
                     Step #{step.stepNumber}
                   </span>
                 </div>
@@ -88,7 +88,7 @@ export const FlowordPipelineVisualizer: React.FC<FlowordPipelineVisualizerProps>
                 <div className="flex items-start justify-between gap-2 mb-1.5">
                   <div className="flex items-center gap-2">
                     {!step.imageUrl && (
-                      <span className="w-5 h-5 rounded-md bg-amber-400/20 text-amber-300 font-mono font-bold text-xs flex items-center justify-center border border-amber-400/30">
+                      <span className="w-5 h-5 rounded-md bg-amber-400/20 text-amber-300 font-mono font-bold text-xs flex items-center justify-center border border-white/10">
                         #{step.stepNumber}
                       </span>
                     )}
@@ -98,17 +98,17 @@ export const FlowordPipelineVisualizer: React.FC<FlowordPipelineVisualizerProps>
                   </div>
 
                   {isActiveNode ? (
-                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold flex items-center gap-1 shrink-0 animate-pulse">
+                    <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-white/10 text-[10px] font-mono font-bold flex items-center gap-1 shrink-0 animate-pulse">
                       <Loader2 className="w-3 h-3 animate-spin text-amber-400" />
                       RUNNING
                     </span>
                   ) : isCompleted ? (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-mono font-bold flex items-center gap-1 shrink-0">
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-white/10 text-[10px] font-mono font-bold flex items-center gap-1 shrink-0">
                       <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                       READY
                     </span>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-mono font-bold flex items-center gap-1 shrink-0">
+                    <span className="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-white/10 text-[10px] font-mono font-bold flex items-center gap-1 shrink-0">
                       <Clock className="w-3 h-3 text-slate-400" />
                       READY
                     </span>
@@ -125,7 +125,7 @@ export const FlowordPipelineVisualizer: React.FC<FlowordPipelineVisualizerProps>
               </div>
 
               {/* Selected Function Tag */}
-              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between font-mono text-[11px]">
+              <div className="pt-2 border-t border-white/10 flex items-center justify-between font-mono text-[11px]">
                 <span className="text-slate-400 truncate max-w-[200px]" title={step.selectedFunction}>
                   Fn: {step.selectedFunction || step.functions[0]}
                 </span>

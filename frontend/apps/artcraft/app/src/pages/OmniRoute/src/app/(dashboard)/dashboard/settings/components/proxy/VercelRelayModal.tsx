@@ -70,7 +70,7 @@ export default function VercelRelayModal({ isOpen, onClose, onDeployed }: Vercel
           </button>
         </div>
 
-        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded p-3 text-xs text-yellow-300">
+        <div className="bg-yellow-500/10 border border-white/10 rounded p-3 text-xs text-yellow-300">
           {t("vercelRelayWarning")}
         </div>
 
@@ -108,7 +108,7 @@ export default function VercelRelayModal({ isOpen, onClose, onDeployed }: Vercel
         </div>
 
         {error && (
-          <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded p-2">
+          <div className="text-sm text-red-400 bg-red-500/10 border border-white/10 rounded p-2">
             {error}
           </div>
         )}

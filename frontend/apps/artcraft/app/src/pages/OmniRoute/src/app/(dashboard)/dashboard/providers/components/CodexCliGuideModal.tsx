@@ -57,7 +57,7 @@ const markdownComponents: Components = {
       );
     }
     return (
-      <code className="rounded border border-black/5 bg-bg-subtle px-1 py-0.5 font-mono text-[12px] text-text-main dark:border-white/5">
+      <code className="rounded border border-black/5 bg-bg-subtle px-1 py-0.5 font-mono text-[12px] text-text-main dark:border-white/10">
         {children}
       </code>
     );

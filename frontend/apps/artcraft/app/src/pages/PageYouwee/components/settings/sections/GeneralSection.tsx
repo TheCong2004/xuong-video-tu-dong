@@ -554,7 +554,7 @@ export function GeneralSection({ highlightId }: GeneralSectionProps) {
               {cliStatus && (cliStatus.target_path || cliStatusNote) && (
                 <div className="space-y-2 text-xs text-muted-foreground">
                   {cliStatus.target_path && (
-                    <div className="flex flex-col gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-left sm:flex-row sm:items-center">
+                    <div className="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-emerald-500/10 px-3 py-2 text-left sm:flex-row sm:items-center">
                       <span className="font-medium text-emerald-700 dark:text-emerald-300">
                         {t('extension.cliInstalledAtLabel')}
                       </span>

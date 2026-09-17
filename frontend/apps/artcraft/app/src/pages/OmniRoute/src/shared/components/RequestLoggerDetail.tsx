@@ -338,8 +338,8 @@ export default function RequestLoggerDetail({
     cacheSource === "semantic" ? "Semantic (OmniRoute)" : "Upstream (Provider)";
   const cacheSourceClassName =
     cacheSource === "semantic"
-      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
-      : "bg-sky-500/20 text-sky-700 dark:text-sky-300 border-sky-500/30";
+      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-white/10"
+      : "bg-sky-500/20 text-sky-700 dark:text-sky-300 border-white/10";
   const accountLabel = maskAccount(detail?.account || log.account, emailsVisible);
   const codexAccountRotation = getCodexAccountRotation(detail);
   return (
@@ -361,11 +361,11 @@ export default function RequestLoggerDetail({
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 {log.active ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-white/10">
                     <span className="inline-block h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin" />
                   </span>
                 ) : log.status === 0 ? (
-                  <span className="inline-block px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                  <span className="inline-block px-2.5 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-white/10">
                     Completed
                   </span>
                 ) : (
@@ -673,7 +673,7 @@ export default function RequestLoggerDetail({
 
           {/* Error Message */}
           {(detail?.error || log.error) && (
-            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+            <div className="p-4 rounded-xl bg-red-500/10 border border-white/10">
               <div className="flex items-center justify-between mb-1">
                 <div className="text-[10px] text-red-600 dark:text-red-400 uppercase tracking-wider font-bold">
                   Error
@@ -683,7 +683,7 @@ export default function RequestLoggerDetail({
                     onClick={handleUnblockAll}
                     disabled={unblockAllBusy}
                     className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-lg
-                      bg-amber-500/10 border border-amber-500/30 text-amber-600
+                      bg-amber-500/10 border border-white/10 text-amber-600
                       hover:bg-amber-500/15 hover:border-amber-500/50
                       dark:text-amber-400 transition-all duration-200
                       disabled:opacity-50 disabled:cursor-not-allowed"
@@ -723,7 +723,7 @@ export default function RequestLoggerDetail({
                     onClick={handleUnblockModel}
                     disabled={unblocking}
                     className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-lg
-                      bg-amber-500/10 border border-amber-500/30 text-amber-600
+                      bg-amber-500/10 border border-white/10 text-amber-600
                       hover:bg-amber-500/15 hover:border-amber-500/50
                       dark:text-amber-400 transition-all duration-200
                       disabled:opacity-50 disabled:cursor-not-allowed"
@@ -822,7 +822,7 @@ export default function RequestLoggerDetail({
           )}
 
           {detailIssue && (
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-white/10">
               <div className="text-[10px] text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1 font-bold">
                 Detail Status
               </div>

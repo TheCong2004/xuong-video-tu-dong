@@ -80,7 +80,7 @@ export default function CompressionLogTab() {
                   <span className="font-mono text-text-main">
                     {entry.provider}/{entry.model}
                   </span>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-400 border border-white/10">
                     {stats.mode}
                   </span>
                 </div>
@@ -121,7 +121,7 @@ export default function CompressionLogTab() {
                   {stats.rulesApplied.map((rule) => (
                     <span
                       key={rule}
-                      className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-400 border border-purple-500/20"
+                      className="px-1.5 py-0.5 rounded text-[10px] bg-purple-500/10 text-purple-400 border border-white/10"
                     >
                       {rule.replace(/_/g, " ")}
                     </span>

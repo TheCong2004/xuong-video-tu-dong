@@ -648,6 +648,10 @@ dependencies = [
  "base64 0.22.1",
  "build_metadata",
  "bytes",
+ "capcut-capcut",
+ "capcut-core",
+ "capcut-ffmpeg",
+ "capcut-validate",
  "chrono",
  "cookie_store 0.0.1",
  "directories",
@@ -1968,6 +1972,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b96ec4966b5813e2c0507c1f86115c8c5abaadc3980879c3424042a02fd1ad3"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "capcut-capcut"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "capcut-core",
+ "serde",
+ "serde_json",
+ "sha2 0.10.8",
+ "thiserror 2.0.18",
+ "uuid 1.22.0",
+]
+
+[[package]]
+name = "capcut-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "uuid 1.22.0",
+]
+
+[[package]]
+name = "capcut-ffmpeg"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "capcut-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "capcut-validate"
+version = "0.1.0"
+dependencies = [
+ "capcut-capcut",
+ "capcut-core",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

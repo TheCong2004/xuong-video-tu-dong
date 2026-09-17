@@ -170,7 +170,7 @@ export default function MitmProxyTab() {
   };
 
   const statusTone = status.running
-    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
+    ? "border-white/10 bg-emerald-500/10 text-emerald-600"
     : "border-border bg-sidebar text-text-muted";
 
   return (
@@ -206,8 +206,8 @@ export default function MitmProxyTab() {
         <div
           className={`mb-5 rounded-lg border px-4 py-3 text-sm ${
             feedback.type === "success"
-              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
-              : "border-red-500/30 bg-red-500/10 text-red-600"
+              ? "border-white/10 bg-emerald-500/10 text-emerald-600"
+              : "border-white/10 bg-red-500/10 text-red-600"
           }`}
         >
           {feedback.message}
@@ -293,8 +293,8 @@ export default function MitmProxyTab() {
               <span
                 className={`rounded-full border px-2 py-1 text-xs ${
                   status.certExists
-                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600"
-                    : "border-amber-500/30 bg-amber-500/10 text-amber-600"
+                    ? "border-white/10 bg-emerald-500/10 text-emerald-600"
+                    : "border-white/10 bg-amber-500/10 text-amber-600"
                 }`}
               >
                 {status.certExists ? t("available") : t("missing")}

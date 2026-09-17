@@ -15,20 +15,20 @@ interface FlowNodeProps {
 const COLOR_MAP: Record<FlowNodeProps["color"], { border: string; bg: string; text: string }> = {
   primary: { border: "border-primary/30", bg: "bg-primary/5", text: "text-primary" },
   orange: { border: "border-orange-500/30", bg: "bg-orange-500/5", text: "text-orange-500" },
-  blue: { border: "border-blue-500/30", bg: "bg-blue-500/5", text: "text-blue-500" },
+  blue: { border: "border-white/10", bg: "bg-blue-500/5", text: "text-blue-500" },
   emerald: {
-    border: "border-emerald-500/30",
+    border: "border-white/10",
     bg: "bg-emerald-500/5",
     text: "text-emerald-500",
   },
-  amber: { border: "border-amber-500/30", bg: "bg-amber-500/5", text: "text-amber-500" },
+  amber: { border: "border-white/10", bg: "bg-amber-500/5", text: "text-amber-500" },
   purple: {
-    border: "border-purple-500/30",
+    border: "border-white/10",
     bg: "bg-purple-500/5",
     text: "text-purple-500",
   },
-  cyan: { border: "border-cyan-500/30", bg: "bg-cyan-500/5", text: "text-cyan-500" },
-  pink: { border: "border-pink-500/30", bg: "bg-pink-500/5", text: "text-pink-500" },
+  cyan: { border: "border-white/10", bg: "bg-cyan-500/5", text: "text-cyan-500" },
+  pink: { border: "border-white/10", bg: "bg-pink-500/5", text: "text-pink-500" },
 };
 
 function FlowNode({ icon, color, title, example, tooltipContent }: FlowNodeProps) {

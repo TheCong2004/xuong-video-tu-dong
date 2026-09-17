@@ -127,25 +127,25 @@ export function LogEntry({ log }: LogEntryProps) {
     command: {
       icon: Terminal,
       label: t('logs.entry.command'),
-      className: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/25',
+      className: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-white/10',
       messageClass: 'text-sky-700 dark:text-sky-300',
     },
     success: {
       icon: CheckCircle,
       label: t('logs.entry.success'),
-      className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-emerald-500/25',
+      className: 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border-white/10',
       messageClass: 'text-foreground',
     },
     error: {
       icon: XCircle,
       label: t('logs.entry.error'),
-      className: 'text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/25',
+      className: 'text-red-600 dark:text-red-400 bg-red-500/10 border-white/10',
       messageClass: 'text-red-600 dark:text-red-400',
     },
     stderr: {
       icon: AlertTriangle,
       label: t('logs.entry.stderr'),
-      className: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/25',
+      className: 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-white/10',
       messageClass: 'text-amber-700 dark:text-amber-300',
     },
     info: {

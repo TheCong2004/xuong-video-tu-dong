@@ -5,13 +5,13 @@ import { FlowordHeader } from "./components/FlowordHeader";
 import { DashboardView } from "./components/views/DashboardView";
 import { JobsView } from "./components/views/JobsView";
 import { PagesView } from "./components/views/PagesView";
-import { StudioView } from "./components/views/StudioView";
 import { ProductionPipelineView } from "./components/views/ProductionPipelineView";
 import { ScriptMarketItem, ScriptMarketView } from "./components/views/ScriptMarketView";
 import { BulkImportView } from "./components/views/BulkImportView";
 import { PublishView } from "./components/views/PublishView";
 import { HistoryView } from "./components/views/HistoryView";
 import { SettingsView } from "./components/views/SettingsView";
+import ProvidersPage from "../../OmniRoute/src/app/(dashboard)/dashboard/providers/page";
 import { ConfigureDrawer } from "./components/ConfigureDrawer";
 import { StepDetailModal } from "./components/StepDetailModal";
 import { PageManagementModal } from "./components/PageManagementModal";
@@ -227,6 +227,13 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
   const [selectedJobId, setSelectedJobId] = useState<string | undefined>(
     undefined,
   );
+  const [hasOpenedOmniRoute, setHasOpenedOmniRoute] = useState<boolean>(false);
+  const [hasOpenedSettings, setHasOpenedSettings] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (activeView === "omniroute") setHasOpenedOmniRoute(true);
+    if (activeView === "settings") setHasOpenedSettings(true);
+  }, [activeView]);
 
   // Workflow State
   const [workflowInput, setWorkflowInput] = useState<WorkflowInput>(
@@ -521,6 +528,7 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
         research_enabled: inputToUse.researchEnabled,
         target_platform: inputToUse.targetPlatform,
         aspect_ratio: inputToUse.aspectRatio,
+        editing_preset: inputToUse.editingPreset,
         target_duration_seconds: inputToUse.targetDurationSeconds,
         output_mode: inputToUse.outputMode,
         title: inputToUse.title || inputToUse.topic,
@@ -732,10 +740,12 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
           }
           onSaveWorkflow={() => toast.success("Đã lưu cấu hình pipeline.")}
           onConfigure={() => setConfigureOpen(true)}
+          activeView={activeView}
+          onChangeView={setActiveView}
         />
 
         {/* Dynamic Views Router */}
-        <main className="flex-1 overflow-y-auto">
+        <main className={`flex-1 ${activeView === "omniroute" || activeView === "settings" ? "overflow-hidden flex flex-col" : "overflow-y-auto"}`}>
           {activeView === "dashboard" && <DashboardView />}
 
           {activeView === "production" && (
@@ -765,18 +775,6 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
             />
           )}
 
-          {activeView === "studio" && (
-            <StudioView
-              pages={pages}
-              activePageId={activePageId || undefined}
-              onSelectPage={(id) => setActivePageId(id)}
-              activeRun={activeWorkflowRun}
-              isRunning={running}
-              onRunWorkflow={handleRunWorkflow}
-              onCancelWorkflow={handleCancelWorkflow}
-              profiles={profiles}
-            />
-          )}
 
           {activeView === "bulk_import" && <BulkImportView />}
 
@@ -807,7 +805,17 @@ export const FlowordApp: React.FC<FlowordAppProps> = ({
 
           {activeView === "history" && <HistoryView />}
 
-          {activeView === "settings" && <SettingsView />}
+          {hasOpenedSettings && (
+            <div className={activeView === "settings" ? "h-full w-full flex-1 flex flex-col min-h-0" : "hidden"}>
+              <SettingsView />
+            </div>
+          )}
+
+          {hasOpenedOmniRoute && (
+            <div className={activeView === "omniroute" ? "w-full h-full flex-1 flex flex-col min-h-0 text-slate-100" : "hidden"}>
+              <ProvidersPage />
+            </div>
+          )}
         </main>
       </div>
 

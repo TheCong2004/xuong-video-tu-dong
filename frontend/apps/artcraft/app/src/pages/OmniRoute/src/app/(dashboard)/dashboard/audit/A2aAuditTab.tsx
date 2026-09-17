@@ -15,10 +15,10 @@ type TaskListResponse = {
 const A2A_PAGE_SIZE = 25;
 
 const STATE_STYLES: Record<TaskState, string> = {
-  submitted: "border-amber-500/30 bg-amber-500/10 text-amber-600",
-  working: "border-blue-500/30 bg-blue-500/10 text-blue-600",
-  completed: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
-  failed: "border-red-500/30 bg-red-500/10 text-red-600",
+  submitted: "border-white/10 bg-amber-500/10 text-amber-600",
+  working: "border-white/10 bg-blue-500/10 text-blue-600",
+  completed: "border-white/10 bg-emerald-500/10 text-emerald-600",
+  failed: "border-white/10 bg-red-500/10 text-red-600",
   cancelled: "border-border bg-sidebar/40 text-text-muted",
 };
 

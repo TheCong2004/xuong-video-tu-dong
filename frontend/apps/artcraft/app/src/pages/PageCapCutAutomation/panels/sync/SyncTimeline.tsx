@@ -106,10 +106,10 @@ export function SyncTimeline({
   const audios = segs.filter((s) => isAudio(s.track_type));
 
   return (
-    <div className="shrink-0 border-t border-white/8 bg-[#15161a] px-5 py-4">
+    <div className="shrink-0 border-t border-white/10 bg-[#15161a] px-5 py-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         {showSyncedBadge ? (
-          <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3.5 py-1 text-[12px] font-medium text-emerald-400">
+          <span className="rounded-full border border-white/10 bg-emerald-500/10 px-3.5 py-1 text-[12px] font-medium text-emerald-400">
             Synced
           </span>
         ) : (
@@ -163,7 +163,7 @@ export function SyncTimeline({
               videos.map((clip) => (
                 <div
                   key={clip.id}
-                  className="flex min-w-[100px] flex-col rounded-md border border-sky-400/30 bg-[#1e2430] px-2.5 py-2"
+                  className="flex min-w-[100px] flex-col rounded-md border border-white/10 bg-[#1e2430] px-2.5 py-2"
                 >
                   <span className="truncate font-mono text-[10px] text-sky-200/80">
                     {clip.id.slice(0, 10)}
@@ -185,7 +185,7 @@ export function SyncTimeline({
               audios.map((clip) => (
                 <div
                   key={clip.id}
-                  className="flex min-w-[100px] flex-col rounded-md border border-emerald-400/30 bg-[#152820] px-2.5 py-2"
+                  className="flex min-w-[100px] flex-col rounded-md border border-white/10 bg-[#152820] px-2.5 py-2"
                 >
                   <span className="truncate font-mono text-[10px] text-emerald-200/80">
                     {clip.id.slice(0, 10)}

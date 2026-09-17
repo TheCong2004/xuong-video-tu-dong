@@ -3,22 +3,22 @@
 import { cn } from "@/shared/utils/cn";
 
 const variants = {
-  primary: "bg-[image:var(--grad-brand)] text-white shadow-sm hover:brightness-105",
-  accent: "bg-accent text-white shadow-sm hover:bg-accent-hover",
+  primary: "bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-md shadow-indigo-600/20 hover:brightness-105 active:scale-[0.98]",
+  accent: "bg-indigo-600 text-white shadow-sm hover:bg-indigo-500 active:scale-[0.98]",
   secondary:
-    "bg-white dark:bg-white/10 border border-black/10 dark:border-white/10 text-text-main hover:bg-black/5 dark:hover:bg-white/5",
-  outline: "border border-black/15 dark:border-white/15 text-text-main hover:bg-black/5",
-  ghost: "text-text-muted hover:bg-black/5 dark:hover:bg-white/5 hover:text-text-main",
-  warning: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm",
-  danger: "bg-red-500 text-white hover:bg-red-600 shadow-sm",
+    "bg-[#1c2230] hover:bg-[#252c3d] border border-white/10 text-slate-100 font-medium active:scale-[0.98]",
+  outline: "border border-white/10 bg-transparent text-slate-200 hover:bg-slate-800 hover:text-white active:scale-[0.98]",
+  ghost: "text-slate-300 hover:bg-slate-800/80 hover:text-white active:scale-[0.98]",
+  warning: "bg-amber-500 text-white hover:bg-amber-600 shadow-sm active:scale-[0.98]",
+  danger: "bg-rose-500/10 hover:bg-rose-500/20 border border-white/10 text-rose-400 font-medium active:scale-[0.98]",
 };
 
 export type ButtonVariant = keyof typeof variants;
 
 const sizes = {
-  sm: "h-7 px-3 text-xs rounded-control",
-  md: "h-9 px-4 text-sm rounded-control",
-  lg: "h-11 px-6 text-sm rounded-control",
+  sm: "h-7 px-3 text-xs rounded-lg",
+  md: "h-9 px-4 text-sm rounded-lg",
+  lg: "h-11 px-6 text-sm rounded-lg",
 };
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {

@@ -35,9 +35,9 @@ export default function Card({
   return (
     <div
       className={cn(
-        "bg-surface",
-        "border border-border",
-        "rounded-card shadow-sm",
+        "bg-[#1e2030]",
+        "border border-white/10",
+        "rounded-xl shadow-sm",
         hover && "hover:shadow-md hover:border-primary/30 transition-all cursor-pointer",
         paddings[padding],
         className
@@ -48,13 +48,13 @@ export default function Card({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             {icon && (
-              <div className="p-2 rounded-lg bg-bg text-text-muted">
+              <div className="p-2 rounded-lg bg-[#131926] text-slate-400">
                 <span className="material-symbols-outlined text-[20px]">{icon}</span>
               </div>
             )}
             <div>
-              {title && <h3 className="text-text-main font-semibold">{title}</h3>}
-              {subtitle && <p className="text-sm text-text-muted">{subtitle}</p>}
+              {title && <h3 className="text-white font-semibold">{title}</h3>}
+              {subtitle && <p className="text-sm text-slate-400">{subtitle}</p>}
             </div>
           </div>
           {action}
@@ -76,7 +76,7 @@ Card.Section = function CardSection({ children, className, ...props }: CardSecti
       className={cn(
         "p-4 rounded-lg",
         "bg-black/[0.02] dark:bg-white/[0.02]",
-        "border border-border",
+        "border border-white/10",
         className
       )}
       {...props}
@@ -96,7 +96,7 @@ Card.Row = function CardRow({ children, className, ...props }: CardRowProps) {
     <div
       className={cn(
         "p-3 -mx-3 px-3 transition-colors",
-        "border-b border-border last:border-b-0",
+        "border-b border-white/10 last:border-b-0",
         "hover:bg-black/[0.02] dark:hover:bg-white/[0.02]",
         className
       )}
@@ -123,7 +123,7 @@ Card.ListItem = function CardListItem({
     <div
       className={cn(
         "group flex items-center justify-between p-3 -mx-3 px-3",
-        "border-b border-black/[0.03] dark:border-white/[0.03] last:border-b-0",
+        "border-b border-black/[0.03] dark:border-white/10 last:border-b-0",
         "hover:bg-black/[0.02] dark:hover:bg-white/[0.02]",
         "transition-colors",
         className

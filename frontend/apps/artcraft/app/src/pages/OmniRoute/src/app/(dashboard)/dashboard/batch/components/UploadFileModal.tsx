@@ -137,7 +137,7 @@ export default function UploadFileModal({ onClose, onUploaded }: Props) {
           {error && (
             <div
               role="alert"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 text-sm"
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-white/10 text-red-400 text-sm"
             >
               <span className="material-symbols-outlined text-[16px]">error</span>
               {error}
@@ -228,7 +228,7 @@ export default function UploadFileModal({ onClose, onUploaded }: Props) {
           >
             {uploading ? (
               <>
-                <span className="animate-spin inline-block rounded-full h-4 w-4 border-b-2 border-white" />
+                <span className="animate-spin inline-block rounded-full h-4 w-4 border-b-2 border-white/10" />
                 {t("uploadFileModalUploading")}
               </>
             ) : (

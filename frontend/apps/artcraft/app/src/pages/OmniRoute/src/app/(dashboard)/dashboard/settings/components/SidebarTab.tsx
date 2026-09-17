@@ -629,7 +629,7 @@ export default function SidebarTab() {
 
           {/* Confirm preset dialog */}
           {confirmPreset && (
-            <div className="mt-3 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 flex items-center gap-3">
+            <div className="mt-3 p-3 rounded-lg border border-white/10 bg-amber-500/5 flex items-center gap-3">
               <span className="material-symbols-outlined text-amber-500 text-[18px] shrink-0">
                 warning
               </span>

@@ -50,7 +50,7 @@ export const FlowDesignView: React.FC<FlowDesignViewProps> = ({
       </div>
 
       {/* Visual Pipeline Mapping Ribbon */}
-      <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl flex items-center justify-between overflow-x-auto gap-3 border border-slate-700/40">
+      <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl flex items-center justify-between overflow-x-auto gap-3 border border-white/10">
         {steps.map((step, idx) => (
           <React.Fragment key={step.id}>
             <div

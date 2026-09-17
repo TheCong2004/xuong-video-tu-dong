@@ -5,5 +5,6 @@ pub mod floword_commands;
 pub mod run_capcut_automation_command;
 pub mod capcut_automation_job_commands;
 pub mod capcut_mate_commands;
+pub mod capcut_draft_commands;
 pub mod capcut_automation_engine_commands;
 pub mod facebook_publishing_commands;

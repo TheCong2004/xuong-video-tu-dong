@@ -1,0 +1,10 @@
+[package]
+name = "capcut-validate"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+capcut-core = { path = "../core" }
+capcut-capcut = { path = "../capcut" }
+serde_json.workspace = true
+thiserror.workspace = true

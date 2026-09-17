@@ -1142,7 +1142,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
       },
       starting: {
         label: translateOrFallback("cloudflaredStarting", "Starting"),
-        className: "bg-blue-500/10 border-blue-500/30 text-blue-400",
+        className: "bg-blue-500/10 border-white/10 text-blue-400",
       },
       stopped: {
         label: translateOrFallback("cloudflaredStoppedState", "Stopped"),
@@ -1154,11 +1154,11 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
       },
       unsupported: {
         label: translateOrFallback("cloudflaredUnsupported", "Unsupported"),
-        className: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+        className: "bg-amber-500/10 border-white/10 text-amber-400",
       },
       error: {
         label: translateOrFallback("cloudflaredError", "Error"),
-        className: "bg-red-500/10 border-red-500/30 text-red-400",
+        className: "bg-red-500/10 border-white/10 text-red-400",
       },
     };
   const cloudflaredActionLabel = cloudflaredStatus?.running
@@ -1178,7 +1178,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
     },
     needs_login: {
       label: translateOrFallback("tailscaleNeedsLogin", "Needs Login"),
-      className: "bg-blue-500/10 border-blue-500/30 text-blue-400",
+      className: "bg-blue-500/10 border-white/10 text-blue-400",
     },
     stopped: {
       label: translateOrFallback("tailscaleStoppedState", "Stopped"),
@@ -1190,11 +1190,11 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
     },
     unsupported: {
       label: translateOrFallback("tailscaleUnsupported", "Unsupported"),
-      className: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+      className: "bg-amber-500/10 border-white/10 text-amber-400",
     },
     error: {
       label: translateOrFallback("tailscaleError", "Error"),
-      className: "bg-red-500/10 border-red-500/30 text-red-400",
+      className: "bg-red-500/10 border-white/10 text-red-400",
     },
   };
   const tailscaleActionLabel = tailscaleStatus?.running
@@ -1217,7 +1217,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
     },
     starting: {
       label: translateOrFallback("ngrokStarting", "Starting"),
-      className: "bg-blue-500/10 border-blue-500/30 text-blue-400",
+      className: "bg-blue-500/10 border-white/10 text-blue-400",
     },
     stopped: {
       label: translateOrFallback("ngrokStoppedState", "Stopped"),
@@ -1225,7 +1225,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
     },
     needs_auth: {
       label: translateOrFallback("ngrokNeedsAuth", "Needs Auth"),
-      className: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+      className: "bg-amber-500/10 border-white/10 text-amber-400",
     },
     not_installed: {
       label: translateOrFallback("ngrokNotInstalled", "Not installed"),
@@ -1233,11 +1233,11 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
     },
     unsupported: {
       label: translateOrFallback("ngrokUnsupported", "Unsupported"),
-      className: "bg-amber-500/10 border-amber-500/30 text-amber-400",
+      className: "bg-amber-500/10 border-white/10 text-amber-400",
     },
     error: {
       label: translateOrFallback("ngrokError", "Error"),
-      className: "bg-red-500/10 border-red-500/30 text-red-400",
+      className: "bg-red-500/10 border-white/10 text-red-400",
     },
   };
   const ngrokActionLabel = ngrokStatus?.running
@@ -1275,8 +1275,8 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
               cloudStatus.type === "success"
                 ? "bg-green-500/10 border border-green-500/30 text-green-400"
                 : cloudStatus.type === "warning"
-                  ? "bg-amber-500/10 border border-amber-500/30 text-amber-400"
-                  : "bg-red-500/10 border border-red-500/30 text-red-400"
+                  ? "bg-amber-500/10 border border-white/10 text-amber-400"
+                  : "bg-red-500/10 border border-white/10 text-red-400"
             }`}
           >
             <span className="material-symbols-outlined text-[18px]">
@@ -1411,7 +1411,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
                 icon="cloud_off"
                 onClick={() => handleCloudToggle(false)}
                 disabled={cloudSyncing}
-                className="shrink-0 bg-red-500/10! text-red-500! hover:bg-red-500/20! border-red-500/30!"
+                className="shrink-0 bg-red-500/10! text-red-500! hover:bg-red-500/20! border-white/10!"
               >
                 {t("disableCloud")}
               </Button>
@@ -1473,8 +1473,8 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
                     cloudflaredNotice.type === "success"
                       ? "border-green-500/30 bg-green-500/10 text-green-400"
                       : cloudflaredNotice.type === "info"
-                        ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
-                        : "border-red-500/30 bg-red-500/10 text-red-400"
+                        ? "border-white/10 bg-blue-500/10 text-blue-400"
+                        : "border-white/10 bg-red-500/10 text-red-400"
                   }`}
                 >
                   <span className="material-symbols-outlined text-[18px]">
@@ -1588,8 +1588,8 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
                         tailscaleNotice.type === "success"
                           ? "border-green-500/30 bg-green-500/10 text-green-400"
                           : tailscaleNotice.type === "info"
-                            ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
-                            : "border-red-500/30 bg-red-500/10 text-red-400"
+                            ? "border-white/10 bg-blue-500/10 text-blue-400"
+                            : "border-white/10 bg-red-500/10 text-red-400"
                       }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">
@@ -1721,8 +1721,8 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
                         ngrokNotice.type === "success"
                           ? "border-green-500/30 bg-green-500/10 text-green-400"
                           : ngrokNotice.type === "info"
-                            ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
-                            : "border-red-500/30 bg-red-500/10 text-red-400"
+                            ? "border-white/10 bg-blue-500/10 text-blue-400"
+                            : "border-white/10 bg-red-500/10 text-red-400"
                       }`}
                     >
                       <span className="material-symbols-outlined text-[18px]">
@@ -2084,7 +2084,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
         onClose={() => setShowCloudModal(false)}
       >
         <div className="flex flex-col gap-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-white/10 dark:border-white/10 rounded-lg p-4">
             <p className="text-sm text-blue-800 dark:text-blue-200 font-medium mb-2">
               {t("whatYouGet")}
             </p>
@@ -2096,7 +2096,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
             </ul>
           </div>
 
-          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-white/10 dark:border-white/10 rounded-lg p-4">
             <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium mb-1">
               {tc("note")}
             </p>
@@ -2175,7 +2175,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
         onClose={() => !cloudSyncing && setShowDisableModal(false)}
       >
         <div className="flex flex-col gap-4">
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-white/10 dark:border-white/10 rounded-lg p-4">
             <div className="flex items-start gap-3">
               <span className="material-symbols-outlined text-red-600 dark:text-red-400">
                 warning
@@ -2242,7 +2242,7 @@ export default function APIPageClient({ machineId }: Readonly<APIPageClientProps
         onClose={() => !tailscaleInstallBusy && setShowTailscaleInstallModal(false)}
       >
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
+          <div className="rounded-lg border border-white/10 bg-blue-500/10 p-4">
             <p className="text-sm font-medium text-blue-300">
               {translateOrFallback(
                 "tailscaleInstallIntro",

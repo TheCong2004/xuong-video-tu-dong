@@ -293,7 +293,7 @@ export default function ModelRoutingSection({ combos: externalCombos }: { combos
                 ${
                   m.enabled
                     ? "border-black/10 dark:border-white/10 bg-white/70 dark:bg-white/[0.02]"
-                    : "border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.01] opacity-50"
+                    : "border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.01] opacity-50"
                 }`}
             >
               <div className="flex items-center gap-3 min-w-0">

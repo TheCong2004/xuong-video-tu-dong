@@ -229,12 +229,12 @@ export default function StreamTransformerAccordion({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="rounded-lg border border-black/5 dark:border-white/5 bg-surface">
+    <div className="rounded-lg border border-black/5 dark:border-white/10 bg-surface">
       {/* ── Collapsible header — mirrors Collapsible.tsx visual style ──── */}
       <div
         className={cn(
           "flex items-center gap-3 p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors",
-          open && "border-b border-black/5 dark:border-white/5"
+          open && "border-b border-black/5 dark:border-white/10"
         )}
       >
         <button
@@ -326,7 +326,7 @@ export default function StreamTransformerAccordion({
                   <div
                     role="alert"
                     data-testid="error-display"
-                    className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400"
+                    className="rounded-lg border border-white/10 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400"
                   >
                     {error}
                   </div>

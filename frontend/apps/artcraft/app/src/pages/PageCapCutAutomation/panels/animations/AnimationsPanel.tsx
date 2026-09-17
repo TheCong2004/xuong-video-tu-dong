@@ -181,7 +181,7 @@ export function AnimationsPanel() {
         tone={mate.localProject.trim() ? "default" : "warn"}
       />
       {loadingLib && (
-        <div className="border-b border-white/6 px-3 py-1 text-[11px] text-white/40">
+        <div className="border-b border-white/10 px-3 py-1 text-[11px] text-white/40">
           Đang tải danh sách hoạt ảnh từ BE…
         </div>
       )}
@@ -227,7 +227,7 @@ export function AnimationsPanel() {
         }
       />
       {applying && (
-        <div className="border-t border-white/6 px-3 py-1 text-center text-[11px] text-amber-300/80">
+        <div className="border-t border-white/10 px-3 py-1 text-center text-[11px] text-amber-300/80">
           Đang gọi local/image-anim…
         </div>
       )}

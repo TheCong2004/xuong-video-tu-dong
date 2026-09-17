@@ -127,7 +127,7 @@ export function MediaMaskPanel({
                   className={twMerge(
                     "flex w-[68px] flex-col items-center gap-1.5 rounded-xl border px-1 py-2 transition-colors",
                     active
-                      ? "border-white/25 bg-white/6 text-white/80"
+                      ? "border-white/10 bg-white/6 text-white/80"
                       : "border-white/10 bg-[#1e2026] text-white/50 hover:border-white/20 hover:text-white/75",
                   )}
                 >
@@ -352,7 +352,7 @@ function RotationDial({
       type="button"
       title="Drag conceptually — click to nudge"
       onClick={() => onChange(degrees - 15)}
-      className="relative h-12 w-12 shrink-0 rounded-full border border-white/15 bg-gradient-to-b from-[#3a3d45] to-[#1e2026] shadow-inner"
+      className="relative h-12 w-12 shrink-0 rounded-full border border-white/10 bg-gradient-to-b from-[#3a3d45] to-[#1e2026] shadow-inner"
       style={{
         backgroundImage: `conic-gradient(from ${angle}deg, #94a3b8 0deg, #94a3b8 8deg, transparent 8deg, transparent 360deg), linear-gradient(180deg,#3a3d45,#1e2026)`,
       }}
@@ -423,7 +423,7 @@ function MaskPreview({
           </div>
         ) : maskType === "circle" ? (
           <div
-            className="rounded-full border-2 border-white/30 bg-white/5"
+            className="rounded-full border-2 border-white/10 bg-white/5"
             style={{
               width: size * 3,
               height: size * 3,
@@ -441,7 +441,7 @@ function MaskPreview({
           />
         ) : (
           <div
-            className="border-2 border-white/25 bg-white/5"
+            className="border-2 border-white/10 bg-white/5"
             style={{
               width: size * 4,
               height: size * 3,
@@ -453,8 +453,8 @@ function MaskPreview({
 
         {/* Center handles */}
         <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-0.5">
-          <div className="h-3 w-3 rounded-full border border-white/70 bg-white/20" />
-          <div className="h-2 w-2 rounded-full border border-white/50 bg-white/25" />
+          <div className="h-3 w-3 rounded-full border border-white/10 bg-white/20" />
+          <div className="h-2 w-2 rounded-full border border-white/10 bg-white/25" />
         </div>
       </div>
     </div>

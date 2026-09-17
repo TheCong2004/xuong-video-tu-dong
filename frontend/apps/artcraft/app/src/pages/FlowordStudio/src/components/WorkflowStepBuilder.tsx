@@ -49,16 +49,16 @@ export const WorkflowStepBuilder: React.FC<WorkflowStepBuilderProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#111622] rounded-xl border border-slate-800 p-4">
+    <div className="flex flex-col h-full bg-[#111622] rounded-xl border border-white/10 p-4">
       {/* Panel Header */}
-      <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
+      <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
         <div>
           <h2 className="font-['Outfit'] font-semibold text-sm text-slate-100 uppercase tracking-wider">
             Cấu hình Quy trình (Workflow Steps)
           </h2>
           <p className="text-xs text-slate-400">Thiết lập các bước tự động hóa tuần tự</p>
         </div>
-        <span className="px-2.5 py-1 text-xs font-semibold rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-md bg-indigo-500/10 text-indigo-400 border border-white/10">
           {steps.filter((s) => s.enabled).length} / {steps.length} Active
         </span>
       </div>
@@ -70,8 +70,8 @@ export const WorkflowStepBuilder: React.FC<WorkflowStepBuilderProps> = ({
             key={step.id}
             className={`p-3 rounded-lg border transition-all ${
               step.enabled
-                ? 'bg-slate-900/90 border-slate-800 hover:border-slate-700'
-                : 'bg-slate-950/40 border-slate-900 opacity-60'
+                ? 'bg-slate-900/90 border-white/10 hover:border-slate-700'
+                : 'bg-slate-950/40 border-white/10 opacity-60'
             }`}
           >
             <div className="flex items-center gap-2 mb-2">
@@ -96,7 +96,7 @@ export const WorkflowStepBuilder: React.FC<WorkflowStepBuilderProps> = ({
                 type="text"
                 value={step.label}
                 onChange={(e) => updateLabel(step.id, e.target.value)}
-                className="flex-1 bg-slate-950/60 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-medium"
+                className="flex-1 bg-slate-950/60 border border-white/10 rounded px-2.5 py-1 text-xs text-slate-200 focus:outline-none focus:border-indigo-500 font-medium"
               />
 
               <button
@@ -114,7 +114,7 @@ export const WorkflowStepBuilder: React.FC<WorkflowStepBuilderProps> = ({
               <select
                 value={step.action}
                 onChange={(e) => changeAction(step.id, e.target.value as WorkflowAction)}
-                className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-indigo-300 font-mono focus:outline-none focus:border-indigo-500"
+                className="bg-slate-950 border border-white/10 rounded px-2 py-1 text-xs text-indigo-300 font-mono focus:outline-none focus:border-indigo-500"
               >
                 {Object.entries(ACTION_OPTIONS).map(([key, opt]) => (
                   <option key={key} value={key}>
@@ -128,7 +128,7 @@ export const WorkflowStepBuilder: React.FC<WorkflowStepBuilderProps> = ({
       </div>
 
       {/* Failure Policy Footer */}
-      <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+      <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
         <div className="flex items-center gap-1.5 text-slate-400">
           <AlertOctagon className="w-4 h-4 text-amber-400" />
           <span>Khi gặp lỗi (On step failure):</span>
@@ -136,7 +136,7 @@ export const WorkflowStepBuilder: React.FC<WorkflowStepBuilderProps> = ({
         <select
           value={onFailurePolicy}
           onChange={(e) => onChangeFailurePolicy(e.target.value as any)}
-          className="bg-slate-950 border border-slate-800 rounded px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-medium"
+          className="bg-slate-950 border border-white/10 rounded px-3 py-1 text-xs text-slate-200 focus:outline-none focus:border-amber-500 font-medium"
         >
           <option value="stop">Dừng quy trình (Stop workflow)</option>
           <option value="skip">Bỏ qua bước lỗi (Skip step)</option>

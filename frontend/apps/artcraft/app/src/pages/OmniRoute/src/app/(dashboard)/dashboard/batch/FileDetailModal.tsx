@@ -213,10 +213,10 @@ export default function FileDetailModal({
                     <span
                       className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium border ${
                         b.status === "completed"
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/25"
+                          ? "bg-emerald-500/15 text-emerald-400 border-white/10"
                           : b.status === "failed"
-                            ? "bg-red-500/15 text-red-400 border-red-500/25"
-                            : "bg-gray-500/15 text-gray-400 border-gray-500/25"
+                            ? "bg-red-500/15 text-red-400 border-white/10"
+                            : "bg-gray-500/15 text-gray-400 border-white/10"
                       }`}
                     >
                       {b.status.replaceAll("_", " ")}
@@ -257,7 +257,7 @@ export default function FileDetailModal({
                     {displayedLines.join("\n")}
                   </pre>
                   {isTruncated && (
-                    <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/25 rounded-lg text-xs text-yellow-400 flex items-center gap-2">
+                    <div className="mt-3 p-3 bg-yellow-500/10 border border-white/10 rounded-lg text-xs text-yellow-400 flex items-center gap-2">
                       <span className="material-symbols-outlined text-[16px]">warning</span>
                       Showing first 1000 lines ({lineCount} total lines)
                     </div>

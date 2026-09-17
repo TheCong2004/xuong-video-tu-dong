@@ -96,7 +96,7 @@ export default function IPFilterSection() {
             disabled={loading}
             className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border text-center transition-all ${
               activeMode === m.value
-                ? "border-red-500/50 bg-red-500/5 ring-1 ring-red-500/20"
+                ? "border-white/10 bg-red-500/5 ring-1 ring-red-500/20"
                 : "border-border/50 hover:border-border hover:bg-surface/30"
             }`}
           >
@@ -164,7 +164,7 @@ export default function IPFilterSection() {
                   <span
                     key={ip}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono
-                               bg-red-500/10 text-red-400 border border-red-500/20"
+                               bg-red-500/10 text-red-400 border border-white/10"
                   >
                     {ip}
                     <button
@@ -190,7 +190,7 @@ export default function IPFilterSection() {
                   <span
                     key={ip}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-mono
-                               bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                               bg-emerald-500/10 text-emerald-400 border border-white/10"
                   >
                     {ip}
                     <button

@@ -86,7 +86,7 @@ export function AutoRenderPanel() {
   };
 
   return (
-    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b1f]">
+    <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Xuất video từ draft mate: lưu (tuỳ chọn) → gen_video → theo dõi tiến độ."
         how="① Thêm nguyên liệu / effect trước · ② chọn loại task · ③ CHẠY · ④ chờ status completed."
@@ -102,7 +102,7 @@ export function AutoRenderPanel() {
         defaultWidth={280}
         left={
           <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-white/8 px-5 py-3">
+      <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
         <h2 className="text-[15px] font-semibold text-white/90">
           Hàng đợi xuất video
         </h2>
@@ -197,7 +197,7 @@ export function AutoRenderPanel() {
               onClick={() =>
                 toast("Preset xuất do Jianying/CapCut trên máy chạy BE quyết định")
               }
-              className="flex items-center gap-2 rounded-lg border border-white/12 bg-[#252830] px-3 py-2 text-[12px] text-white/70 hover:bg-[#2a2d35] hover:text-white"
+              className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#252830] px-3 py-2 text-[12px] text-white/70 hover:bg-[#2a2d35] hover:text-white"
             >
               <FontAwesomeIcon icon={faGear} className="text-[12px]" />
               Cài đặt
@@ -243,7 +243,7 @@ export function AutoRenderPanel() {
                 className={twMerge(
                   "flex h-28 w-44 flex-col items-center justify-center rounded-lg border-2 transition-colors",
                   monitor === 1
-                    ? "border-white/25 bg-white/6 text-white/85"
+                    ? "border-white/10 bg-white/6 text-white/85"
                     : "border-white/10 bg-[#1e2026] text-white/50 hover:border-white/20",
                 )}
               >

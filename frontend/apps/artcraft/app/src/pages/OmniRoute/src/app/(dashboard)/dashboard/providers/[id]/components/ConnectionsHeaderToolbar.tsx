@@ -159,7 +159,7 @@ export default function ConnectionsHeaderToolbar({
         )}
         {providerId === "codex" && (
           <div
-            className="inline-flex items-center gap-2 rounded-lg border border-sky-500/20 bg-sky-500/5 px-2 py-1 text-xs font-medium text-text-muted"
+            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-sky-500/5 px-2 py-1 text-xs font-medium text-text-muted"
             title={providerText(
               t,
               "providerDetailServiceModeTooltip",
@@ -186,7 +186,7 @@ export default function ConnectionsHeaderToolbar({
               <button
                 type="button"
                 onClick={() => void loadCodexSettings()}
-                className="rounded border border-sky-500/30 px-2 py-0.5 text-[11px] font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300"
+                className="rounded border border-white/10 px-2 py-0.5 text-[11px] font-medium text-sky-600 hover:bg-sky-500/10 dark:text-sky-300"
                 title={codexSettingsLoadError}
               >
                 {providerText(t, "retry", "Retry")}

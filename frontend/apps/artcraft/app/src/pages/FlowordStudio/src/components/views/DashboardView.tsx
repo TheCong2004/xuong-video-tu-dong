@@ -76,11 +76,11 @@ export const DashboardView: React.FC = () => {
   const selectedPage = pages.find((p) => p.id === selectedPageId);
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#0b0f17] text-slate-100 overflow-y-auto p-6 space-y-6">
+    <div className="flex-1 flex flex-col h-full text-slate-100 overflow-y-auto p-6 space-y-6">
       {/* Top Header & Real-time Filter Bar */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow-lg">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#131926] p-4 rounded-xl border border-white/10 shadow-lg">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-10 h-10 rounded-lg bg-indigo-500/10  flex items-center justify-center text-indigo-400">
             <BarChart3 className="w-5 h-5" />
           </div>
           <div>
@@ -92,7 +92,7 @@ export const DashboardView: React.FC = () => {
         {/* Global Filters */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Page Selector */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10 text-xs">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={selectedPageId}
@@ -107,7 +107,7 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Date Filter */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10 text-xs">
             <Calendar className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={dateRange}
@@ -122,7 +122,7 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Platform Filter */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10 text-xs">
             <Globe className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={platformFilter}
@@ -149,10 +149,10 @@ export const DashboardView: React.FC = () => {
 
       {/* Per-Page Specific Banner (if a single page is selected) */}
       {selectedPage && (
-        <div className="bg-gradient-to-r from-indigo-950/40 via-[#131926] to-[#131926] p-4 rounded-xl border border-indigo-500/30 flex flex-wrap items-center justify-between gap-4">
+        <div className="bg-gradient-to-r from-indigo-950/40 via-[#131926] to-[#131926] p-4 rounded-xl border border-white/10 flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span className="text-xs font-bold px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-white/10">
                 ACTIVE PAGE
               </span>
               <h2 className="text-lg font-bold text-white">{selectedPage.name}</h2>
@@ -164,7 +164,7 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Storage health check */}
-          <div className="flex items-center gap-3 bg-[#0b0f17] px-4 py-2 rounded-lg border border-slate-800">
+          <div className="flex items-center gap-3 bg-[#0b0f17] px-4 py-2 rounded-lg border border-white/10">
             <HardDrive className="w-5 h-5 text-indigo-400" />
             <div className="text-xs">
               <div className="text-slate-400">Output Storage:</div>
@@ -173,11 +173,11 @@ export const DashboardView: React.FC = () => {
               </div>
             </div>
             {pageStorageHealth ? (
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${pageStorageHealth.writable ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'}`}>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${pageStorageHealth.writable ? 'bg-emerald-500/10 text-emerald-400 border border-white/10' : 'bg-rose-500/10 text-rose-400 border border-white/10'}`}>
                 {pageStorageHealth.writable ? 'WRITABLE' : 'READ-ONLY/LOCKED'}
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">PROBING</span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/10 text-slate-400">PROBING</span>
             )}
           </div>
         </div>
@@ -185,7 +185,7 @@ export const DashboardView: React.FC = () => {
 
       {/* Main Metric Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+        <div className="bg-[#131926] p-4 rounded-xl border border-white/10 shadow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
             <span>TOTAL JOBS</span>
             <Database className="w-4 h-4 text-indigo-400" />
@@ -194,7 +194,7 @@ export const DashboardView: React.FC = () => {
           <div className="text-[11px] text-slate-500 mt-1">Đơn hàng trong bộ lọc</div>
         </div>
 
-        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+        <div className="bg-[#131926] p-4 rounded-xl border border-white/10 shadow">
           <div className="flex items-center justify-between text-amber-400 text-xs font-semibold mb-2">
             <span>QUEUED</span>
             <Clock className="w-4 h-4 text-amber-400" />
@@ -203,7 +203,7 @@ export const DashboardView: React.FC = () => {
           <div className="text-[11px] text-slate-500 mt-1">Chờ Worker nhận việc</div>
         </div>
 
-        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+        <div className="bg-[#131926] p-4 rounded-xl border border-white/10 shadow">
           <div className="flex items-center justify-between text-sky-400 text-xs font-semibold mb-2">
             <span>IN PROGRESS</span>
             <Play className="w-4 h-4 text-sky-400" />
@@ -214,7 +214,7 @@ export const DashboardView: React.FC = () => {
           <div className="text-[11px] text-slate-500 mt-1">Đang tạo ảnh/video/tải</div>
         </div>
 
-        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+        <div className="bg-[#131926] p-4 rounded-xl border border-white/10 shadow">
           <div className="flex items-center justify-between text-emerald-400 text-xs font-semibold mb-2">
             <span>VIDEO DONE</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -223,7 +223,7 @@ export const DashboardView: React.FC = () => {
           <div className="text-[11px] text-slate-500 mt-1">Đã lưu ổ đĩa thành công</div>
         </div>
 
-        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+        <div className="bg-[#131926] p-4 rounded-xl border border-white/10 shadow">
           <div className="flex items-center justify-between text-purple-400 text-xs font-semibold mb-2">
             <span>READY TO POST</span>
             <Share2 className="w-4 h-4 text-purple-400" />
@@ -232,7 +232,7 @@ export const DashboardView: React.FC = () => {
           <div className="text-[11px] text-slate-500 mt-1">Sẵn sàng xuất bản</div>
         </div>
 
-        <div className="bg-[#131926] p-4 rounded-xl border border-slate-800/80 shadow">
+        <div className="bg-[#131926] p-4 rounded-xl border border-white/10 shadow">
           <div className="flex items-center justify-between text-rose-400 text-xs font-semibold mb-2">
             <span>ERROR / AUTH</span>
             <AlertTriangle className="w-4 h-4 text-rose-400" />
@@ -247,7 +247,7 @@ export const DashboardView: React.FC = () => {
       {/* Production Pipeline Funnel Details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Core Video Generation Stage Funnel */}
-        <div className="lg:col-span-2 bg-[#131926] p-5 rounded-xl border border-slate-800/80 shadow space-y-4">
+        <div className="lg:col-span-2 bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Film className="w-4 h-4 text-indigo-400" />
@@ -257,31 +257,31 @@ export const DashboardView: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-white/10">
               <div className="text-[11px] text-slate-400 font-medium">1. Grok Edit</div>
               <div className="text-xl font-bold text-sky-400 mt-1">{summary?.generating_image ?? 0}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">Tạo / chỉnh ảnh</div>
             </div>
 
-            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-white/10">
               <div className="text-[11px] text-slate-400 font-medium">2. Expand 9:16</div>
               <div className="text-xl font-bold text-indigo-400 mt-1">{summary?.converting_9_16 ?? 0}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">Mở rộng khung dọc</div>
             </div>
 
-            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-white/10">
               <div className="text-[11px] text-slate-400 font-medium">3. Grok Video</div>
               <div className="text-xl font-bold text-purple-400 mt-1">{summary?.generating_video ?? 0}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">Sinh clip chuyển động</div>
             </div>
 
-            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-white/10">
               <div className="text-[11px] text-slate-400 font-medium">4. Auto Download</div>
               <div className="text-xl font-bold text-cyan-400 mt-1">{summary?.downloading ?? 0}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">Tải video MP4</div>
             </div>
 
-            <div className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800">
+            <div className="bg-[#0b0f17] p-3 rounded-lg border border-white/10">
               <div className="text-[11px] text-slate-400 font-medium">5. Save Local</div>
               <div className="text-xl font-bold text-emerald-400 mt-1">{summary?.saving_local ?? 0}</div>
               <div className="text-[10px] text-slate-500 mt-0.5">Lưu chuẩn Page/date</div>
@@ -289,7 +289,7 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Quick status banner */}
-          <div className="bg-[#0b0f17] p-3.5 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
+          <div className="bg-[#0b0f17] p-3.5 rounded-lg border border-white/10 flex items-center justify-between text-xs">
             <div className="flex items-center gap-2 text-slate-300">
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>Dữ liệu Authoritative truy vấn trực tiếp từ SQLite Database - Zero client-side stale mockup.</span>
@@ -299,7 +299,7 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Social Publishing Engine Status Breakdown */}
-        <div className="bg-[#131926] p-5 rounded-xl border border-slate-800/80 shadow space-y-4">
+        <div className="bg-[#131926] p-5 rounded-xl border border-white/10 shadow space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Share2 className="w-4 h-4 text-purple-400" />
@@ -308,7 +308,7 @@ export const DashboardView: React.FC = () => {
           </div>
 
           <div className="space-y-2.5">
-            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 text-xs">
+            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-white/10 text-xs">
               <div className="flex items-center gap-2 text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                 <span>Facebook Reels</span>
@@ -316,7 +316,7 @@ export const DashboardView: React.FC = () => {
               <span className="font-mono font-bold text-blue-400">{summary?.publications_facebook ?? 0}</span>
             </div>
 
-            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 text-xs">
+            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-white/10 text-xs">
               <div className="flex items-center gap-2 text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                 <span>TikTok Video</span>
@@ -324,7 +324,7 @@ export const DashboardView: React.FC = () => {
               <span className="font-mono font-bold text-rose-400">{summary?.publications_tiktok ?? 0}</span>
             </div>
 
-            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-slate-800 text-xs">
+            <div className="flex items-center justify-between bg-[#0b0f17] p-2.5 rounded-lg border border-white/10 text-xs">
               <div className="flex items-center gap-2 text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-red-500"></span>
                 <span>YouTube Shorts</span>
@@ -332,16 +332,16 @@ export const DashboardView: React.FC = () => {
               <span className="font-mono font-bold text-red-400">{summary?.publications_youtube ?? 0}</span>
             </div>
 
-            <div className="pt-2 border-t border-slate-800/80 grid grid-cols-3 gap-2 text-center text-xs">
-              <div className="bg-[#0b0f17] p-2 rounded border border-slate-800">
+            <div className="pt-2 border-t border-white/10 grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="bg-[#0b0f17] p-2 rounded border border-white/10">
                 <div className="text-slate-400 text-[10px]">Đã đăng</div>
                 <div className="text-emerald-400 font-bold font-mono mt-0.5">{summary?.publications_posted ?? 0}</div>
               </div>
-              <div className="bg-[#0b0f17] p-2 rounded border border-slate-800">
+              <div className="bg-[#0b0f17] p-2 rounded border border-white/10">
                 <div className="text-slate-400 text-[10px]">Lên lịch</div>
                 <div className="text-amber-400 font-bold font-mono mt-0.5">{summary?.publications_scheduled ?? 0}</div>
               </div>
-              <div className="bg-[#0b0f17] p-2 rounded border border-slate-800">
+              <div className="bg-[#0b0f17] p-2 rounded border border-white/10">
                 <div className="text-slate-400 text-[10px]">Chờ duyệt</div>
                 <div className="text-indigo-400 font-bold font-mono mt-0.5">{summary?.publications_waiting_approval ?? 0}</div>
               </div>

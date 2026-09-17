@@ -358,7 +358,7 @@ function OpEditor({
   const wrap = (body: React.ReactNode) => (
     <div className="flex flex-col gap-3">
       {opDescription && (
-        <p className="text-[11px] leading-relaxed text-text-muted border-l-2 border-purple-500/30 pl-2 italic">
+        <p className="text-[11px] leading-relaxed text-text-muted border-l-2 border-white/10 pl-2 italic">
           {opDescription}
         </p>
       )}
@@ -960,7 +960,7 @@ export default function RoutingTab() {
                 disabled={loading}
                 className={`p-2 rounded-lg border text-left transition-all ${
                   settings.autoRoutingDefaultVariant === option.value
-                    ? "border-indigo-500/50 bg-indigo-500/5 ring-1 ring-indigo-500/20"
+                    ? "border-white/10 bg-indigo-500/5 ring-1 ring-indigo-500/20"
                     : "border-border/50 hover:border-border hover:bg-surface/30"
                 }`}
               >
@@ -1102,7 +1102,7 @@ export default function RoutingTab() {
                 {providerSaveErrors[providerId] && (
                   <div
                     role="alert"
-                    className="mb-3 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-300"
+                    className="mb-3 rounded border border-white/10 bg-red-500/10 p-2 text-xs text-red-300"
                   >
                     <span className="font-medium">{t("routingServerRejectedSave")}</span>{" "}
                     <span className="break-words font-mono">{providerSaveErrors[providerId]}</span>
@@ -1307,7 +1307,7 @@ export default function RoutingTab() {
                   title={titleText}
                   className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-all ${
                     checked
-                      ? "border-indigo-500/50 bg-indigo-500/5 ring-1 ring-indigo-500/20"
+                      ? "border-white/10 bg-indigo-500/5 ring-1 ring-indigo-500/20"
                       : "border-border/50 hover:border-border hover:bg-surface/30"
                   } ${loading ? "cursor-not-allowed opacity-60" : ""}`}
                 >
@@ -1434,7 +1434,7 @@ export default function RoutingTab() {
               disabled={loading}
               className={`w-full flex flex-col items-start gap-1 p-3 rounded-lg border text-left transition-all ${
                 settings.antigravitySignatureCacheMode === option.value
-                  ? "border-sky-500/50 bg-sky-500/5 ring-1 ring-sky-500/20"
+                  ? "border-white/10 bg-sky-500/5 ring-1 ring-sky-500/20"
                   : "border-border/50 hover:border-border hover:bg-surface/30"
               }`}
             >

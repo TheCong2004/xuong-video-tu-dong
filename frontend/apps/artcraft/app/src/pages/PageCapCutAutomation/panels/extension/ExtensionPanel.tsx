@@ -189,7 +189,7 @@ export function ExtensionPanel() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b1f]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Công cụ bảo trì draft: doctor env, lint phụ đề, diagnose, enums, prune…"
         how="① Bật tiện ích nếu chưa · ② Chạy → xem log JSON bên dưới."
@@ -201,15 +201,15 @@ export function ExtensionPanel() {
         defaultWidth={300}
         left={
           <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      <div className="border-b border-white/8 px-5 py-3">
-        <h2 className="text-[15px] font-semibold text-white/90">Tiện ích</h2>
-        <p className="mt-0.5 text-[12px] text-white/40">
-          API local tooling — không phải marketplace plugin
+      <div className="border-b border-white/10 px-6 py-4">
+        <h2 className="text-sm font-bold text-white tracking-wide">Tiện Ích Bảo Trì</h2>
+        <p className="mt-0.5 text-xs text-zinc-400">
+          API local tooling — công cụ chẩn đoán và xử lý draft CapCut
         </p>
       </div>
 
-      <div className="px-5 py-3">
-        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#252830] px-3 py-2">
+      <div className="px-6 py-3">
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#0b0f17] px-3 py-2">
           <FontAwesomeIcon
             icon={faSearch}
             className="text-[12px] text-white/35"
@@ -232,7 +232,7 @@ export function ExtensionPanel() {
             return (
               <div
                 key={ext.id}
-                className="flex flex-col rounded-xl border border-white/8 bg-[#16171b] p-4"
+                className="flex flex-col rounded-xl border border-white/10 bg-[#16171b] p-4"
               >
                 <div className="mb-2 flex items-start gap-3">
                   <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/5 text-white/50">
@@ -259,7 +259,7 @@ export function ExtensionPanel() {
                     "mt-auto rounded-lg px-3 py-2 text-[12px] font-semibold transition-colors disabled:opacity-50",
                     isOn
                       ? "bg-sky-500/90 text-white hover:bg-sky-500"
-                      : "border border-white/12 bg-[#252830] text-white/70 hover:bg-[#2a2d35]",
+                      : "border border-white/10 bg-[#252830] text-white/70 hover:bg-[#2a2d35]",
                   )}
                 >
                   {busy ? "…" : isOn ? "Chạy" : "Bật"}
@@ -270,7 +270,7 @@ export function ExtensionPanel() {
         </div>
 
         {log && (
-          <pre className="mx-auto mt-4 max-h-48 max-w-3xl overflow-auto rounded-lg border border-white/8 bg-black/40 p-3 font-mono text-[10px] text-emerald-200/75">
+          <pre className="mx-auto mt-4 max-h-48 max-w-3xl overflow-auto rounded-lg border border-white/10 bg-black/40 p-3 font-mono text-[10px] text-emerald-200/75">
             {log}
           </pre>
         )}

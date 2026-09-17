@@ -59,7 +59,7 @@ export function GalleryPage({ onNavigateToSettings }: GalleryPageProps) {
           {!isReady && (
             <Badge
               variant="outline"
-              className="h-5 border-amber-500/40 px-1.5 text-[10px] text-amber-600 dark:text-amber-400"
+              className="h-5 border-white/10 px-1.5 text-[10px] text-amber-600 dark:text-amber-400"
             >
               {t('missing.title')}
             </Badge>
@@ -82,9 +82,9 @@ export function GalleryPage({ onNavigateToSettings }: GalleryPageProps) {
             </div>
 
             {!isReady && (
-              <Panel className="border-amber-500/30 bg-amber-500/5 p-3 sm:p-4">
+              <Panel className="border-white/10 bg-amber-500/5 p-3 sm:p-4">
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-white/10 bg-amber-500/10 text-amber-600 dark:text-amber-400">
                     <TriangleAlert className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1 space-y-3">

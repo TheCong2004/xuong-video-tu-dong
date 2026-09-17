@@ -48,16 +48,16 @@ interface FilesListTabProps {
 }
 
 const PURPOSE_STYLES_MAP: Record<string, string> = {
-  batch: "bg-blue-500/15 text-blue-400 border-blue-500/25",
-  "batch-output": "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+  batch: "bg-blue-500/15 text-blue-400 border-white/10",
+  "batch-output": "bg-emerald-500/15 text-emerald-400 border-white/10",
   "fine-tune": "bg-violet-500/15 text-violet-400 border-violet-500/25",
-  assistants: "bg-yellow-500/15 text-yellow-400 border-yellow-500/25",
+  assistants: "bg-yellow-500/15 text-yellow-400 border-white/10",
 };
 
 const TERMINAL_STATUSES = new Set(["completed", "failed", "cancelled", "expired"]);
 
 function Badge({ value, styles }: Readonly<{ value: string; styles: Record<string, string> }>) {
-  const cls = styles[value] ?? "bg-gray-500/15 text-gray-400 border-gray-500/25";
+  const cls = styles[value] ?? "bg-gray-500/15 text-gray-400 border-white/10";
   return (
     <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium border ${cls}`}>
       {value}

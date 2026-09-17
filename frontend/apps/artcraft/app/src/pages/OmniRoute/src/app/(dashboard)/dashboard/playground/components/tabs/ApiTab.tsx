@@ -724,7 +724,7 @@ export default function ApiTab(_props: ApiTabProps) {
               </div>
             </div>
             {isTranscriptionEndpoint && (
-              <p className="text-xs text-text-muted bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5 flex items-start gap-1">
+              <p className="text-xs text-text-muted bg-amber-500/10 border border-white/10 rounded px-2 py-1.5 flex items-start gap-1">
                 <span className="material-symbols-outlined text-[12px] text-amber-500 mt-0.5">
                   info
                 </span>

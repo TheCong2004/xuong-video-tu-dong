@@ -166,7 +166,7 @@ export default function ProxyLogDetail({ log, onClose }) {
 
           {/* Error */}
           {log.error && (
-            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+            <div className="p-4 rounded-xl bg-red-500/10 border border-white/10">
               <div className="text-[10px] text-red-400 uppercase tracking-wider mb-1 font-bold">
                 Error
               </div>

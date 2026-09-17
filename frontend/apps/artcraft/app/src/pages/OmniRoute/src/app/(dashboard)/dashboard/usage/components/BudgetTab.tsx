@@ -125,22 +125,22 @@ const STATUS_META: Record<StatusKey, { tone: string; bg: string; dot: string }> 
   all: { tone: "text-text-main", bg: "bg-bg-subtle", dot: "var(--color-text-muted)" },
   blocked: {
     tone: "text-red-400",
-    bg: "bg-red-500/10 border-red-500/30",
+    bg: "bg-red-500/10 border-white/10",
     dot: "#ef4444",
   },
   alerting: {
     tone: "text-amber-400",
-    bg: "bg-amber-500/10 border-amber-500/30",
+    bg: "bg-amber-500/10 border-white/10",
     dot: "#f59e0b",
   },
   warning: {
     tone: "text-yellow-400",
-    bg: "bg-yellow-500/10 border-yellow-500/30",
+    bg: "bg-yellow-500/10 border-white/10",
     dot: "#eab308",
   },
   safe: {
     tone: "text-emerald-400",
-    bg: "bg-emerald-500/10 border-emerald-500/30",
+    bg: "bg-emerald-500/10 border-white/10",
     dot: "#22c55e",
   },
   "no-limit": {

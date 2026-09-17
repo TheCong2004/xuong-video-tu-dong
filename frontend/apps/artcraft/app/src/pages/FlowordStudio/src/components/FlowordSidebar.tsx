@@ -12,7 +12,6 @@ import {
   Layers,
   ListChecks,
   Menu,
-  PlaySquare,
   Radio,
   Send,
   Settings,
@@ -29,13 +28,13 @@ export type FlowordView =
   | "dashboard"
   | "production"
   | "script_market"
-  | "studio"
   | "bulk_import"
   | "jobs"
   | "pages"
   | "publish"
   | "history"
-  | "settings";
+  | "settings"
+  | "omniroute";
 
 interface FlowordSidebarProps {
   activeView: FlowordView;
@@ -66,12 +65,6 @@ const navItems = [
     id: "script_market" as const,
     label: "Chợ kịch bản",
     icon: BookOpen,
-    badge: null,
-  },
-  {
-    id: "studio" as const,
-    label: "Studio Sản Xuất",
-    icon: PlaySquare,
     badge: null,
   },
   {
@@ -145,12 +138,12 @@ export const FlowordSidebar: React.FC<FlowordSidebarProps> = ({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r border-white/[0.08] bg-[#10141e] md:static ${
+        className={`fixed inset-y-0 left-0 z-50 flex shrink-0 flex-col border-r border-white/10 bg-[#10141e] md:static ${
           collapsed ? "w-[72px]" : "w-[230px]"
         } ${mobileOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"} transition-all duration-200`}
       >
         {/* App Title / Logo */}
-        <div className="flex h-16 items-center gap-3 border-b border-white/[0.08] px-4">
+        <div className="flex h-16 items-center gap-3 border-b border-white/10 px-4">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#e54d5e] to-[#a855f7] text-white shadow-lg shadow-rose-500/20">
             <Sparkles className="h-5 w-5" />
           </div>
@@ -206,7 +199,7 @@ export const FlowordSidebar: React.FC<FlowordSidebarProps> = ({
                 }}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
                   active
-                    ? "border border-rose-500/30 bg-rose-500/10 text-white shadow-md shadow-rose-500/5"
+                    ? "border border-white/10 bg-rose-500/10 text-white shadow-md shadow-rose-500/5"
                     : "text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]"
                 }`}
               >
@@ -236,7 +229,7 @@ export const FlowordSidebar: React.FC<FlowordSidebarProps> = ({
           })}
 
           {/* AI Tools & Integrations Section */}
-          <div className="mt-4 border-t border-white/[0.08] pt-4">
+          <div className="mt-4 border-t border-white/10 pt-4">
             {!collapsed && (
               <div className="text-zinc-500 mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em]">
                 AI & Routing
@@ -248,10 +241,14 @@ export const FlowordSidebar: React.FC<FlowordSidebarProps> = ({
               type="button"
               title="Quản lý API Keys & Router AI (OmniRoute)"
               onClick={() => {
-                goToApp("OMNI_ROUTE");
+                onChange("omniroute");
                 onCloseMobile();
               }}
-              className="group flex w-full items-center gap-3 rounded-xl border border-indigo-500/20 px-3 py-2.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/10 hover:text-indigo-200"
+              className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-xs font-semibold transition cursor-pointer ${
+                activeView === "omniroute"
+                  ? "border-white/10 bg-indigo-500/20 text-indigo-200 shadow-md shadow-indigo-500/10"
+                  : "border-white/10 text-indigo-300 hover:bg-indigo-500/10 hover:text-indigo-200"
+              }`}
             >
               <Globe className="h-4 w-4 shrink-0 text-indigo-400 transition-transform group-hover:scale-110" />
               {!collapsed && (
@@ -274,7 +271,7 @@ export const FlowordSidebar: React.FC<FlowordSidebarProps> = ({
                 goToApp("CAPCUT_AUTOMATION");
                 onCloseMobile();
               }}
-              className="group mt-1.5 flex w-full items-center gap-3 rounded-xl border border-cyan-500/20 px-3 py-2.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/10 hover:text-cyan-200"
+              className="group mt-1.5 flex w-full items-center gap-3 rounded-xl border border-white/10 px-3 py-2.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/10 hover:text-cyan-200"
             >
               <Clapperboard className="h-4 w-4 shrink-0 text-cyan-400 transition-transform group-hover:scale-110" />
               {!collapsed && (
@@ -287,7 +284,7 @@ export const FlowordSidebar: React.FC<FlowordSidebarProps> = ({
         </nav>
 
         {/* Sidebar Collapse Toggle */}
-        <div className="border-t border-white/[0.08] p-3">
+        <div className="border-t border-white/10 p-3">
           <button
             type="button"
             onClick={onToggleCollapse}

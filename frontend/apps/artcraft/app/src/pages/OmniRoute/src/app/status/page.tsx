@@ -94,7 +94,7 @@ export default function StatusPage() {
         )}
 
         {!loading && error && (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6" role="alert">
+          <div className="rounded-xl border border-white/10 bg-red-500/10 p-6" role="alert">
             <h2 className="text-lg font-semibold text-red-600 dark:text-red-400">
               Health Check Failed
             </h2>

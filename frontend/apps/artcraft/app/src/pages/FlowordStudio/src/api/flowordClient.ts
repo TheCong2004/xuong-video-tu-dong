@@ -98,6 +98,7 @@ export interface EnqueueFlowordWorkflowRequest {
   source_image_artifact?: unknown;
   target_platform?: string;
   aspect_ratio?: string;
+  editing_preset?: EditingPreset;
   target_duration_seconds?: number;
   output_mode?: string;
   model_id?: string;
@@ -129,6 +130,32 @@ export interface EnqueueFlowordWorkflowResponse {
   job_id: string;
   workflow_id?: string | null;
   status: string;
+}
+
+export interface EditingPreset {
+  aspect: '9:16' | '16:9' | '1:1' | '4:5';
+  subtitle_style: 'dynamic' | 'cinematic' | 'clean';
+  transition_style: string;
+  music_volume: number;
+  video_speed: number;
+}
+
+export interface CapcutDraftActionResponse {
+  draft_id: string;
+  draft_path: string;
+  engine: string;
+}
+
+export function rebuildFlowordCapcutDraft(jobId: string, editingPreset: EditingPreset): Promise<CapcutDraftActionResponse> {
+  return invokeCommand<CapcutDraftActionResponse>('rebuild_floword_capcut_draft_command', {
+    request: { job_id: jobId, editing_preset: editingPreset },
+  });
+}
+
+export function openFlowordCapcutDraft(draftPath: string): Promise<boolean> {
+  return invokeCommand<boolean>('open_floword_capcut_draft_command', {
+    request: { draft_path: draftPath },
+  });
 }
 
 export interface GetFlowordWorkflowResponse {
@@ -187,8 +214,11 @@ export interface BrowserWorkerInfo {
   profile_id?: string | null;
   profile_name?: string | null;
   state: string;
-  has_extension: boolean;
-  grok_logged_in: boolean;
+  /** Current Donut runtime field. */
+  extension_ready?: boolean;
+  /** Backward-compatible field from older runtime builds. */
+  has_extension?: boolean;
+  grok_logged_in?: boolean | null;
   last_heartbeat_at?: string | null;
 }
 
@@ -322,8 +352,8 @@ export async function listDonutProfilesEnriched(): Promise<DonutProfileEnriched[
       ...p,
       worker_id: w?.worker_id,
       worker_state: w?.state,
-      extension_ready: w?.has_extension ?? false,
-      grok_logged_in: w?.grok_logged_in ?? false,
+      extension_ready: w?.extension_ready ?? w?.has_extension ?? false,
+      grok_logged_in: w?.grok_logged_in === true,
     };
   });
 }
@@ -1398,5 +1428,3 @@ export async function openDonutBrowserGui(): Promise<boolean> {
     return false;
   }
 }
-
-

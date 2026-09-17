@@ -6,11 +6,11 @@
  * - Avoid stacking every hue on the same control
  */
 export const cc = {
-  shell: "bg-[#1a1b1f]",
-  nav: "bg-[#141518]",
-  panel: "bg-[#16171b]",
-  surface: "bg-[#252830]",
-  surfaceDeep: "bg-[#1e2026]",
+  shell: "bg-[#0d1017]",
+  nav: "bg-[#10141e]",
+  panel: "bg-[#10141e]",
+  surface: "bg-[#131926]",
+  surfaceDeep: "bg-[#0b0f17]",
 
   /** Active nav / primary brand accent */
   brand: {
@@ -18,7 +18,7 @@ export const cc = {
     soft: "bg-sky-500/15 text-sky-300",
     bar: "bg-sky-400",
     ring: "ring-1 ring-sky-400/35",
-    border: "border-sky-400/40",
+    border: "border-white/10",
   },
 
   /** Primary buttons (Apply / Generate / Export) */
@@ -32,12 +32,12 @@ export const cc = {
   /** Timeline track identities */
   track: {
     footage: {
-      border: "border-teal-400/45",
+      border: "border-white/10",
       bg: "bg-teal-900/45",
       header: "bg-teal-700/55",
     },
     audio: {
-      border: "border-blue-400/45",
+      border: "border-white/10",
       bg: "bg-blue-900/50",
       wave: "bg-sky-300/85",
     },
@@ -50,7 +50,7 @@ export const cc = {
 
   /** Status chips */
   status: {
-    synced: "border-emerald-500/40 bg-emerald-500/10 text-emerald-400",
+    synced: "border-white/10 bg-emerald-500/10 text-emerald-400",
     before: "bg-white/10 text-amber-400/90",
     beta: "bg-emerald-600 text-white",
     empty: "bg-white/10 text-white/40",

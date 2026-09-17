@@ -823,7 +823,7 @@ export default function HomePageClient({ machineId }: HomePageClientProps) {
                         : s.status === "done"
                           ? "border-green-500/30 bg-green-500/5"
                           : s.status === "failed"
-                            ? "border-red-500/30 bg-red-500/5"
+                            ? "border-white/10 bg-red-500/5"
                             : "border-border bg-bg-subtle"
                     }`}
                   >
@@ -853,7 +853,7 @@ export default function HomePageClient({ machineId }: HomePageClientProps) {
 
               {/* Error message */}
               {updateSteps.find((s) => s.step === "error") && (
-                <div className="mt-1 px-3 py-2.5 rounded-lg border border-red-500/30 bg-red-500/5 text-red-500">
+                <div className="mt-1 px-3 py-2.5 rounded-lg border border-white/10 bg-red-500/5 text-red-500">
                   <p className="text-xs font-mono break-all">
                     {updateSteps.find((s) => s.step === "error")?.message}
                   </p>

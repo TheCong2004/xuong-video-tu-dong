@@ -231,8 +231,8 @@ export default function SubscriptionTab() {
 
   const statusBadge: Record<SubscriptionRecord["status"], string> = {
     ok: "bg-green-500/15 text-green-600 border-green-500/30",
-    error: "bg-red-500/15 text-red-600 border-red-500/30",
-    empty: "bg-yellow-500/15 text-yellow-600 border-yellow-500/30",
+    error: "bg-red-500/15 text-red-600 border-white/10",
+    empty: "bg-yellow-500/15 text-yellow-600 border-white/10",
   };
 
   return (
@@ -250,7 +250,7 @@ export default function SubscriptionTab() {
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">
+        <div className="rounded-md border border-white/10 bg-red-500/10 px-3 py-2 text-sm text-red-600">
           {error}
         </div>
       )}
@@ -438,7 +438,7 @@ export default function SubscriptionTab() {
                   <p className="text-xs text-amber-600 mt-1 break-words">{resolveSubError(sub.error)}</p>
                 )}
                 {showCoreHint && (
-                  <div className="mt-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 space-y-1.5">
+                  <div className="mt-2 rounded-md border border-white/10 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 space-y-1.5">
                     <p className="font-medium">
                       该订阅有 {needsCoreNodes.length} 个节点需要本地代理内核（SS / VMess / Trojan / VLESS 等），当前未被路由。
                     </p>
@@ -505,7 +505,7 @@ export default function SubscriptionTab() {
                   type="button"
                   disabled={busyId === sub.id}
                   onClick={() => remove(sub)}
-                  className="px-2 py-1 text-xs rounded border border-red-500/30 text-red-600 hover:bg-red-500/10"
+                  className="px-2 py-1 text-xs rounded border border-white/10 text-red-600 hover:bg-red-500/10"
                   title="删除"
                 >
                   删除

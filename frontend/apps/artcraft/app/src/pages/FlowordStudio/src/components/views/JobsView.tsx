@@ -145,13 +145,13 @@ export const JobsView: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full bg-[#0b0f17] text-slate-100 overflow-hidden">
       {actionError && (
-        <div className="px-4 py-2.5 bg-rose-950/90 border-b border-rose-500/50 text-rose-300 text-xs flex items-center justify-between">
+        <div className="px-4 py-2.5 bg-rose-950/90 border-b border-white/10 text-rose-300 text-xs flex items-center justify-between">
           <span>{actionError}</span>
           <button onClick={() => setActionError(null)} className="text-slate-400 hover:text-white">✕</button>
         </div>
       )}
       {/* Top Filter & Search Bar */}
-      <div className="p-4 bg-[#131926] border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 shadow-md">
+      <div className="p-4 bg-[#131926] border-b border-white/10 flex flex-wrap items-center justify-between gap-3 shadow-md">
         <div className="flex items-center gap-3 flex-1 min-w-[280px] max-w-md">
           <div className="relative w-full">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -163,14 +163,14 @@ export const JobsView: React.FC = () => {
                 setSearchQuery(e.target.value);
                 setPageIndex(0);
               }}
-              className="w-full bg-[#0b0f17] text-xs text-slate-200 pl-9 pr-3 py-2 rounded-lg border border-slate-700 focus:outline-none focus:border-indigo-500 transition"
+              className="w-full bg-[#0b0f17] text-xs text-slate-200 pl-9 pr-3 py-2 rounded-lg border border-white/10 focus:outline-none focus:border-indigo-500 transition"
             />
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           {/* Page Filter */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10 text-xs">
             <Layers className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={selectedPageId}
@@ -188,7 +188,7 @@ export const JobsView: React.FC = () => {
           </div>
 
           {/* Status Filter */}
-          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-slate-700 text-xs">
+          <div className="flex items-center gap-1.5 bg-[#0b0f17] px-3 py-1.5 rounded-lg border border-white/10 text-xs">
             <Filter className="w-3.5 h-3.5 text-slate-400" />
             <select
               value={statusFilter}
@@ -222,7 +222,7 @@ export const JobsView: React.FC = () => {
       <div className="flex-1 overflow-auto">
         <table className="w-full text-left border-collapse text-xs">
           <thead>
-            <tr className="bg-[#101522] border-b border-slate-800 text-slate-400 sticky top-0 z-10 select-none">
+            <tr className="bg-[#101522] border-b border-white/10 text-slate-400 sticky top-0 z-10 select-none">
               <th className="py-3 px-4 font-semibold">JOB ID</th>
               <th className="py-3 px-4 font-semibold">PAGE</th>
               <th className="py-3 px-4 font-semibold">PREVIEW / PROMPT</th>
@@ -256,14 +256,14 @@ export const JobsView: React.FC = () => {
 
                 const statusColor =
                   job.status === 'DONE' || job.status === 'COMPLETED'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-white/10'
                     : job.status === 'RUNNING'
-                    ? 'bg-sky-500/10 text-sky-400 border-sky-500/30 animate-pulse'
+                    ? 'bg-sky-500/10 text-sky-400 border-white/10 animate-pulse'
                     : job.status === 'AUTH_REQUIRED'
-                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    ? 'bg-amber-500/10 text-amber-400 border-white/10'
                     : job.status === 'ERROR' || job.status === 'FAILED'
-                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                    : 'bg-slate-800 text-slate-400 border-slate-700';
+                    ? 'bg-rose-500/10 text-rose-400 border-white/10'
+                    : 'bg-slate-800 text-slate-400 border-white/10';
 
                 return (
                   <tr
@@ -336,7 +336,7 @@ export const JobsView: React.FC = () => {
       </div>
 
       {/* Pagination Footer */}
-      <div className="p-3 bg-[#131926] border-t border-slate-800 flex items-center justify-between text-xs text-slate-400 select-none">
+      <div className="p-3 bg-[#131926] border-t border-white/10 flex items-center justify-between text-xs text-slate-400 select-none">
         <div className="flex items-center gap-2">
           <span>Tổng cộng: <strong className="text-white font-mono">{totalCount}</strong> Jobs</span>
           <span>•</span>
@@ -350,7 +350,7 @@ export const JobsView: React.FC = () => {
               setPageSize(Number(e.target.value));
               setPageIndex(0);
             }}
-            className="bg-[#0b0f17] border border-slate-700 rounded px-2 py-1 text-slate-300 focus:outline-none"
+            className="bg-[#0b0f17] border border-white/10 rounded px-2 py-1 text-slate-300 focus:outline-none"
           >
             <option value={10}>10 / trang</option>
             <option value={20}>20 / trang</option>
@@ -361,14 +361,14 @@ export const JobsView: React.FC = () => {
           <button
             onClick={() => setPageIndex((p) => Math.max(0, p - 1))}
             disabled={pageIndex === 0}
-            className="p-1.5 rounded border border-slate-700 bg-[#0b0f17] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none"
+            className="p-1.5 rounded border border-white/10 bg-[#0b0f17] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
           <button
             onClick={() => setPageIndex((p) => Math.min(totalPages - 1, p + 1))}
             disabled={pageIndex >= totalPages - 1}
-            className="p-1.5 rounded border border-slate-700 bg-[#0b0f17] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none"
+            className="p-1.5 rounded border border-white/10 bg-[#0b0f17] text-slate-300 hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
@@ -377,8 +377,8 @@ export const JobsView: React.FC = () => {
 
       {/* Job Inspector Drawer */}
       {inspectingJob && (
-        <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-[#101522] border-l border-slate-800 shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-[#131926]">
+        <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-[#101522] border-l border-white/10 shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-200">
+          <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#131926]">
             <div>
               <h2 className="text-sm font-bold text-white flex items-center gap-2">
                 <FileText className="w-4 h-4 text-indigo-400" />
@@ -398,7 +398,7 @@ export const JobsView: React.FC = () => {
 
           <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
             {/* Summary card */}
-            <div className="bg-[#0b0f17] p-3.5 rounded-lg border border-slate-800 space-y-2">
+            <div className="bg-[#0b0f17] p-3.5 rounded-lg border border-white/10 space-y-2">
               <div className="flex justify-between">
                 <span className="text-slate-400">Status:</span>
                 <span className="font-bold text-indigo-400">{inspectingJob.status}</span>
@@ -412,7 +412,7 @@ export const JobsView: React.FC = () => {
                 <span className="font-mono text-slate-200">{inspectingJob.maybe_page_id || 'None'}</span>
               </div>
               {inspectingJob.maybe_on_failure_message && (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-300">
+                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-white/10 text-rose-300">
                   <div className="flex items-center justify-between font-bold text-[10px] uppercase tracking-wider mb-1">
                     <span>Chi Tiết Lỗi (Failure Details)</span>
                     <button
@@ -445,7 +445,7 @@ export const JobsView: React.FC = () => {
                   <span>Đang tải events...</span>
                 </div>
               ) : jobEvents.length === 0 ? (
-                <div className="text-center py-6 text-slate-500 italic bg-[#0b0f17] rounded-lg border border-slate-800">
+                <div className="text-center py-6 text-slate-500 italic bg-[#0b0f17] rounded-lg border border-white/10">
                   Chưa có audit event nào được ghi nhận.
                 </div>
               ) : (
@@ -453,7 +453,7 @@ export const JobsView: React.FC = () => {
                   {jobEvents.map((evt) => (
                     <div
                       key={evt.id}
-                      className="bg-[#0b0f17] p-3 rounded-lg border border-slate-800/80 flex flex-col gap-1"
+                      className="bg-[#0b0f17] p-3 rounded-lg border border-white/10 flex flex-col gap-1"
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-mono font-bold text-indigo-400 text-[11px]">

@@ -90,7 +90,7 @@ export function TierCoverageWidget() {
   }));
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-surface p-5">
+    <div className="rounded-xl border border-white/10 bg-surface p-5">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="font-semibold text-sm">{t("tierCoverageTitle")}</h3>

@@ -1,0 +1,11 @@
+[package]
+name = "capcut-core"
+version = "0.1.0"
+edition = "2021"
+description = "Stable internal timeline model - no CapCut/ffmpeg knowledge"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+thiserror.workspace = true

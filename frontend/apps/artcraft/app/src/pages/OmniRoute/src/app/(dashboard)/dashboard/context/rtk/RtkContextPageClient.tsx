@@ -184,7 +184,7 @@ export default function RtkContextPageClient() {
       </section>
 
       {masterEnabled === false && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
+        <div className="rounded-lg border border-white/10 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300 flex items-start gap-2">
           <span className="material-symbols-outlined text-[18px]">info</span>
           <p>{t("masterSwitchOffAlert")}</p>
         </div>

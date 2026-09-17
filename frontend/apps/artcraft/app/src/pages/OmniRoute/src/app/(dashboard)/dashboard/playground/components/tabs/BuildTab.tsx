@@ -7,7 +7,8 @@ import { useTranslations } from "next-intl";
 import { useToolsBuilder } from "../../hooks/useToolsBuilder";
 import { useStructuredOutput } from "../../hooks/useStructuredOutput";
 import MarkdownMessage from "../MarkdownMessage";
-import BuildWizard from "./build/BuildWizard";
+import StructuredOutputEditor from "../StructuredOutputEditor";
+import ToolsBuilder from "../ToolsBuilder";
 import type { ConfigState } from "../StudioConfigPane";
 
 interface BuildTabProps {
@@ -234,7 +235,7 @@ export default function BuildTab({ configState }: BuildTabProps) {
               msg.role === "user"
                 ? "bg-primary text-white"
                 : msg.role === "tool"
-                  ? "bg-yellow-500/10 border border-yellow-500/30 text-text-main"
+                  ? "bg-yellow-500/10 border border-white/10 text-text-main"
                   : "bg-bg-alt border border-border text-text-main"
             }`}
           >
@@ -255,7 +256,7 @@ export default function BuildTab({ configState }: BuildTabProps) {
             return (
               <div
                 key={tc.id}
-                className="border border-amber-500/40 rounded-lg p-3 bg-amber-500/5"
+                className="border border-white/10 rounded-lg p-3 bg-amber-500/5"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <span className="material-symbols-outlined text-[14px] text-amber-500">
@@ -314,14 +315,29 @@ export default function BuildTab({ configState }: BuildTabProps) {
   );
 
   return (
-    <BuildWizard
-      toolsBuilder={toolsBuilder}
-      structuredOutput={structuredOutput}
-      running={running}
-      onRun={() => void handleRun()}
-      prompt={prompt}
-      setPrompt={setPrompt}
-      result={resultArea}
-    />
+    <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(360px,0.8fr)]">
+      <div className="min-w-0 space-y-4">
+        <ToolsBuilder toolsBuilder={toolsBuilder} />
+        <StructuredOutputEditor structuredOutput={structuredOutput} />
+      </div>
+      <div className="min-w-0 space-y-3 rounded-xl border border-border bg-bg-alt/40 p-4">
+        <textarea
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          rows={6}
+          placeholder="Nhập yêu cầu kiểm thử công cụ hoặc structured output"
+          className="w-full resize-y rounded-lg border border-border bg-bg-main px-3 py-2 text-sm text-text-main outline-none focus:ring-1 focus:ring-primary"
+        />
+        <button
+          type="button"
+          disabled={running || !prompt.trim()}
+          onClick={() => void handleRun()}
+          className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {running ? "Đang chạy…" : "Chạy"}
+        </button>
+        {resultArea}
+      </div>
+    </div>
   );
 }

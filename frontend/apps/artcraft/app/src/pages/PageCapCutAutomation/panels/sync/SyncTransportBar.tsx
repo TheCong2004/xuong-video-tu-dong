@@ -13,7 +13,7 @@ interface SyncTransportBarProps {
 
 export function SyncTransportBar({ isRunning, onRun }: SyncTransportBarProps) {
   return (
-    <div className="relative flex shrink-0 items-center gap-4 border-t border-white/8 bg-[#121317] px-5 py-3">
+    <div className="relative flex shrink-0 items-center gap-4 border-t border-white/10 bg-[#121317] px-5 py-3">
       <div className="flex flex-1 items-center gap-3">
         <span className="font-mono text-[11px] text-white/40">0:00</span>
         <input

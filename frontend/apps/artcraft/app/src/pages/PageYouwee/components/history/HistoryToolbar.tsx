@@ -492,7 +492,7 @@ export function HistoryToolbar() {
                       className={cn(
                         'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors',
                         advancedFilters.tagIds.includes(tag.id)
-                          ? 'bg-blue-500/10 border-blue-500/40 text-blue-600 dark:text-blue-400'
+                          ? 'bg-blue-500/10 border-white/10 text-blue-600 dark:text-blue-400'
                           : 'bg-card border-border text-muted-foreground hover:text-foreground',
                       )}
                     >
@@ -522,7 +522,7 @@ export function HistoryToolbar() {
                       className={cn(
                         'inline-flex items-center gap-2 rounded-md border px-2 py-1 text-xs transition-colors',
                         advancedFilters.collectionIds.includes(collection.id)
-                          ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
+                          ? 'bg-amber-500/10 border-white/10 text-amber-600 dark:text-amber-400'
                           : 'bg-card border-border text-muted-foreground hover:text-foreground',
                       )}
                     >

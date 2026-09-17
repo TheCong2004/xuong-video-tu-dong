@@ -6,7 +6,7 @@ use tauri::{AppHandle, TitleBarStyle, WebviewUrl, WebviewWindowBuilder};
 pub async fn setup_main_window(app: &AppHandle) -> AnyhowResult<()> {
   let is_headless = std::env::var("ARTCRAFT_HEADLESS").is_ok() || std::env::var("HEADLESS").is_ok();
 
-  let win_builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_NAME, WebviewUrl::default()).title("ArtCraft").visible(!is_headless).resizable(true).fullscreen(false).background_color(Color(0, 0, 0, 0)).enable_clipboard_access().inner_size(2400.0, 1300.0);
+  let win_builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_NAME, WebviewUrl::default()).title("Xưởng Sản Xuất Video").visible(!is_headless).resizable(true).fullscreen(false).background_color(Color(0, 0, 0, 0)).enable_clipboard_access().inner_size(2400.0, 1300.0);
 
   #[cfg(target_os = "macos")]
   let win_builder = win_builder

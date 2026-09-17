@@ -27,7 +27,7 @@ export default function ReasoningTokenBufferToggle({ config, setConfig, t }: Pro
         data-testid="combo-reasoning-token-buffer-enabled"
         checked={config.reasoningTokenBufferEnabled !== false}
         onChange={(e) => setConfig({ ...config, reasoningTokenBufferEnabled: e.target.checked })}
-        className="w-3.5 h-3.5 rounded border border-black/20 dark:border-white/20 accent-primary cursor-pointer"
+        className="w-3.5 h-3.5 rounded border border-black/20 dark:border-white/10 accent-primary cursor-pointer"
       />
       <label
         htmlFor="reasoningTokenBufferEnabled"

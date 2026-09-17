@@ -87,9 +87,9 @@ function SectionBadge({
     tone === "green"
       ? "border-green-500/20 bg-green-500/10 text-green-300"
       : tone === "amber"
-        ? "border-amber-400/20 bg-amber-400/10 text-amber-300"
+        ? "border-white/10 bg-amber-400/10 text-amber-300"
         : tone === "blue"
-          ? "border-blue-400/20 bg-blue-400/10 text-blue-300"
+          ? "border-white/10 bg-blue-400/10 text-blue-300"
           : "border-border/40 bg-surface/50 text-text-muted";
 
   return (

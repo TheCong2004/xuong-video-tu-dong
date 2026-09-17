@@ -50,7 +50,7 @@ export default function CoolingConnectionsPanel(props: CoolingConnectionsPanelPr
   return (
     <div
       data-testid="cooling-connections-panel"
-      className="mb-4 rounded-card border border-amber-500/40 bg-amber-500/5 p-4 shadow-sm"
+      className="mb-4 rounded-card border border-white/10 bg-amber-500/5 p-4 shadow-sm"
     >
       <div className="mb-2 flex items-center gap-2">
         <span
@@ -76,7 +76,7 @@ export default function CoolingConnectionsPanel(props: CoolingConnectionsPanelPr
           return (
             <li
               key={c.id ?? label}
-              className="flex items-center justify-between rounded border border-amber-500/30 bg-background/40 px-3 py-2 text-sm"
+              className="flex items-center justify-between rounded border border-white/10 bg-background/40 px-3 py-2 text-sm"
             >
               <span className="font-medium">{label}</span>
               <span

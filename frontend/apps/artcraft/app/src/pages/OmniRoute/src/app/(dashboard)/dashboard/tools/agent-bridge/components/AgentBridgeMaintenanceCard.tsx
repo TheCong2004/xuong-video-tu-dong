@@ -201,7 +201,7 @@ export function AgentBridgeMaintenanceCard({
 
       {/* Orphaned-state repair banner (Gap 7) */}
       {orphanedStateDetected && (
-        <div className="mx-5 mb-3 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+        <div className="mx-5 mb-3 flex items-center gap-2 rounded-lg border border-white/10 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
           <span className="material-symbols-outlined text-[16px]">warning</span>
           <span>
             {t("orphanedStateWarning") ||
@@ -238,7 +238,7 @@ export function AgentBridgeMaintenanceCard({
 
         {certTrusted &&
           (confirmRemoveCa ? (
-            <span className="inline-flex items-center gap-1 rounded-lg bg-red-500/5 border border-red-500/30 px-2 py-1 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-lg bg-red-500/5 border border-white/10 px-2 py-1 text-xs">
               <span className="text-red-600 dark:text-red-400">{t("removeCaConfirm") || "Remove CA?"}</span>
               <button
                 type="button"
@@ -300,7 +300,7 @@ export function AgentBridgeMaintenanceCard({
 
       {/* Success notice */}
       {notice && (
-        <div className="mx-5 mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
+        <div className="mx-5 mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-emerald-500/5 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
           <span className="material-symbols-outlined text-[16px]">check_circle</span>
           {notice}
         </div>
@@ -352,7 +352,7 @@ export function AgentBridgeMaintenanceCard({
         size="sm"
       >
         <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+          <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-yellow-500/10 p-3">
             <span className="material-symbols-outlined text-[20px] text-yellow-500">warning</span>
             <p className="text-xs text-text-muted">{tCli("sudoPasswordHint")}</p>
           </div>

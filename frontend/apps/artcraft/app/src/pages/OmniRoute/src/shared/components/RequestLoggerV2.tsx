@@ -76,13 +76,13 @@ function getCacheSourceMeta(cacheSource: unknown) {
     return {
       key: "semantic",
       className:
-        "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30",
+        "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-white/10",
     };
   }
 
   return {
     key: "upstream",
-    className: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30",
+    className: "bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-white/10",
   };
 }
 
@@ -842,7 +842,7 @@ const RequestLoggerV2 = forwardRef<RequestLoggerV2Handle, { initialSelectedId?: 
             onClick={() => setRecording(!recording)}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
               recording
-                ? "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-400"
+                ? "bg-red-500/10 border-white/10 text-red-700 dark:text-red-400"
                 : "bg-bg-subtle border-border text-text-muted"
             }`}
           >
@@ -857,7 +857,7 @@ const RequestLoggerV2 = forwardRef<RequestLoggerV2Handle, { initialSelectedId?: 
             disabled={detailLoggingLoading}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors disabled:opacity-60 ${
               detailLoggingEnabled
-                ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                ? "bg-amber-500/10 border-white/10 text-amber-700 dark:text-amber-300"
                 : "bg-bg-subtle border-border text-text-muted"
             }`}
             title={t("capturePipeline")}
@@ -1083,9 +1083,9 @@ const RequestLoggerV2 = forwardRef<RequestLoggerV2Handle, { initialSelectedId?: 
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
                 activeFilter === f.key
                   ? f.key === "error"
-                    ? "bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40"
+                    ? "bg-red-500/20 text-red-700 dark:text-red-400 border-white/10"
                     : f.key === "ok"
-                      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40"
+                      ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-white/10"
                       : f.key === "combo"
                         ? "bg-violet-500/20 text-violet-700 dark:text-violet-300 border-violet-500/40"
                         : "bg-primary text-white border-primary"
@@ -1116,7 +1116,7 @@ const RequestLoggerV2 = forwardRef<RequestLoggerV2Handle, { initialSelectedId?: 
                 onClick={() => setSelectedProvider(isActive ? "" : p)}
                 className={`px-3 py-1 rounded-full text-xs font-bold uppercase border transition-all ${
                   isActive
-                    ? "border-white/40 ring-1 ring-white/20"
+                    ? "border-white/10 ring-1 ring-white/20"
                     : "border-transparent opacity-70 hover:opacity-100"
                 }`}
                 style={{
@@ -1294,10 +1294,10 @@ const RequestLoggerV2 = forwardRef<RequestLoggerV2Handle, { initialSelectedId?: 
                           <td className="px-3 py-2">
                             {isActive ? (
                               <span
-                                className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500/15 border border-amber-500/25"
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500/15 border border-white/10"
                                 title="In progress"
                               >
-                                <span className="inline-block h-3 w-3 rounded-full border-2 border-amber-500 border-t-transparent animate-spin" />
+                                <span className="inline-block h-3 w-3 rounded-full border-2 border-white/10 border-t-transparent animate-spin" />
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1">
@@ -1361,7 +1361,7 @@ const RequestLoggerV2 = forwardRef<RequestLoggerV2Handle, { initialSelectedId?: 
                               <span>{log.model}</span>
                               {log.groupStatus === "healed" && !log.isRetry && (
                                 <span
-                                  className="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[8px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25"
+                                  className="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[8px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-white/10"
                                   title={`Failed, recovered after ${log.groupSize - 1} retry`}
                                 >
                                   healed
@@ -1369,7 +1369,7 @@ const RequestLoggerV2 = forwardRef<RequestLoggerV2Handle, { initialSelectedId?: 
                               )}
                               {log.groupStatus === "failed" && !log.isRetry && (
                                 <span
-                                  className="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[8px] font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/25"
+                                  className="inline-flex items-center gap-0.5 px-1 py-0 rounded text-[8px] font-bold bg-red-500/15 text-red-600 dark:text-red-400 border border-white/10"
                                   title={`All ${log.groupSize} attempts failed`}
                                 >
                                   failed

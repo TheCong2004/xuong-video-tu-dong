@@ -21,7 +21,7 @@ export default function MitmProxyMovedPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-8">
-      <div className="rounded-xl border border-amber-500/40 bg-amber-900/20 p-8 text-center max-w-md w-full space-y-4">
+      <div className="rounded-xl border border-white/10 bg-amber-900/20 p-8 text-center max-w-md w-full space-y-4">
         <div className="flex items-center justify-center gap-2">
           <span className="material-symbols-outlined text-amber-400 text-[28px]">info</span>
           <h1 className="text-lg font-semibold text-amber-200">{t("title")}</h1>

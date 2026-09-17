@@ -9,7 +9,7 @@ const MODES: CompatMode[] = ["off", "auto", "always"];
 
 const MODE_STYLES: Record<CompatMode, string> = {
   off: "bg-black/5 dark:bg-white/5 text-text-muted border-border",
-  auto: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/40",
+  auto: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-white/10",
   always: "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/40",
 };
 

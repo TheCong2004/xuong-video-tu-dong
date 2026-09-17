@@ -2,7 +2,7 @@ import type { FootageClip } from "../../types";
 
 export function FootageClipCard({ clip }: { clip: FootageClip }) {
   return (
-    <div className="flex min-w-[140px] flex-1 flex-col overflow-hidden rounded-md border border-teal-400/45 bg-teal-900/45">
+    <div className="flex min-w-[140px] flex-1 flex-col overflow-hidden rounded-md border border-white/10 bg-teal-900/45">
       <div className="truncate bg-teal-700/55 px-2 py-0.5 text-[11px] font-medium text-white">
         {clip.label}
       </div>

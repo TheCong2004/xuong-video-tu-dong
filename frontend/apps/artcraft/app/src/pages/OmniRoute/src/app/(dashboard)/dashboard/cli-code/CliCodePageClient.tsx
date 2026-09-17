@@ -201,7 +201,7 @@ export default function CliCodePageClient({ machineId: _machineId }: CliCodePage
 
       {/* Empty state — no active providers */}
       {!providersLoading && !hasActiveProviders && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 flex items-start gap-3">
+        <div className="rounded-lg border border-white/10 bg-amber-500/5 p-4 flex items-start gap-3">
           <span className="material-symbols-outlined text-amber-500 flex-shrink-0">warning</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-amber-600 dark:text-amber-400">

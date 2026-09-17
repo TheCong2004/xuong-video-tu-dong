@@ -150,7 +150,7 @@ export function ProxyBulkImportModal({ isOpen, onClose, onImported }: ProxyBulkI
         </div>
 
         {bulkImportErrors.length > 0 && (
-          <div className="max-h-28 overflow-y-auto rounded border border-red-500/30 bg-red-500/10 p-2">
+          <div className="max-h-28 overflow-y-auto rounded border border-white/10 bg-red-500/10 p-2">
             {bulkImportErrors.map((err, idx) => (
               <div key={idx} className="text-xs text-red-400">
                 {t("bulkImportErrorLine", { line: err.line, reason: t(err.reason as "bulkImportMinFields" | "bulkImportInvalidPort") })}
@@ -201,7 +201,7 @@ export function ProxyBulkImportModal({ isOpen, onClose, onImported }: ProxyBulkI
         )}
 
         {bulkImportResult && (
-          <div className="px-3 py-2 rounded border border-emerald-500/30 bg-emerald-500/10 text-sm text-emerald-400">
+          <div className="px-3 py-2 rounded border border-white/10 bg-emerald-500/10 text-sm text-emerald-400">
             {t("bulkImportSuccess", { created: bulkImportResult.created, updated: bulkImportResult.updated, failed: bulkImportResult.failed })}
           </div>
         )}

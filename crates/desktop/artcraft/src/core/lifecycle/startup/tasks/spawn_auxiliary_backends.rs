@@ -99,12 +99,20 @@ fn resolve_sidecar(app: &AppHandle, spec: &BackendSpec) -> Option<PathBuf> {
       push_unique(&mut candidates, directory.join(spec.executable));
       push_unique(&mut candidates, directory.join(spec.directory).join(spec.executable));
       push_unique(&mut candidates, directory.join("resources").join(spec.directory).join(spec.executable));
+      // Unified backend fallback (avoids duplicate 139MB binaries)
+      push_unique(&mut candidates, directory.join("capcut-mate-server.exe"));
+      push_unique(&mut candidates, directory.join("resources").join("capcut-mate-server.exe"));
+      push_unique(&mut candidates, directory.join("resources/capcut-mate").join("capcut-mate-server.exe"));
     }
   }
 
   if let Ok(resources) = app.path().resource_dir() {
     push_unique(&mut candidates, resources.join(spec.directory).join(spec.executable));
     push_unique(&mut candidates, resources.join("resources").join(spec.directory).join(spec.executable));
+    // Unified backend fallback in resources
+    push_unique(&mut candidates, resources.join("capcut-mate-server.exe"));
+    push_unique(&mut candidates, resources.join("resources").join("capcut-mate-server.exe"));
+    push_unique(&mut candidates, resources.join("capcut-mate").join("capcut-mate-server.exe"));
   }
 
   candidates.into_iter().find(|candidate| candidate.is_file())

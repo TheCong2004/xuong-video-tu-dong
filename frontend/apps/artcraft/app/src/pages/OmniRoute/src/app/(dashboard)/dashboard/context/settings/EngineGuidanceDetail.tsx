@@ -40,7 +40,7 @@ export default function EngineGuidanceDetail({
         {!guidance.lossy && (
           <span
             data-testid={`engine-safe-default-${id}`}
-            className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-500"
+            className="rounded border border-white/10 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-emerald-500"
           >
             {t("compressionGuidanceSafeDefault")}
           </span>

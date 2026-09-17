@@ -217,7 +217,7 @@ function SearchResultGridItem({
                 <Check className="w-4 h-4 stroke-[3]" />
               </div>
             ) : (
-              <div className="w-6 h-6 rounded-md border-2 border-white/80 bg-black/20 backdrop-blur-sm flex items-center justify-center shadow-sm transition-colors hover:bg-black/40" />
+              <div className="w-6 h-6 rounded-md border-2 border-white/10 bg-black/20 backdrop-blur-sm flex items-center justify-center shadow-sm transition-colors hover:bg-black/40" />
             )}
           </div>
         )}

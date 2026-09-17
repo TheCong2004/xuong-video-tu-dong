@@ -23,7 +23,7 @@ const CREATOR_ICON_FILES: Partial<Record<ModelCreator, string>> = {
   [ModelCreator.Higgsfield]: "higgsfield.svg",
   [ModelCreator.Alibaba]: "alibaba.svg",
   [ModelCreator.Vidu]: "vidu.svg",
-  [ModelCreator.ArtCraft]: "artcraft.svg",
+  [ModelCreator.ArtCraft]: "xuong-video.png",
   [ModelCreator.Grok]: "grok.svg",
   [ModelCreator.WorldLabs]: "worldlabs.svg",
   [ModelCreator.Suno]: "suno.svg",

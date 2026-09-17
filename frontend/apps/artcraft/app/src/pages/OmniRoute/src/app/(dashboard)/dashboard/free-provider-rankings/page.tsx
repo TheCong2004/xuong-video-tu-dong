@@ -148,7 +148,7 @@ export default function FreeProviderRankingsPage() {
           aria-pressed={configuredOnly}
           className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
             configuredOnly
-              ? "bg-emerald-500 border-emerald-500 text-white"
+              ? "bg-emerald-500 border-white/10 text-white"
               : "border-border text-text-muted hover:text-text-main hover:border-emerald-500/50"
           }`}
         >
@@ -160,7 +160,7 @@ export default function FreeProviderRankingsPage() {
           title={t("filterAvailableOnlyHelp")}
           className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
             availableOnly
-              ? "bg-emerald-500 border-emerald-500 text-white"
+              ? "bg-emerald-500 border-white/10 text-white"
               : "border-border text-text-muted hover:text-text-main hover:border-emerald-500/50"
           }`}
         >
@@ -190,7 +190,7 @@ export default function FreeProviderRankingsPage() {
           title={t("sortTypeFirstHelp")}
           className={`px-4 py-2 text-sm font-medium rounded-lg border transition-colors ${
             groupByType
-              ? "bg-emerald-500 border-emerald-500 text-white"
+              ? "bg-emerald-500 border-white/10 text-white"
               : "border-border text-text-muted hover:text-text-main hover:border-emerald-500/50"
           }`}
         >

@@ -157,7 +157,7 @@ export function AiGeneratePanel() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b1f]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Hệ thống tạo ảnh AI với Gom API Keys thành 1 Key Hợp Nhất (Unified Key Pooling)."
         how="① Nhập Prompt & chọn Model/Size · ② Nhấn «Tạo Ảnh AI» · ③ Ảnh tự động tải & tự retry nếu mạng chậm."
@@ -166,7 +166,7 @@ export function AiGeneratePanel() {
       />
 
       {/* AI Image / AI Voice / Key Pool */}
-      <div className="flex items-center gap-6 border-b border-white/8 px-5">
+      <div className="flex items-center gap-2 border-b border-white/10 bg-[#10141e]/50 px-6 py-2.5">
         {(
           [
             { id: "image" as const, label: "AI Image" },
@@ -181,14 +181,13 @@ export function AiGeneratePanel() {
               type="button"
               onClick={() => setTab(t.id)}
               className={twMerge(
-                "relative py-3 text-[13px] font-medium transition-colors",
-                active ? "text-white/90 font-semibold" : "text-white/45 hover:text-white/70",
+                "rounded-xl px-3.5 py-1.5 text-xs font-semibold transition",
+                active
+                  ? "border border-white/10 bg-rose-500/10 text-white shadow-md shadow-rose-500/5 font-semibold"
+                  : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100",
               )}
             >
               {t.label}
-              {active && (
-                <span className="absolute right-0 bottom-0 left-0 h-0.5 rounded-full bg-sky-400" />
-              )}
             </button>
           );
         })}
@@ -210,9 +209,9 @@ export function AiGeneratePanel() {
           minWidth={280}
           maxWidth={480}
           left={
-            <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto border-r border-white/8">
+            <div className="flex h-full min-h-0 w-full flex-col overflow-y-auto border-r border-white/10">
               {/* Unified Key Header */}
-              <div className="flex flex-wrap items-center justify-between gap-1 border-b border-white/6 px-4 py-2 text-[11px] bg-[#21232b]">
+              <div className="flex flex-wrap items-center justify-between gap-1 border-b border-white/10 px-4 py-2 text-[11px] bg-[#21232b]">
                 <div className="flex items-center gap-1.5 font-medium text-sky-300">
                   <FontAwesomeIcon icon={faKey} className="text-[10px]" />
                   <span>Key hợp nhất:</span>
@@ -266,9 +265,9 @@ export function AiGeneratePanel() {
                         type="button"
                         onClick={() => setAspect(r)}
                         className={twMerge(
-                          "rounded-lg py-2 text-[12px] font-semibold transition-colors border border-white/8",
+                          "rounded-lg py-2 text-[12px] font-semibold transition-colors border border-white/10",
                           aspect === r
-                            ? "bg-sky-600 text-white border-sky-400"
+                            ? "bg-sky-600 text-white border-white/10"
                             : "bg-[#1e2026] text-white/60 hover:bg-[#252830]",
                         )}
                       >
@@ -344,7 +343,7 @@ export function AiGeneratePanel() {
           right={
             <div className="relative flex h-full min-h-0 min-w-0 flex-1 flex-col bg-[#141519]">
               {/* Right Header Toolbar */}
-              <div className="flex items-center justify-between border-b border-white/6 px-4 py-2 text-white/40 bg-[#1a1b1f]">
+              <div className="flex items-center justify-between border-b border-white/10 px-4 py-2 text-white/40 bg-[#1a1b1f]">
                 <div className="text-[12px] font-medium text-white/70">
                   Kết quả ảnh AI ({generatedImages.length})
                 </div>
@@ -422,7 +421,7 @@ export function AiGeneratePanel() {
               </div>
 
               {/* Footer Stats Bar */}
-              <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-white/8 bg-[#1a1b1f] px-4 py-2.5 text-[12px]">
+              <div className="flex flex-wrap gap-x-5 gap-y-1 border-t border-white/10 bg-[#1a1b1f] px-4 py-2.5 text-[12px]">
                 <span className="text-white/70">
                   Total: <span className="text-white font-bold">{stats.total}</span>
                 </span>

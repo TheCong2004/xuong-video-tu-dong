@@ -39,7 +39,7 @@ export default function CliConceptCard({ currentType }: CliConceptCardProps) {
         </div>
 
         {/* Other types as chips */}
-        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-black/5 dark:border-white/5">
+        <div className="flex items-center gap-2 flex-wrap pt-1 border-t border-black/5 dark:border-white/10">
           {types
             .filter((type) => type !== currentType)
             .map((type) => (

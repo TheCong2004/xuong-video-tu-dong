@@ -150,37 +150,37 @@ export const PublishView: React.FC<PublishViewProps> = ({
     switch (status) {
       case 'WAITING_APPROVAL':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-300 border border-white/10 flex items-center gap-1">
             <Clock className="h-3 w-3" /> Chờ Phê Duyệt
           </span>
         );
       case 'SCHEDULED':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/10 text-blue-300 border border-blue-500/30 flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-500/10 text-blue-300 border border-white/10 flex items-center gap-1">
             <Calendar className="h-3 w-3" /> Đã Xếp Lịch
           </span>
         );
       case 'READY_TO_POST':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-300 border border-white/10 flex items-center gap-1">
             <Send className="h-3 w-3" /> Sẵn Sàng Đăng
           </span>
         );
       case 'POSTING':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-300 border border-purple-500/30 flex items-center gap-1 animate-pulse">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-500/10 text-purple-300 border border-white/10 flex items-center gap-1 animate-pulse">
             <RefreshCw className="h-3 w-3 animate-spin" /> Đang Đăng...
           </span>
         );
       case 'POSTED':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-white/10 flex items-center gap-1">
             <CheckCircle2 className="h-3 w-3" /> Đã Đăng Thành Công
           </span>
         );
       case 'AUTH_REQUIRED':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/15 text-red-300 border border-red-500/40 flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/15 text-red-300 border border-white/10 flex items-center gap-1">
             <ShieldAlert className="h-3 w-3" /> Cần Đăng Nhập Profile
           </span>
         );
@@ -192,13 +192,13 @@ export const PublishView: React.FC<PublishViewProps> = ({
         );
       case 'POST_ERROR':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/10 text-red-300 border border-red-500/30 flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-500/10 text-red-300 border border-white/10 flex items-center gap-1">
             <AlertTriangle className="h-3 w-3" /> Lỗi Đăng Bài
           </span>
         );
       case 'CANCELLED':
         return (
-          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-500/10 text-zinc-400 border border-zinc-500/20 flex items-center gap-1">
+          <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-500/10 text-zinc-400 border border-white/10 flex items-center gap-1">
             <XCircle className="h-3 w-3" /> Đã Hủy
           </span>
         );
@@ -214,11 +214,11 @@ export const PublishView: React.FC<PublishViewProps> = ({
   const getPlatformIcon = (platform: string) => {
     switch (platform.toLowerCase()) {
       case 'facebook':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600/30 text-blue-300 border border-blue-500/30">FACEBOOK REELS</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-600/30 text-blue-300 border border-white/10">FACEBOOK REELS</span>;
       case 'tiktok':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-600/30 text-pink-300 border border-pink-500/30">TIKTOK</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-pink-600/30 text-pink-300 border border-white/10">TIKTOK</span>;
       case 'youtube':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600/30 text-red-300 border border-red-500/30">YOUTUBE SHORTS</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-600/30 text-red-300 border border-white/10">YOUTUBE SHORTS</span>;
       default:
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-zinc-700 text-zinc-300">{platform.toUpperCase()}</span>;
     }
@@ -234,7 +234,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
               <Share2 className="h-5 w-5 text-emerald-400" />
               Floword Multi-Platform Publishing Engine
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-300 border border-white/10">
               {publications.length} Publications
             </span>
           </div>
@@ -252,9 +252,9 @@ export const PublishView: React.FC<PublishViewProps> = ({
       </div>
 
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-3 bg-[#121622] p-3 rounded-2xl border border-white/[0.08]">
+      <div className="flex flex-wrap items-center gap-3 bg-[#121622] p-3 rounded-2xl border border-white/10">
         {/* Platform Tabs */}
-        <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/[0.05]">
+        <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
           {(['all', 'facebook', 'tiktok', 'youtube'] as const).map((p) => (
             <button
               key={p}
@@ -274,7 +274,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-xl bg-black/40 border border-white/[0.08] text-xs text-zinc-300 focus:outline-none"
+          className="px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-zinc-300 focus:outline-none"
         >
           <option value="all">Tất cả trạng thái</option>
           <option value="WAITING_APPROVAL">Chờ Phê Duyệt (Review)</option>
@@ -292,7 +292,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
         <select
           value={pageFilter}
           onChange={(e) => setPageFilter(e.target.value)}
-          className="px-3 py-1.5 rounded-xl bg-black/40 border border-white/[0.08] text-xs text-zinc-300 focus:outline-none"
+          className="px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-xs text-zinc-300 focus:outline-none"
         >
           <option value="all">Tất cả Content Pages</option>
           {pages.map((p) => (
@@ -305,12 +305,12 @@ export const PublishView: React.FC<PublishViewProps> = ({
 
       {/* Publications Grid */}
       {loading ? (
-        <div className="p-16 rounded-2xl bg-[#121622] border border-white/[0.08] text-center space-y-2">
+        <div className="p-16 rounded-2xl bg-[#121622] border border-white/10 text-center space-y-2">
           <RefreshCw className="h-8 w-8 text-indigo-400 animate-spin mx-auto" />
           <p className="text-xs text-zinc-400">Đang tải danh sách bài đăng...</p>
         </div>
       ) : publications.length === 0 ? (
-        <div className="p-16 rounded-2xl bg-[#121622] border border-white/[0.08] text-center space-y-3">
+        <div className="p-16 rounded-2xl bg-[#121622] border border-white/10 text-center space-y-3">
           <Film className="h-10 w-10 text-zinc-600 mx-auto" />
           <h3 className="text-base font-bold text-white">Chưa có bài đăng nào phù hợp bộ lọc</h3>
           <p className="text-xs text-zinc-400 max-w-md mx-auto">
@@ -325,10 +325,10 @@ export const PublishView: React.FC<PublishViewProps> = ({
             return (
               <div
                 key={pub.id}
-                className="rounded-2xl bg-[#121622] border border-white/[0.08] overflow-hidden flex flex-col justify-between shadow-xl transition hover:border-white/[0.15]"
+                className="rounded-2xl bg-[#121622] border border-white/10 overflow-hidden flex flex-col justify-between shadow-xl transition hover:border-white/[0.15]"
               >
                 {/* Header Badge */}
-                <div className="p-3.5 border-b border-white/[0.06] bg-black/20 flex items-center justify-between">
+                <div className="p-3.5 border-b border-white/10 bg-black/20 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     {getPlatformIcon(pub.platform)}
                     <span className="text-xs font-bold text-white truncate max-w-[130px]">
@@ -345,13 +345,13 @@ export const PublishView: React.FC<PublishViewProps> = ({
                     <h4 className="font-bold text-white text-sm line-clamp-1 mb-1">
                       {pub.title || 'Floword Video Master'}
                     </h4>
-                    <p className="text-zinc-300 line-clamp-3 bg-white/[0.02] p-2.5 rounded-xl border border-white/[0.04] text-[11px]">
+                    <p className="text-zinc-300 line-clamp-3 bg-white/[0.02] p-2.5 rounded-xl border border-white/10 text-[11px]">
                       {pub.caption || pub.description || 'Không có mô tả phụ đề.'}
                     </p>
                   </div>
 
                   {/* Browser Profile & Target */}
-                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-black/30 p-2.5 rounded-xl border border-white/[0.04]">
+                  <div className="grid grid-cols-2 gap-2 text-[11px] bg-black/30 p-2.5 rounded-xl border border-white/10">
                     <div>
                       <span className="text-zinc-500 block text-[10px]">Browser Profile:</span>
                       <span className="font-mono text-zinc-300 truncate block">
@@ -368,7 +368,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
 
                   {/* Scheduled info if available */}
                   {pub.scheduled_at && (
-                    <div className="flex items-center gap-1.5 text-blue-300 bg-blue-500/10 p-2 rounded-lg border border-blue-500/20 text-[11px]">
+                    <div className="flex items-center gap-1.5 text-blue-300 bg-blue-500/10 p-2 rounded-lg border border-white/10 text-[11px]">
                       <Clock className="h-3.5 w-3.5" />
                       <span>
                         Lên lịch lúc: <b>{new Date(pub.scheduled_at * 1000).toLocaleString()}</b>
@@ -378,7 +378,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
 
                   {/* Error display if failed */}
                   {pub.last_error_message && (
-                    <div className="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-[11px] space-y-1">
+                    <div className="p-2.5 rounded-xl bg-red-500/10 border border-white/10 text-red-300 text-[11px] space-y-1">
                       <div className="flex items-center gap-1 font-bold">
                         <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
                         <span>Mã lỗi: {pub.last_error_code || 'ERROR'}</span>
@@ -393,7 +393,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
                       href={pub.post_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20 transition font-bold text-xs"
+                      className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-white/10 text-emerald-300 hover:bg-emerald-500/20 transition font-bold text-xs"
                     >
                       <span className="flex items-center gap-1.5">
                         <ExternalLink className="h-3.5 w-3.5" /> Xem bài đăng trực tiếp
@@ -404,7 +404,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
 
                   {/* Local video path */}
                   {pub.video_path && (
-                    <div className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-white/[0.05] text-[10px]">
+                    <div className="flex items-center justify-between bg-black/40 p-2 rounded-lg border border-white/10 text-[10px]">
                       <span className="font-mono text-zinc-400 truncate max-w-[220px]">
                         {pub.video_path}
                       </span>
@@ -421,7 +421,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
                 </div>
 
                 {/* Card Action Buttons */}
-                <div className="p-3 border-t border-white/[0.06] bg-black/30 flex flex-wrap items-center justify-end gap-2">
+                <div className="p-3 border-t border-white/10 bg-black/30 flex flex-wrap items-center justify-end gap-2">
                   {pub.status === 'WAITING_APPROVAL' && (
                     <>
                       <button
@@ -436,7 +436,7 @@ export const PublishView: React.FC<PublishViewProps> = ({
                         type="button"
                         disabled={isLoading}
                         onClick={() => handleScheduleDefaultSlot(pub.id)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-300 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 transition flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-blue-300 bg-blue-600/20 hover:bg-blue-600/30 border border-white/10 transition flex items-center gap-1"
                       >
                         <Calendar className="h-3 w-3" /> Xếp Lịch
                       </button>

@@ -60,23 +60,23 @@ export function ModelStatusPanel() {
   };
   return (
     <Panel title="Mô hình AI nội bộ">
-      <p className="mb-3 text-[11px] text-slate-400">Tài nguyên thuộc ArtCraft, tải qua HTTPS và kiểm tra SHA trước khi dùng.</p>
+      <p className="mb-3 text-[11px] text-slate-400">Tài nguyên thuộc Xưởng Sản Xuất Video, tải qua HTTPS và kiểm tra SHA trước khi dùng.</p>
       <div className="space-y-2">
         {models.map((model) => (
-          <div key={model.id} className="rounded-lg border border-slate-700/60 bg-slate-950/30 p-2 text-xs">
+          <div key={model.id} className="rounded-lg border border-white/10 bg-slate-950/30 p-2 text-xs">
             <div className="flex items-center justify-between gap-2">
               <span className="font-medium text-slate-100">{model.engine}</span>
               <span className={model.status === "READY" ? "text-emerald-300" : "text-amber-200"}>{statusLabel[model.status]}</span>
             </div>
             <div className="mt-1 truncate text-[10px] text-slate-500">{model.version} · {model.relative_path}{model.size ? ` · ${(model.size / 1048576).toFixed(1)} MB` : ""}</div>
             {model.status === "DOWNLOADING" && <div className="mt-1 h-1 rounded bg-white/10"><div className="h-full rounded bg-cyan-400" style={{ width: `${model.progress}%` }} /></div>}
-            {model.status === "DOWNLOADING" && <button type="button" disabled={busy === model.id} onClick={() => void cancel(model.id)} className="mt-2 mr-2 rounded-md border border-rose-300/30 px-2 py-1 text-[10px] text-rose-100 disabled:opacity-50">Hủy tải</button>}
+            {model.status === "DOWNLOADING" && <button type="button" disabled={busy === model.id} onClick={() => void cancel(model.id)} className="mt-2 mr-2 rounded-lg border border-rose-500/30 bg-rose-500/20 px-2.5 py-1 text-[11px] font-semibold text-rose-300 disabled:opacity-50">Hủy tải</button>}
             {(model.status === "NOT_INSTALLED" || model.status === "CORRUPTED") && (
-              <button type="button" disabled={busy === model.id} onClick={() => void install(model.id)} className="mt-2 rounded-md border border-cyan-300/30 px-2 py-1 text-[10px] text-cyan-100 disabled:opacity-50">
+              <button type="button" disabled={busy === model.id} onClick={() => void install(model.id)} className="mt-2 rounded-lg border border-indigo-500/30 bg-indigo-500/20 px-2.5 py-1 text-[11px] font-semibold text-indigo-300 hover:bg-indigo-500/30 disabled:opacity-50">
                 {busy === model.id ? "Đang cài…" : "Cài mô hình"}
               </button>
             )}
-            {(model.status === "READY" || model.status === "CORRUPTED") && <button type="button" disabled={busy === model.id} onClick={() => void remove(model.id)} className="mt-2 ml-2 rounded-md border border-slate-500/40 px-2 py-1 text-[10px] text-slate-300 disabled:opacity-50">Gỡ mô hình</button>}
+            {(model.status === "READY" || model.status === "CORRUPTED") && <button type="button" disabled={busy === model.id} onClick={() => void remove(model.id)} className="mt-2 ml-2 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold text-zinc-300 hover:bg-white/[0.08] disabled:opacity-50">Gỡ mô hình</button>}
           </div>
         ))}
       </div>
@@ -85,5 +85,10 @@ export function ModelStatusPanel() {
 }
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
-  return <div className="rounded-xl border border-slate-700/70 bg-[#18212a] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"><h3 className="mb-3 text-sm font-semibold text-slate-100">{title}</h3>{children}</div>;
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#121622] p-5 shadow-xl shadow-black/10">
+      <h3 className="mb-4 text-sm font-bold text-white tracking-wide">{title}</h3>
+      {children}
+    </div>
+  );
 }

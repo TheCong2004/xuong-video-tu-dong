@@ -26,32 +26,32 @@ const CATEGORY_STYLES: Record<
 > = {
   security: {
     bg: "bg-red-50 dark:bg-red-500/15",
-    border: "border-red-200 dark:border-red-500/20",
+    border: "border-white/10 dark:border-white/10",
     text: "text-red-700 dark:text-red-300",
   },
   network: {
     bg: "bg-sky-50 dark:bg-blue-500/15",
-    border: "border-sky-200 dark:border-blue-500/20",
+    border: "border-white/10 dark:border-white/10",
     text: "text-sky-700 dark:text-blue-300",
   },
   policies: {
     bg: "bg-amber-50 dark:bg-amber-500/15",
-    border: "border-amber-200 dark:border-amber-500/20",
+    border: "border-white/10 dark:border-white/10",
     text: "text-amber-700 dark:text-amber-300",
   },
   runtime: {
     bg: "bg-violet-50 dark:bg-purple-500/15",
-    border: "border-violet-200 dark:border-purple-500/20",
+    border: "border-violet-200 dark:border-white/10",
     text: "text-violet-700 dark:text-purple-300",
   },
   cli: {
     bg: "bg-emerald-50 dark:bg-green-500/15",
-    border: "border-emerald-200 dark:border-green-500/20",
+    border: "border-white/10 dark:border-green-500/20",
     text: "text-emerald-700 dark:text-green-300",
   },
   health: {
     bg: "bg-cyan-50 dark:bg-cyan-500/15",
-    border: "border-cyan-200 dark:border-cyan-500/20",
+    border: "border-white/10 dark:border-white/10",
     text: "text-cyan-700 dark:text-cyan-300",
   },
 };
@@ -62,19 +62,19 @@ const SOURCE_STYLES: Record<
 > = {
   db: {
     bg: "bg-sky-50 dark:bg-blue-500/20",
-    border: "border-sky-200 dark:border-blue-500/30",
+    border: "border-white/10 dark:border-white/10",
     text: "text-sky-700 dark:text-blue-300",
     label: "DB",
   },
   env: {
     bg: "bg-amber-50 dark:bg-amber-500/20",
-    border: "border-amber-200 dark:border-amber-500/30",
+    border: "border-white/10 dark:border-white/10",
     text: "text-amber-700 dark:text-amber-300",
     label: "ENV",
   },
   default: {
     bg: "bg-slate-100 dark:bg-slate-500/20",
-    border: "border-slate-200 dark:border-slate-500/30",
+    border: "border-white/10 dark:border-white/10",
     text: "text-slate-600 dark:text-slate-300",
     label: "DEF",
   },
@@ -106,7 +106,7 @@ export default function FeatureFlagCard({
 
   const cardBorder =
     flag.type === "boolean" && enabled
-      ? "border-emerald-300 shadow-emerald-500/10 dark:border-green-500/30"
+      ? "border-white/10 shadow-emerald-500/10 dark:border-green-500/30"
       : "border-border";
 
   return (
@@ -181,7 +181,7 @@ export default function FeatureFlagCard({
         )}
         {flag.requiresRestart && (
           <span
-            className="rounded border border-slate-300 bg-slate-50 px-1 text-[10px] text-slate-600 dark:border-slate-400/30 dark:bg-transparent dark:text-slate-300"
+            className="rounded border border-white/10 bg-slate-50 px-1 text-[10px] text-slate-600 dark:border-white/10 dark:bg-transparent dark:text-slate-300"
             title={t("requiresRestart")}
             aria-label={t("requiresRestart")}
           >

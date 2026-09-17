@@ -44,10 +44,10 @@ export default function Select({
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
       {label && (
-        <label htmlFor={selectId} className="text-sm font-medium text-text-main">
+        <label htmlFor={selectId} className="text-sm font-semibold text-slate-200">
           {label}
           {required && (
-            <span className="text-red-500 ml-1" aria-hidden="true">
+            <span className="text-rose-500 ml-1" aria-hidden="true">
               *
             </span>
           )}
@@ -64,38 +64,38 @@ export default function Select({
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={cn(
-            "w-full py-2 px-3 pe-10 text-sm text-text-main",
-            "bg-surface border border-black/10 dark:border-white/10 rounded-control appearance-none",
-            "focus:ring-1 focus:ring-accent/30 focus:border-accent/50 focus:outline-none",
+            "w-full py-2.5 px-3.5 pe-10 text-sm text-white font-medium",
+            "bg-[#10141e] border border-white/10 rounded-xl appearance-none",
+            "focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 focus:outline-none",
             "transition-all disabled:opacity-50 disabled:cursor-not-allowed",
             "text-[16px] sm:text-sm",
-            error ? "border-red-500 focus:border-red-500 focus:ring-red-500/20" : "",
+            error ? "border-white/10 focus:border-rose-500 focus:ring-rose-500/20" : "",
             selectClassName
           )}
           {...props}
         >
           {!children && (placeholder ?? t("selectOption")) && (
-            <option value="" disabled className="bg-surface text-text-muted">
+            <option value="" disabled className="bg-[#10141e] text-slate-400">
               {placeholder ?? t("selectOption")}
             </option>
           )}
           {!children &&
             options.map((option) => (
-              <option key={option.value} value={option.value} className="bg-surface text-text-main">
+              <option key={option.value} value={option.value} className="bg-[#10141e] text-white">
                 {option.label}
               </option>
             ))}
           {children}
         </select>
         <div
-          className="absolute inset-y-0 end-0 flex items-center pe-3 pointer-events-none text-text-muted"
+          className="absolute inset-y-0 end-0 flex items-center pe-3 pointer-events-none text-slate-400"
           aria-hidden="true"
         >
           <span className="material-symbols-outlined text-[20px]">expand_more</span>
         </div>
       </div>
       {error && (
-        <p id={errorId} className="text-xs text-red-500 flex items-center gap-1" role="alert">
+        <p id={errorId} className="text-xs text-rose-400 flex items-center gap-1" role="alert">
           <span className="material-symbols-outlined text-[14px]" aria-hidden="true">
             error
           </span>
@@ -103,10 +103,11 @@ export default function Select({
         </p>
       )}
       {hint && !error && (
-        <p id={hintId} className="text-xs text-text-muted">
+        <p id={hintId} className="text-xs text-slate-400">
           {hint}
         </p>
       )}
     </div>
   );
 }
+

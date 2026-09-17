@@ -169,7 +169,7 @@ export default function PipelineView({
       subtitle={tr("advancedPipelineSubtitle", "Visualize cada passo da tradução (hub-and-spoke).")}
       icon="route"
       defaultOpen={defaultOpen || forceOpen}
-      className="border-black/5 dark:border-white/5"
+      className="border-black/5 dark:border-white/10"
     >
       {/* D7 lazy-render container */}
       <div
@@ -225,7 +225,7 @@ export default function PipelineView({
                     <Card
                       className={
                         step.status === "error"
-                          ? "border-red-500/30"
+                          ? "border-white/10"
                           : isExpanded
                             ? "border-primary/30"
                             : step.status === "pending"

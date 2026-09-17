@@ -493,7 +493,7 @@ export default function AppearanceTab() {
                 >
                   <span className="flex items-center gap-2">
                     <span
-                      className="size-4 rounded-full border border-black/10 dark:border-white/20"
+                      className="size-4 rounded-full border border-black/10 dark:border-white/10"
                       style={{ backgroundColor: item.color }}
                     />
                     <span className="text-sm font-medium">{item.label}</span>
@@ -517,7 +517,7 @@ export default function AppearanceTab() {
               onChange={(e) => setCustomThemeColor(e.target.value)}
               placeholder="#3b82f6"
               maxLength={7}
-              className={`flex-1 h-10 px-3 rounded-lg bg-surface border text-sm text-text-main focus:outline-none ${isValidHex ? "border-border focus:border-primary" : "border-red-400 focus:border-red-500"}`}
+              className={`flex-1 h-10 px-3 rounded-lg bg-surface border text-sm text-text-main focus:outline-none ${isValidHex ? "border-border focus:border-primary" : "border-white/10 focus:border-red-500"}`}
             />
             <Button onClick={() => setCustomColorTheme(customThemeColor)} disabled={!isValidHex}>
               {t("themeCreate")}

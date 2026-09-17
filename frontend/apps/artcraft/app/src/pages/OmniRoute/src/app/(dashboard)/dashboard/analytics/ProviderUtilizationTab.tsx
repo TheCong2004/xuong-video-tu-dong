@@ -263,7 +263,7 @@ export default function ProviderUtilizationTab() {
                 {t("providerUtilizationNoDataDescription")}
               </p>
             </div>
-            <div className="rounded-lg border border-black/5 bg-black/[0.02] p-4 dark:border-white/5 dark:bg-white/[0.02]">
+            <div className="rounded-lg border border-black/5 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.02]">
               <p className="text-xs font-medium text-text-main">
                 {t("providerUtilizationGettingStarted")}
               </p>
@@ -315,7 +315,7 @@ export default function ProviderUtilizationTab() {
                   <Card.Section key={point.provider} className="flex h-full flex-col gap-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/5 bg-surface text-text-main dark:border-white/5">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-black/5 bg-surface text-text-main dark:border-white/10">
                           <ProviderIcon providerId={point.provider} size={22} />
                         </div>
                         <div>

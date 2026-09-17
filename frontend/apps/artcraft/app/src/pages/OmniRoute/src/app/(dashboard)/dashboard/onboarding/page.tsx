@@ -255,7 +255,7 @@ export default function OnboardingWizard() {
         </div>
 
         {/* Card */}
-        <div className="bg-surface rounded-2xl border border-white/[0.06] p-8 shadow-xl">
+        <div className="bg-surface rounded-2xl border border-white/10 p-8 shadow-xl">
           {/* Step Header */}
           <div className="text-center mb-6">
             <span
@@ -287,7 +287,7 @@ export default function OnboardingWizard() {
                   ].map((f) => (
                     <div
                       key={f.icon}
-                      className="h-full bg-white/[0.03] rounded-xl p-3 text-center border border-white/[0.06]"
+                      className="h-full bg-white/[0.03] rounded-xl p-3 text-center border border-white/10"
                     >
                       <div className="flex h-full flex-col items-center justify-center">
                         <span className="material-symbols-outlined text-primary text-[24px] mb-1 block">
@@ -443,7 +443,7 @@ export default function OnboardingWizard() {
             {currentStep.id === "done" && (
               <div className="text-center space-y-4">
                 <p className="text-text-muted">{t("doneDesc")}</p>
-                <div className="bg-white/[0.03] rounded-xl p-4 border border-white/[0.06] text-left">
+                <div className="bg-white/[0.03] rounded-xl p-4 border border-white/10 text-left">
                   <p className="text-xs text-text-muted mb-2 font-medium">{t("yourEndpoint")}</p>
                   <code className="text-sm text-primary">{apiEndpoint}</code>
                 </div>
@@ -452,7 +452,7 @@ export default function OnboardingWizard() {
           </div>
 
           {/* Footer Actions */}
-          <div className="flex items-center justify-between mt-8 pt-6 border-t border-white/[0.06]">
+          <div className="flex items-center justify-between mt-8 pt-6 border-t border-white/10">
             <div>
               {step > 0 && !isLastStep && (
                 <button

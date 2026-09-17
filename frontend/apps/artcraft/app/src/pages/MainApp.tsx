@@ -14,22 +14,24 @@ import { useTabStore } from "./Stores/TabState";
 
 import { AppsIndexPage } from "./PageApps/AppsIndexPage";
 const CapCutAutomation = React.lazy(() =>
-  import("./PageCapCutAutomation").then((m) => ({ default: m.CapCutAutomation }))
+  import("./PageCapCutAutomation").then((m) => ({
+    default: m.CapCutAutomation,
+  })),
 );
 const Youwee = React.lazy(() =>
-  import("./PageYouwee").then((m) => ({ default: m.Youwee }))
+  import("./PageYouwee").then((m) => ({ default: m.Youwee })),
 );
 const PageMediaCrawler = React.lazy(() =>
-  import("./PageMediaCrawler").then((m) => ({ default: m.PageMediaCrawler }))
+  import("./PageMediaCrawler").then((m) => ({ default: m.PageMediaCrawler })),
 );
 const PageOmniRoute = React.lazy(() =>
-  import("./OmniRoute/index").then((m) => ({ default: m.PageOmniRoute }))
+  import("./OmniRoute/index").then((m) => ({ default: m.PageOmniRoute })),
 );
 const PageFlowordStudio = React.lazy(() =>
-  import("./FlowordStudio").then((m) => ({ default: m.PageFlowordStudio }))
+  import("./FlowordStudio").then((m) => ({ default: m.PageFlowordStudio })),
 );
 const PageInkOS = React.lazy(() =>
-  import("./PageInkOS").then((m) => ({ default: m.PageInkOS }))
+  import("./PageInkOS").then((m) => ({ default: m.PageInkOS })),
 );
 
 interface Props {
@@ -48,22 +50,26 @@ class TabErrorBoundary extends Component<
     return { hasError: true, error };
   }
   componentDidCatch(error: Error, errorInfo: any) {
-    console.error(`[TabErrorBoundary] Error in ${this.props.tabName}:`, error, errorInfo);
+    console.error(
+      `[TabErrorBoundary] Error in ${this.props.tabName}:`,
+      error,
+      errorInfo,
+    );
   }
   render() {
     if (this.state.hasError) {
       return (
-        <div className="flex h-[calc(100vh-56px)] w-full flex-col items-center justify-center bg-[#121318] p-8 text-center text-slate-200">
-          <div className="rounded-2xl border border-red-500/20 bg-[#1c1e26] p-8 max-w-md space-y-4 shadow-xl">
+        <div className="text-slate-200 flex h-[calc(100vh-56px)] w-full flex-col items-center justify-center bg-[#121318] p-8 text-center">
+          <div className="max-w-md space-y-4 rounded-2xl border border-white/10 bg-[#1c1e26] p-8 shadow-xl">
             <h3 className="text-xl font-bold text-white">
               Ứng dụng {this.props.tabName} gặp sự cố
             </h3>
-            <p className="text-xs text-red-400 font-mono bg-[#0e0f14] p-3 rounded-xl overflow-x-auto text-left">
+            <p className="overflow-x-auto rounded-xl bg-[#0e0f14] p-3 text-left font-mono text-xs text-red-400">
               {this.state.error?.message || "Lỗi không xác định"}
             </p>
             <button
               onClick={() => this.setState({ hasError: false, error: null })}
-              className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition"
+              className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-500"
             >
               Thử lại
             </button>
@@ -110,10 +116,7 @@ export const MainApp = ({ sceneToken }: Props) => {
 
   return (
     <div className="w-screen">
-      <TopBar
-        loginSignUpPressed={() => {}}
-        pageName="Floword Studio"
-      />
+      <TopBar loginSignUpPressed={() => {}} pageName="Floword Studio" />
 
       <TabBody sceneToken={sceneToken} />
 
@@ -126,27 +129,37 @@ export const MainApp = ({ sceneToken }: Props) => {
 const TabFallback = () => (
   <div className="flex h-[calc(100vh-56px)] w-full items-center justify-center bg-[#0f1015]">
     <div className="flex flex-col items-center gap-3">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500/20 border-t-indigo-500" />
-      <div className="text-xs text-slate-500">Loading module...</div>
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-indigo-500" />
+      <div className="text-slate-500 text-xs">Loading module...</div>
     </div>
   </div>
 );
 
 const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
   const tabStore = useTabStore();
-  const tabId = tabStore.activeTabId;
+  const tabId = tabStore.activeTabId || "FLOWORD_STUDIO";
 
   const [omniRouteMounted, setOmniRouteMounted] = useState(false);
+  const [capCutMounted, setCapCutMounted] = useState(false);
+  const [flowordMounted, setFlowordMounted] = useState(true);
+
   useEffect(() => {
     if (tabId === "OMNI_ROUTE") setOmniRouteMounted(true);
+    if (tabId === "CAPCUT_AUTOMATION") setCapCutMounted(true);
+    if (tabId === "FLOWORD_STUDIO") setFlowordMounted(true);
   }, [tabId]);
+
+  const isOtherTab = ["APPS", "YOUWEE", "MEDIA_CRAWLER", "INKOS"].includes(tabId);
 
   return (
     <>
-      {/* Persistent OmniRoute container — mounts on first visit, then stays warm */}
       <div
         data-testid="omniroute-persistent-container"
-        className={tabId === "OMNI_ROUTE" ? "h-[calc(100vh-56px)] w-full overflow-hidden block" : "hidden"}
+        className={
+          tabId === "OMNI_ROUTE"
+            ? "h-[calc(100vh-56px)] w-full overflow-hidden block"
+            : "hidden"
+        }
       >
         {omniRouteMounted && (
           <TabErrorBoundary tabName="OMNI_ROUTE">
@@ -157,27 +170,53 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
         )}
       </div>
 
-      {tabId !== "OMNI_ROUTE" && (
+      <div
+        data-testid="floword-persistent-container"
+        className={
+          tabId === "FLOWORD_STUDIO" || (!isOtherTab && tabId !== "OMNI_ROUTE" && tabId !== "CAPCUT_AUTOMATION")
+            ? "h-[calc(100vh-56px)] w-full overflow-hidden block"
+            : "hidden"
+        }
+      >
+        {flowordMounted && (
+          <TabErrorBoundary tabName="FLOWORD_STUDIO">
+            <React.Suspense fallback={<TabFallback />}>
+              <PageFlowordStudio />
+            </React.Suspense>
+          </TabErrorBoundary>
+        )}
+      </div>
+
+      <div
+        data-testid="capcut-persistent-container"
+        className={
+          tabId === "CAPCUT_AUTOMATION"
+            ? "h-[calc(100vh-56px)] w-full overflow-hidden block"
+            : "hidden"
+        }
+      >
+        {capCutMounted && (
+          <TabErrorBoundary tabName="CAPCUT_AUTOMATION">
+            <React.Suspense fallback={<TabFallback />}>
+              <CapCutAutomation />
+            </React.Suspense>
+          </TabErrorBoundary>
+        )}
+      </div>
+
+      {isOtherTab && (
         <TabErrorBoundary tabName={tabId} key={tabId}>
           <React.Suspense fallback={<TabFallback />}>
             {(() => {
               switch (tabId) {
                 case "APPS":
                   return <AppsIndexPage />;
-                case "CAPCUT_AUTOMATION":
-                  return <CapCutAutomation />;
                 case "YOUWEE":
                   return <Youwee />;
                 case "MEDIA_CRAWLER":
                   return (
                     <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
                       <PageMediaCrawler />
-                    </div>
-                  );
-                case "FLOWORD_STUDIO":
-                  return (
-                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                      <PageFlowordStudio />
                     </div>
                   );
                 case "INKOS":
@@ -187,11 +226,7 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
                     </div>
                   );
                 default:
-                  return (
-                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                      <PageFlowordStudio />
-                    </div>
-                  );
+                  return null;
               }
             })()}
           </React.Suspense>

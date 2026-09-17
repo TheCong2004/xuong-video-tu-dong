@@ -122,7 +122,7 @@ export default function GlobalConfigTab() {
           <p className="text-sm text-text-muted mb-4">{t("globalProxyDesc")}</p>
           <div className="flex items-center gap-3">
             {globalProxy ? (
-              <span className="px-2.5 py-1 rounded text-xs font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span className="px-2.5 py-1 rounded text-xs font-bold uppercase bg-emerald-500/15 text-emerald-400 border border-white/10">
                 {globalProxy.type}://{globalProxy.host}:{globalProxy.port}
               </span>
             ) : (
@@ -196,7 +196,7 @@ export default function GlobalConfigTab() {
           </div>
 
           {error && (
-            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400">
+            <div className="p-3 rounded-lg bg-red-500/10 border border-white/10 text-sm text-red-400">
               {error}
             </div>
           )}
@@ -240,7 +240,7 @@ export default function GlobalConfigTab() {
                 </thead>
                 <tbody>
                   {results.map((r, i) => (
-                    <tr key={i} className="border-t border-black/5 dark:border-white/5">
+                    <tr key={i} className="border-t border-black/5 dark:border-white/10">
                       <td className="px-3 py-1.5">
                         {r.ok ? (
                           <span className="text-emerald-400 text-sm">✓</span>

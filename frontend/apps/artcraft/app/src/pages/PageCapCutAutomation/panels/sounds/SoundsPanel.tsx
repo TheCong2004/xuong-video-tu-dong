@@ -211,7 +211,7 @@ export function SoundsPanel() {
         how="① Dán URL http hoặc path .mp3 · ② volume / fade / placement · ③ Apply."
         need="URL → draft mate (Tạo draft). Path file → Draft local (Lưu path)."
       />
-      <div className="flex flex-wrap items-center gap-2 border-b border-white/8 bg-[#15161a] px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-white/10 bg-[#15161a] px-3 py-2">
         <label className="text-[11px] text-white/45">URL / path audio</label>
         <input
           value={audioSource}
@@ -271,7 +271,7 @@ export function SoundsPanel() {
         }
       />
       {applying && (
-        <div className="border-t border-white/6 px-3 py-1 text-center text-[11px] text-blue-300/80">
+        <div className="border-t border-white/10 px-3 py-1 text-center text-[11px] text-blue-300/80">
           Đang thêm audio…
         </div>
       )}

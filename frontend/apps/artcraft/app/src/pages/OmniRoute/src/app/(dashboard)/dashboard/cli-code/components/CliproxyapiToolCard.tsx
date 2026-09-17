@@ -155,7 +155,7 @@ export default function CliproxyapiToolCard({ isExpanded = false, onToggle = () 
           )}
 
           {updateInfo?.updateAvailable && (
-            <div className="flex items-center justify-between p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-yellow-500/10 border border-white/10">
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-yellow-500 text-lg">
                   system_update

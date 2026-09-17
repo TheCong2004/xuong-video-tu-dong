@@ -53,7 +53,7 @@ export const DraftExplorer: React.FC<DraftExplorerProps> = ({
   return (
     <div className="flex flex-col h-full bg-[#1a1f2c] rounded-xl p-4 shadow-md select-none">
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-700/60">
+      <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
         <div>
           <h3 className="font-bold text-sm text-white">
             Quản lý Dự án Draft CapCut

@@ -1200,14 +1200,14 @@ export default function EvalsTab() {
                 <h4 className="text-sm font-semibold text-text-main mb-1">{t("define")}</h4>
                 <p className="text-xs text-text-muted">{t("defineStepDescription")}</p>
               </div>
-              <div className="flex flex-col items-center text-center p-4 rounded-lg bg-sky-500/5 border border-sky-500/10">
+              <div className="flex flex-col items-center text-center p-4 rounded-lg bg-sky-500/5 border border-white/10">
                 <div className="w-10 h-10 rounded-full bg-sky-500/20 flex items-center justify-center mb-3">
                   <span className="text-lg font-bold text-sky-400">2</span>
                 </div>
                 <h4 className="text-sm font-semibold text-text-main mb-1">{t("run")}</h4>
                 <p className="text-xs text-text-muted">{t("runStepDescription")}</p>
               </div>
-              <div className="flex flex-col items-center text-center p-4 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+              <div className="flex flex-col items-center text-center p-4 rounded-lg bg-emerald-500/5 border border-white/10">
                 <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center mb-3">
                   <span className="text-lg font-bold text-emerald-400">3</span>
                 </div>

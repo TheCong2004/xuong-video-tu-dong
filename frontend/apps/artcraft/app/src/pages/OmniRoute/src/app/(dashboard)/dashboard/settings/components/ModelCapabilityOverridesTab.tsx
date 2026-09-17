@@ -38,9 +38,9 @@ interface StatusMessage {
 }
 
 function statusClassName(tone: StatusTone) {
-  if (tone === "success") return "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
-  if (tone === "error") return "bg-red-500/10 border-red-500/20 text-red-400";
-  return "bg-sky-500/10 border-sky-500/20 text-sky-400";
+  if (tone === "success") return "bg-emerald-500/10 border-white/10 text-emerald-400";
+  if (tone === "error") return "bg-red-500/10 border-white/10 text-red-400";
+  return "bg-sky-500/10 border-white/10 text-sky-400";
 }
 
 function useModelCapabilityOverridesData() {

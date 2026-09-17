@@ -625,7 +625,7 @@ export function ImportClaudeAuthModal({ onClose, onSuccess }: ImportClaudeAuthMo
               </div>
             )}
             {bulkErrors.length > 0 && (
-              <div className="rounded border border-red-500/30 bg-red-500/5 px-2 py-1.5 max-h-28 overflow-y-auto">
+              <div className="rounded border border-white/10 bg-red-500/5 px-2 py-1.5 max-h-28 overflow-y-auto">
                 {bulkErrors.map((e) => (
                   <div key={e.index} className="text-xs text-red-500 py-0.5">
                     {e.name}: {e.message}
@@ -712,7 +712,7 @@ export function ApplyClaudeAuthModal({
             {"~/.claude/credentials-{timestamp}.bak"}
           </code>
         </div>
-        <div className="rounded bg-sky-500/10 border border-sky-500/20 px-3 py-2 text-xs text-sky-400">
+        <div className="rounded bg-sky-500/10 border border-white/10 px-3 py-2 text-xs text-sky-400">
           {mcpHint}
         </div>
         <p className="text-sm text-text-muted">{warning}</p>

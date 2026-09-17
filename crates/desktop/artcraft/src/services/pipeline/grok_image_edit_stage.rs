@@ -281,9 +281,8 @@ pub async fn execute_grok_image_edit_stage(input: GrokImageEditInput, attempt_id
 
     let client = Client::builder().timeout(Duration::from_millis(input.timeout_ms.unwrap_or(180000) + 10000)).build().map_err(|e| format!("Failed to create client: {e}"))?;
 
-    // Forward to extension bridge endpoint
-    let bridge_base = extension_bridge_base_url();
-    let bridge_url = build_dispatch_url(&bridge_base, &worker_id);
+    // Forward to Donut runtime dispatch endpoint
+    let bridge_url = build_dispatch_url(&runtime_api_base_url(), &worker_id);
 
     let (resp_res, was_cancelled) = tokio::select! {
       res = async {

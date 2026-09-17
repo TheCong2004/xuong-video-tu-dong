@@ -356,7 +356,7 @@ export default function BuilderIntelligentStep({
         </Card.Section>
       </div>
 
-      <details className="rounded-lg border border-black/8 dark:border-white/8 bg-black/2 dark:bg-white/2 p-3">
+      <details className="rounded-lg border border-black/8 dark:border-white/10 bg-black/2 dark:bg-white/2 p-3">
         <summary className="cursor-pointer text-xs font-semibold text-text-main">
           {getI18nOrFallback(t, "advancedWeightsTitle", "Advanced: Scoring Weights")}
         </summary>
@@ -364,7 +364,7 @@ export default function BuilderIntelligentStep({
           {Object.entries(normalizedConfig.weights).map(([weightKey, weightValue]) => (
             <div
               key={weightKey}
-              className="rounded-lg border border-black/6 dark:border-white/6 p-3"
+              className="rounded-lg border border-black/6 dark:border-white/10 p-3"
             >
               <div className="flex items-center justify-between gap-2">
                 <label className="text-[11px] font-medium text-text-main">

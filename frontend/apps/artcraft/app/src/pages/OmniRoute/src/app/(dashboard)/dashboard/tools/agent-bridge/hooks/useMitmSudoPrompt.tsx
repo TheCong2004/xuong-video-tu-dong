@@ -49,7 +49,7 @@ export function MitmSudoPasswordModal({
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title={tCli("sudoPasswordRequiredTitle")} size="sm">
       <div className="flex flex-col gap-4">
-        <div className="flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3">
+        <div className="flex items-start gap-3 rounded-lg border border-white/10 bg-yellow-500/10 p-3">
           <span className="material-symbols-outlined text-[20px] text-yellow-500">warning</span>
           <p className="text-xs text-text-muted">{tCli("sudoPasswordHint")}</p>
         </div>

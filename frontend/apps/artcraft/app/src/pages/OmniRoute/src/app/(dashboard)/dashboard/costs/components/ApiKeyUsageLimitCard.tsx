@@ -124,7 +124,7 @@ export function ApiKeyUsageLimitCard({
   };
 
   return (
-    <Card className="p-5 border-emerald-500/20">
+    <Card className="p-5 border-white/10">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -146,7 +146,7 @@ export function ApiKeyUsageLimitCard({
           onClick={() => setEnabled((prev) => !prev)}
           className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-xs font-semibold transition-colors ${
             enabled
-              ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+              ? "border-white/10 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
               : "border-border bg-black/5 text-text-muted dark:bg-white/5"
           } ${loading || !payload ? "opacity-50" : ""}`}
         >

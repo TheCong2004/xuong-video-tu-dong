@@ -153,7 +153,7 @@ export default function PluginsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("marketplaceUrlLabel")}</label>
             <input
               type="text"
-              className="w-full rounded border-gray-300 p-2"
+              className="w-full rounded border-white/10 p-2"
               placeholder={t("marketplaceUrlPlaceholder")}
               value={marketplaceUrl}
               onChange={(e) => setMarketplaceUrl(e.target.value)}

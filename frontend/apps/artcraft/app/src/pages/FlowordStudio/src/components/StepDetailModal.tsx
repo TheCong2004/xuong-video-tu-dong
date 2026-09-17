@@ -72,19 +72,19 @@ export const StepDetailModal: React.FC<StepDetailModalProps> = ({
           {tab === 'overview' && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-slate-700/40">
+                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-white/10">
                   <span className="text-slate-400">Step Status:</span>
                   <div className="font-bold text-amber-300 text-sm mt-0.5 uppercase">{step.status}</div>
                 </div>
-                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-slate-700/40">
+                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-white/10">
                   <span className="text-slate-400">Execution Mode:</span>
                   <div className="font-bold text-emerald-300 text-sm mt-0.5 uppercase">{step.executionMode}</div>
                 </div>
-                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-slate-700/40">
+                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-white/10">
                   <span className="text-slate-400">Timeout Configuration:</span>
                   <div className="font-bold text-white text-sm mt-0.5">{step.timeoutMs / 1000}s</div>
                 </div>
-                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-slate-700/40">
+                <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-white/10">
                   <span className="text-slate-400">Max Retries:</span>
                   <div className="font-bold text-white text-sm mt-0.5">{step.maxRetries} Retries</div>
                 </div>
@@ -122,7 +122,7 @@ export const StepDetailModal: React.FC<StepDetailModalProps> = ({
                 <div className="text-slate-400 italic p-4 bg-[#12151e] rounded-xl text-center">Chưa có artifact nào được tạo từ bước này.</div>
               ) : (
                 step.artifacts.map((art) => (
-                  <div key={art.id} style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-slate-700/40 flex items-center justify-between">
+                  <div key={art.id} style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-white/10 flex items-center justify-between">
                     <div>
                       <div className="font-bold text-white">{art.name} ({art.type})</div>
                       <div className="text-[11px] text-slate-400">{art.path || art.url}</div>
@@ -141,11 +141,11 @@ export const StepDetailModal: React.FC<StepDetailModalProps> = ({
 
           {tab === 'cdp' && (
             <div className="space-y-3">
-              <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-slate-700/40">
+              <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-white/10">
                 <span className="text-slate-400">CDP Controlled URL:</span>
                 <div className="font-bold text-amber-300 text-xs mt-0.5">https://tiktok.com/studio/trends</div>
               </div>
-              <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-slate-700/40">
+              <div style={{ backgroundColor: '#12151e' }} className="p-3 rounded-xl border border-white/10">
                 <span className="text-slate-400">Playwright Trace:</span>
                 <div className="font-bold text-blue-300 text-xs mt-0.5">artifacts/traces/playwright_step_{step.stepNumber}.zip</div>
               </div>
@@ -176,7 +176,7 @@ export const StepDetailModal: React.FC<StepDetailModalProps> = ({
                   {(step.error.code === 'RESEARCH_AUTH_REQUIRED' || step.error.code === 'MEDIACRAWLER_AUTH_REQUIRED') && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button type="button" onClick={() => { onLoginResearch(); onClose(); }} className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-950">Login Now</button>
-                      <button type="button" onClick={() => { onSkipResearch(); onClose(); }} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-white">Skip Research</button>
+                      <button type="button" onClick={() => { onSkipResearch(); onClose(); }} className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-bold text-white">Skip Research</button>
                     </div>
                   )}
                 </div>

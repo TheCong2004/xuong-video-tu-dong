@@ -187,7 +187,7 @@ export default function AccessTokensTab() {
       </Card>
 
       {error && (
-        <div className="rounded-control border border-red-500/40 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+        <div className="rounded-control border border-white/10 bg-red-500/5 px-4 py-3 text-sm text-red-400">
           {error}
         </div>
       )}

@@ -109,7 +109,7 @@ export const BrowserCdpView: React.FC = () => {
 
       {/* Connection Status & Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 font-mono text-xs">
-        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-slate-700/40">
+        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-white/10">
           <span className="text-slate-400 text-[11px]">Connection Status</span>
           <div className="flex items-center gap-1.5 mt-1 font-bold text-sm">
             {health.connected ? (
@@ -124,21 +124,21 @@ export const BrowserCdpView: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-slate-700/40">
+        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-white/10">
           <span className="text-slate-400 text-[11px]">CDP Endpoint</span>
           <div className="font-bold text-sm text-white mt-1 truncate" title={health.cdpEndpoint}>
             {health.cdpEndpoint}
           </div>
         </div>
 
-        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-slate-700/40">
+        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-white/10">
           <span className="text-slate-400 text-[11px]">Browser Version</span>
           <div className="font-bold text-sm text-amber-300 mt-1 truncate">
             {health.browserVersion || 'Chromium Headless'}
           </div>
         </div>
 
-        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-slate-700/40">
+        <div style={{ backgroundColor: '#12151e' }} className="p-3.5 rounded-xl border border-white/10">
           <span className="text-slate-400 text-[11px]">Active Tabs</span>
           <div className="font-bold text-sm text-purple-300 mt-1">
             {health.activeTabsCount} Open Tabs
@@ -150,7 +150,7 @@ export const BrowserCdpView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Column: Active Tabs & Actions (5 cols) */}
         <div className="lg:col-span-5 space-y-4">
-          <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl border border-slate-700/40 space-y-3 font-mono text-xs">
+          <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl border border-white/10 space-y-3 font-mono text-xs">
             <h3 className="font-bold text-sm text-amber-300 flex items-center gap-1.5">
               <Monitor className="w-4 h-4" /> Danh sách Tabs/Pages đang Mở
             </h3>
@@ -178,7 +178,7 @@ export const BrowserCdpView: React.FC = () => {
             </div>
           </div>
 
-          <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl border border-slate-700/40 space-y-2 font-mono text-xs">
+          <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl border border-white/10 space-y-2 font-mono text-xs">
             <h3 className="font-bold text-sm text-white">Browser Automation Controls</h3>
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -203,7 +203,7 @@ export const BrowserCdpView: React.FC = () => {
         {/* Right Column: Live Screenshot & Automation Logs (7 cols) */}
         <div className="lg:col-span-7 space-y-4">
           {/* Live Preview Box */}
-          <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl border border-slate-700/40 space-y-2">
+          <div style={{ backgroundColor: '#12151e' }} className="p-4 rounded-xl border border-white/10 space-y-2">
             <div className="flex items-center justify-between font-mono text-xs text-slate-300">
               <span className="font-bold text-white flex items-center gap-1.5">
                 <Camera className="w-4 h-4 text-amber-400" /> CDP Live Browser View
@@ -211,7 +211,7 @@ export const BrowserCdpView: React.FC = () => {
               <span className="text-amber-300 truncate max-w-[300px]">{activeUrl}</span>
             </div>
 
-            <div className="relative rounded-xl overflow-hidden h-[180px] bg-black border border-slate-800">
+            <div className="relative rounded-xl overflow-hidden h-[180px] bg-black border border-white/10">
               {screenshotUrl ? (
                 <img src={screenshotUrl} alt="CDP Screenshot" className="w-full h-full object-cover" />
               ) : (
@@ -223,7 +223,7 @@ export const BrowserCdpView: React.FC = () => {
           </div>
 
           {/* Automation Logs */}
-          <div style={{ backgroundColor: '#090b10' }} className="p-4 rounded-xl border border-slate-800 font-mono text-xs text-slate-300 space-y-1 h-[140px] overflow-y-auto">
+          <div style={{ backgroundColor: '#090b10' }} className="p-4 rounded-xl border border-white/10 font-mono text-xs text-slate-300 space-y-1 h-[140px] overflow-y-auto">
             <div className="text-amber-300 font-bold mb-1">▶ Browser Automation Execution Trace Logs</div>
             {logs.map((l, idx) => (
               <div key={idx} className="whitespace-pre-wrap leading-relaxed">{l}</div>

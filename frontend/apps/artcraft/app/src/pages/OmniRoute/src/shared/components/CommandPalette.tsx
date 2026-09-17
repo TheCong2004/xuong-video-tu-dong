@@ -230,7 +230,7 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
         aria-modal="true"
         aria-label="Command palette"
       >
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-black/5 dark:border-white/5">
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-black/5 dark:border-white/10">
           <span className="material-symbols-outlined text-[20px] text-text-muted shrink-0">
             search
           </span>
@@ -273,7 +273,7 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
           >
             {grouped.map((group) => (
               <li key={group.sectionId} role="presentation">
-                <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-sm px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-b border-black/5 dark:border-white/5">
+                <div className="sticky top-0 z-10 bg-surface/95 backdrop-blur-sm px-6 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-text-muted border-b border-black/5 dark:border-white/10">
                   {group.sectionLabel}
                 </div>
                 <ul role="group" aria-label={group.sectionLabel}>
@@ -349,7 +349,7 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }) {
           <div className="py-10 text-center text-text-muted text-sm">No results</div>
         )}
 
-        <div className="flex items-center gap-4 px-4 py-2 border-t border-black/5 dark:border-white/5 text-[11px] text-text-muted">
+        <div className="flex items-center gap-4 px-4 py-2 border-t border-black/5 dark:border-white/10 text-[11px] text-text-muted">
           <span className="flex items-center gap-1">
             <kbd className="px-1 py-0.5 rounded bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 font-mono">
               ↑↓

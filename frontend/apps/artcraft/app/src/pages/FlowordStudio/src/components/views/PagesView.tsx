@@ -95,8 +95,8 @@ export const PagesView: React.FC<PagesViewProps> = ({
               onClick={() => onSelectPage(page.id)}
               className={`p-5 rounded-2xl border transition flex flex-col justify-between cursor-pointer ${
                 isActive
-                  ? 'bg-rose-500/[0.06] border-rose-500/40 shadow-xl'
-                  : 'bg-[#121622] border-white/[0.08] hover:border-white/[0.16]'
+                  ? 'bg-rose-500/[0.06] border-white/10 shadow-xl'
+                  : 'bg-[#121622] border-white/10 hover:border-white/[0.16]'
               }`}
             >
               <div>
@@ -126,7 +126,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
                 </div>
 
                 {/* Profile Affinity & Platform */}
-                <div className="mt-4 pt-3 border-t border-white/[0.06] space-y-2">
+                <div className="mt-4 pt-3 border-t border-white/10 space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-zinc-500">Platform:</span>
                     <span className="text-zinc-300 font-medium uppercase">{page.target_platform || 'TikTok'}</span>
@@ -140,7 +140,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
                 </div>
 
                 {/* Output Directory Template */}
-                <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-white/[0.04] text-[10px] font-mono text-zinc-400">
+                <div className="mt-3 p-2.5 rounded-xl bg-black/40 border border-white/10 text-[10px] font-mono text-zinc-400">
                   <div className="text-zinc-500 font-sans font-semibold mb-0.5">Layout lưu file:</div>
                   <div className="truncate text-indigo-300">
                     {page.output_root}\{page.name}\&lt;DD-MM-YYYY&gt;\
@@ -149,7 +149,7 @@ export const PagesView: React.FC<PagesViewProps> = ({
               </div>
 
               {/* Card Footer */}
-              <div className="mt-5 pt-3 border-t border-white/[0.06] flex items-center justify-between">
+              <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
                 <span className="text-[11px] text-zinc-500">
                   {isActive ? '● Currently Active' : 'Click to select'}
                 </span>

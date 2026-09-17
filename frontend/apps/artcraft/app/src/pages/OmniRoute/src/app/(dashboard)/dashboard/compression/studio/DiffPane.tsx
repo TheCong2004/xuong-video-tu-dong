@@ -35,7 +35,7 @@ export function DiffPane({ segments, preservedBlocks }: DiffPaneProps) {
       {preservedBlocks.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1" data-testid="diff-preserved">
           {preservedBlocks.map((b, i) => (
-            <span key={i} className="rounded border border-purple-500/50 px-1 text-[10px]">
+            <span key={i} className="rounded border border-white/10 px-1 text-[10px]">
               {b.kind}: {b.preview.slice(0, 40)}
             </span>
           ))}

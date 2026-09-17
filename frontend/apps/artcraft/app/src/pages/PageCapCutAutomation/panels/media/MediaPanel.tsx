@@ -220,7 +220,7 @@ export function MediaPanel() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b1f]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Chỉnh media trên draft CapCut: mask video, volume/fade audio (một phần basic video)."
         how="① Draft local → path · ② tab Video/Audio · ③ chỉnh thông số · ④ Apply."
@@ -231,7 +231,7 @@ export function MediaPanel() {
         }
         tone={mate.localProject.trim() ? "default" : "warn"}
       />
-      <div className="flex items-center gap-1 border-b border-white/8 px-4 py-2.5">
+      <div className="flex items-center gap-1.5 border-b border-white/10 bg-[#10141e]/50 px-6 py-2.5">
         {(
           [
             { id: "video" as const, label: "Video", icon: faFilm },
@@ -248,10 +248,10 @@ export function MediaPanel() {
                 setTrack("All");
               }}
               className={twMerge(
-                "flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-[13px] font-medium transition-colors",
+                "flex items-center gap-2 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition",
                 active
-                  ? "bg-[#2a3140] text-sky-300 ring-1 ring-sky-400/40"
-                  : "text-white/50 hover:bg-white/5 hover:text-white/80",
+                  ? "border border-white/10 bg-rose-500/10 text-white shadow-md shadow-rose-500/5 font-semibold"
+                  : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100",
               )}
             >
               <FontAwesomeIcon icon={tab.icon} className="text-[12px]" />
@@ -342,7 +342,7 @@ export function MediaPanel() {
                 />
               )}
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/8 bg-[#15161a] px-4 py-3">
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-white/10 bg-[#15161a] px-4 py-3">
               {kind === "audio" && (
                 <>
                   <span className="text-[12px] text-white/45">Media type</span>

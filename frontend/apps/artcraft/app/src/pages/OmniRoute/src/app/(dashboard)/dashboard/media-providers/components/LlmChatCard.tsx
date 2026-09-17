@@ -537,7 +537,7 @@ export function LlmChatCard({
             type="button"
             onClick={handleStop}
             title={t("stop")}
-            className="size-8 flex items-center justify-center rounded-md border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors shrink-0"
+            className="size-8 flex items-center justify-center rounded-md border border-white/10 bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors shrink-0"
           >
             <span className="material-symbols-outlined text-[18px]">stop</span>
           </button>

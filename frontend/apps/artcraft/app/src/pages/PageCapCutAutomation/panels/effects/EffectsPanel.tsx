@@ -312,12 +312,12 @@ export function EffectsPanel() {
         tone={mate.draftUrl ? "default" : "warn"}
       />
       {loadingLib && (
-        <div className="border-b border-white/6 px-3 py-1 text-[11px] text-white/40">
+        <div className="border-b border-white/10 px-3 py-1 text-[11px] text-white/40">
           Đang tải get_effects từ BE…
         </div>
       )}
       {loadError && !loadingLib && (
-        <div className="border-b border-rose-500/20 bg-rose-500/5 px-3 py-1 text-[11px] text-rose-200/80">
+        <div className="border-b border-white/10 bg-rose-500/5 px-3 py-1 text-[11px] text-rose-200/80">
           {loadError}
         </div>
       )}
@@ -389,7 +389,7 @@ export function EffectsPanel() {
         }
       />
       {applying && (
-        <div className="border-t border-white/6 px-3 py-1 text-center text-[11px] text-fuchsia-300/80">
+        <div className="border-t border-white/10 px-3 py-1 text-center text-[11px] text-fuchsia-300/80">
           Đang gọi add_effects…
         </div>
       )}

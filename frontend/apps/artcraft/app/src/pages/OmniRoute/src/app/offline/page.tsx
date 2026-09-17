@@ -34,7 +34,7 @@ export default function OfflinePage() {
           className={`mt-6 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm border ${
             isOnline
               ? "border-green-500/30 text-green-600 dark:text-green-400 bg-green-500/10"
-              : "border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10"
+              : "border-white/10 text-amber-600 dark:text-amber-400 bg-amber-500/10"
           }`}
           aria-live="polite"
         >

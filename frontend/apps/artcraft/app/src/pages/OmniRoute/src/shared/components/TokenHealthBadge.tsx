@@ -98,7 +98,7 @@ export default function TokenHealthBadge() {
               </div>
             )}
             {health.lastCheckAt && (
-              <div className="flex justify-between mt-1 pt-1 border-t border-white/5">
+              <div className="flex justify-between mt-1 pt-1 border-t border-white/10">
                 <span className="text-text-muted">{t("lastCheck")}</span>
                 <span className="text-text-muted">
                   {new Date(health.lastCheckAt).toLocaleTimeString()}

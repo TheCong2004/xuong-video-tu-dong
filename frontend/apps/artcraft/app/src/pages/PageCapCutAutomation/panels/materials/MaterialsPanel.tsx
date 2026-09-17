@@ -118,7 +118,7 @@ export function MaterialsPanel() {
   };
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b1f]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Thêm video, ảnh, audio vào draft mate bằng URL file trực tiếp."
         how="① Tạo draft (thanh trên) · ② chọn loại · ③ dán URL http(s) · ④ thời lượng · ⑤ Thêm."
@@ -129,11 +129,11 @@ export function MaterialsPanel() {
         }
         tone={mate.draftUrl ? "default" : "warn"}
       />
-      <div className="border-b border-white/8 px-5 py-3">
-        <h2 className="text-[15px] font-semibold text-white/90">Nguyên liệu</h2>
-        <p className="mt-0.5 text-[12px] text-white/40">
+      <div className="border-b border-white/10 px-6 py-4">
+        <h2 className="text-sm font-bold text-white tracking-wide">Nguyên Liệu Media</h2>
+        <p className="mt-0.5 text-xs text-zinc-400">
           URL file →{" "}
-          <code className="text-white/50">add_videos / add_images / add_audios</code>
+          <code className="text-zinc-300">add_videos / add_images / add_audios</code>
         </p>
       </div>
 
@@ -144,18 +144,18 @@ export function MaterialsPanel() {
         maxWidth={400}
         left={
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-        <div className="mx-auto max-w-xl space-y-5">
-          <div className="flex gap-1 rounded-lg bg-[#121318] p-1">
+        <div className="mx-auto max-w-xl space-y-4">
+          <div className="flex gap-1.5 rounded-xl border border-white/10 bg-[#10141e] p-1.5">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setKind(t.id)}
                 className={twMerge(
-                  "flex flex-1 items-center justify-center gap-2 rounded-md py-2 text-[12px] font-medium transition-colors",
+                  "flex flex-1 items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold transition",
                   kind === t.id
-                    ? "bg-[#2a3140] text-teal-300"
-                    : "text-white/50 hover:text-white/75",
+                    ? "border border-white/10 bg-rose-500/10 text-white shadow-md shadow-rose-500/5"
+                    : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100",
                 )}
               >
                 <FontAwesomeIcon icon={t.icon} />
@@ -165,23 +165,23 @@ export function MaterialsPanel() {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[12px] text-white/50">
+            <label className="mb-1.5 block text-xs font-medium text-zinc-400">
               URL media (file trực tiếp)
             </label>
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://…/clip.mp4"
-              className="w-full rounded-lg border border-white/10 bg-[#252830] px-3 py-2.5 font-mono text-[12px] text-white outline-none focus:border-teal-400/40"
+              className="w-full rounded-lg border border-white/10 bg-[#0b0f17] px-3.5 py-2 font-mono text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             />
-            <p className="mt-1 text-[10px] text-white/35">
-              Cần link file (mp4/jpg/mp3…), không dùng link trang TikTok
+            <p className="mt-1 text-[10px] text-zinc-500">
+              Cần link file (mp4/jpg/mp3…), không dùng link trang web
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="mb-1.5 block text-[12px] text-white/50">
+              <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                 Thời lượng (giây)
               </label>
               <input
@@ -190,39 +190,39 @@ export function MaterialsPanel() {
                 step={0.1}
                 value={durationSec}
                 onChange={(e) => setDurationSec(Number(e.target.value) || 1)}
-                className="w-full rounded-lg border border-white/10 bg-[#252830] px-3 py-2.5 text-[13px] text-white outline-none focus:border-teal-400/40"
+                className="w-full rounded-lg border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
               />
               {kind === "audio" && (
-                <p className="mt-1 text-[10px] text-white/35">
+                <p className="mt-1 text-[10px] text-zinc-500">
                   Sẽ thử đo duration tự động trước
                 </p>
               )}
             </div>
             {(kind === "video" || kind === "image") && (
               <div>
-                <label className="mb-1.5 block text-[12px] text-white/50">
+                <label className="mb-1.5 block text-xs font-medium text-zinc-400">
                   Chuyển cảnh (tuỳ chọn)
                 </label>
                 <input
                   value={transition}
                   onChange={(e) => setTransition(e.target.value)}
                   placeholder="淡入淡出"
-                  className="w-full rounded-lg border border-white/10 bg-[#252830] px-3 py-2.5 text-[13px] text-white outline-none focus:border-teal-400/40"
+                  className="w-full rounded-lg border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
                 />
               </div>
             )}
           </div>
 
-          <div className="rounded-lg border border-white/8 bg-[#16171b] px-3 py-2 text-[11px] text-white/45">
+          <div className="rounded-xl border border-white/10 bg-[#10141e] px-3.5 py-2.5 text-xs text-zinc-400">
             Thêm vào timeline lúc{" "}
-            <span className="text-white/70">
+            <span className="font-mono font-semibold text-zinc-200">
               {(mate.timelineEndUs / api.US).toFixed(2)}s
             </span>
             {" · "}
             {mate.draftUrl ? (
-              <span className="text-emerald-400/80">đã có draft</span>
+              <span className="font-medium text-emerald-400">đã có draft</span>
             ) : (
-              <span className="text-amber-400/80">hãy tạo draft trước</span>
+              <span className="font-medium text-amber-400">hãy tạo draft trước</span>
             )}
           </div>
 
@@ -230,7 +230,7 @@ export function MaterialsPanel() {
             type="button"
             disabled={busy}
             onClick={() => void handleAdd()}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-teal-500/90 py-2.5 text-[13px] font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-500/20 border border-indigo-500/30 py-2.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/30 disabled:opacity-50"
           >
             <FontAwesomeIcon icon={faPlus} />
             {busy

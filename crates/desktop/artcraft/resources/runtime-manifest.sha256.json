@@ -1,10 +1,10 @@
 {
     "schemaVersion":  1,
-    "generatedAt":  "2026-09-03T17:07:23.7630713Z",
+    "generatedAt":  "2026-09-16T14:22:07.8960694Z",
     "sourceCommits":  {
-                          "donutbrowser":  "786de8d4706d5f35055615f127bdf109210bbace",
+                          "donutbrowser":  "e43043c4047f37c3d1de54f94cc5737b4ee8b6f2",
                           "chromex":  "9d8978f06807a96707f44b7fe14272d62b9183ed",
-                          "artcraft":  "935edb405a988827147b057cbab94a8fcae0f218"
+                          "artcraft":  "c9c9e00fe2e509adb69d3f74af3da18c539e4ce8"
                       },
     "requiredArtifacts":  [
                               "artcraft-browser-runtime/src/server.js",
@@ -24,7 +24,7 @@
                   "playwright/chrome-win64/chrome.exe":  "409805a16d6416087e6b2f778df1cf8f7bbb267d6b99f6b5bb0a618eace234f2",
                   "chromex/chromex.zip":  "94a073ce9b74eb4d16c445f9824eb900f0c0f3f76e4c972647abe510b73ff074",
                   "node/node.exe":  "780f44f2c53c108bae261ada21a525b4bfe733c020ac85e41bfe94479090ac9b",
-                  "playwright-sidecar/src/server.js":  "be334de7099228582eeb2cc46b3b49ffc0179701b3a228aea8396567952143b2",
+                  "playwright-sidecar/src/server.js":  "6b4b11ea9afb8491ef2bd1789c98b48295d1f415786a88f8cf0aa8153053dc18",
                   "playwright-sidecar/package.json":  "563dbaee95e2830176bdea1ebd07e8ce8ab7b147f7051f0c7ebd894e677c2151",
                   "playwright-sidecar/node_modules/express/package.json":  "c7db3b72582355c80cdcef1ad7b2c9a8f53557550724c6bef8502e9818c2ebe7",
                   "playwright-sidecar/node_modules/playwright/package.json":  "ca170ec143a88ed3043ac953eb3b2377b2b97304104f4e1e23316684ce2c35af",

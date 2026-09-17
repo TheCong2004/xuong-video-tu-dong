@@ -247,14 +247,14 @@ export default function CompressionPreviewAccordion({
 
   return (
     <div
-      className="rounded-lg border border-black/5 dark:border-white/5 bg-surface w-full"
+      className="rounded-lg border border-black/5 dark:border-white/10 bg-surface w-full"
       data-testid="compression-accordion"
     >
       {/* Header row — matches Collapsible visual style */}
       <div
         className={cn(
           "flex items-center gap-3 p-4 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors",
-          open && "border-b border-black/5 dark:border-white/5"
+          open && "border-b border-black/5 dark:border-white/10"
         )}
       >
         <button

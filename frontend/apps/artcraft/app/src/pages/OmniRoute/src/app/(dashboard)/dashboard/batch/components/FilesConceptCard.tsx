@@ -13,9 +13,9 @@ const TYPE_PILLS: Array<{
   key: "filesConceptInput" | "filesConceptOutput" | "filesConceptError";
   color: string;
 }> = [
-  { key: "filesConceptInput", color: "bg-blue-500/15 text-blue-400 border-blue-500/25" },
-  { key: "filesConceptOutput", color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25" },
-  { key: "filesConceptError", color: "bg-red-500/15 text-red-400 border-red-500/25" },
+  { key: "filesConceptInput", color: "bg-blue-500/15 text-blue-400 border-white/10" },
+  { key: "filesConceptOutput", color: "bg-emerald-500/15 text-emerald-400 border-white/10" },
+  { key: "filesConceptError", color: "bg-red-500/15 text-red-400 border-white/10" },
 ];
 
 export default function FilesConceptCard({ className = "" }: Props) {

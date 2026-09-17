@@ -25,7 +25,7 @@ function CountryFlag({ emoji, alt }: { emoji: string; alt: string }) {
   return (
     <img
       src={`https://flagcdn.com/w40/${countryCode}.png`}
-      className="w-4.5 h-3 object-cover rounded-2xs shrink-0 shadow-2xs border border-black/5 dark:border-white/5"
+      className="w-4.5 h-3 object-cover rounded-2xs shrink-0 shadow-2xs border border-black/5 dark:border-white/10"
       alt={alt}
       onError={() => setError(true)}
     />

@@ -67,7 +67,10 @@ impl MediaTimelineError {
 }
 
 pub fn prepare_media_timeline(context: &PipelineContext, work_dir: &Path) -> Result<MediaTimelineInput, PipelineContractError> {
-  let original_creation = matches!(context.workflow_mode.as_str(), "original" | "original_creation");
+  // Grok feature-film jobs already carry a verified GeneratedVideo from the
+  // Donut/Grok stage and use the same canonical visual-asset handoff as
+  // OmniRoute original creation.
+  let original_creation = matches!(context.workflow_mode.as_str(), "original" | "original_creation" | "grok_feature_film_pipeline");
   let (source_video, visual_assets, scene_plan, scenes) = if original_creation {
     let plan = stage_artifact(context, StageId::StoryScript, ArtifactKind::ScenePlan)?;
     let assets = context.artifact_refs.iter().filter(|artifact| artifact.kind == ArtifactKind::GeneratedVideo).map(artifact_input).collect::<Vec<_>>();

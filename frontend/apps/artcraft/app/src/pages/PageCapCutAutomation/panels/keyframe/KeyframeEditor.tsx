@@ -48,7 +48,7 @@ export function KeyframeEditor({
   };
 
   return (
-    <div className="flex min-h-0 flex-col border-t border-white/8 bg-[#16171b]">
+    <div className="flex min-h-0 flex-col border-t border-white/10 bg-[#16171b]">
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
         {/* Name + unit */}
         <div className="flex items-center gap-2">
@@ -199,7 +199,7 @@ export function KeyframeEditor({
         </div>
       </div>
 
-      <div className="border-t border-white/8 px-4 py-3">
+      <div className="border-t border-white/10 px-4 py-3">
         <button
           type="button"
           onClick={onSave}
@@ -299,7 +299,7 @@ function RotationDial({
       type="button"
       title="Click to nudge rotation"
       onClick={() => onChange(Number((degrees + 15).toFixed(2)))}
-      className="relative h-14 w-14 shrink-0 rounded-full border border-white/15 bg-gradient-to-b from-[#3a3d45] to-[#1e2026]"
+      className="relative h-14 w-14 shrink-0 rounded-full border border-white/10 bg-gradient-to-b from-[#3a3d45] to-[#1e2026]"
     >
       <span className="absolute inset-2 rounded-full border border-white/10 bg-[#252830]" />
       <span

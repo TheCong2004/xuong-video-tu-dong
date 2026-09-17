@@ -146,7 +146,7 @@ export function GrammarFixDialog({ open, onClose }: GrammarFixDialogProps) {
                   className={cn(
                     'flex-1 px-3 py-2 text-sm rounded-lg border transition-colors',
                     style === opt
-                      ? 'border-purple-500 bg-primary/10 text-primary'
+                      ? 'border-white/10 bg-primary/10 text-primary'
                       : 'border-border hover:bg-accent',
                   )}
                 >

@@ -34,12 +34,12 @@ const LEVEL_COLORS: Record<string, string> = {
 };
 
 const LEVEL_BG: Record<string, string> = {
-  debug: "bg-gray-500/10 border-gray-500/20",
-  trace: "bg-gray-500/10 border-gray-500/20",
-  info: "bg-cyan-500/10 border-cyan-500/20",
-  warn: "bg-yellow-500/10 border-yellow-500/20",
-  error: "bg-red-500/10 border-red-500/20",
-  fatal: "bg-fuchsia-500/10 border-fuchsia-500/20",
+  debug: "bg-gray-500/10 border-white/10",
+  trace: "bg-gray-500/10 border-white/10",
+  info: "bg-cyan-500/10 border-white/10",
+  warn: "bg-yellow-500/10 border-white/10",
+  error: "bg-red-500/10 border-white/10",
+  fatal: "bg-fuchsia-500/10 border-white/10",
 };
 
 const POLL_INTERVAL = 5000; // 5 seconds
@@ -183,7 +183,7 @@ export default function ConsoleLogViewer() {
           title={autoScroll ? tv("disableAutoScroll") : tv("enableAutoScroll")}
           className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
             autoScroll
-              ? "bg-cyan-500/15 text-cyan-400 border-cyan-500/30"
+              ? "bg-cyan-500/15 text-cyan-400 border-white/10"
               : "bg-[var(--color-bg)] text-[var(--color-text-muted)] border-[var(--color-border)]"
           }`}
         >
@@ -220,7 +220,7 @@ export default function ConsoleLogViewer() {
       {/* Error */}
       {error && (
         <div
-          className="p-4 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm"
+          className="p-4 rounded-lg bg-red-500/10 border border-white/10 text-red-400 text-sm"
           role="alert"
         >
           <span className="material-symbols-outlined text-[16px] align-middle mr-2">error</span>

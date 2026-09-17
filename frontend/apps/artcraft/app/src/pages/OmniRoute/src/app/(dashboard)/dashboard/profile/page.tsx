@@ -80,11 +80,11 @@ function BadgeIcon({ icon, earned }: { icon: string | null; earned: boolean }) {
 }
 
 const RARITY_COLORS: Record<string, string> = {
-  common: "text-gray-400 border-gray-500/30",
+  common: "text-gray-400 border-white/10",
   uncommon: "text-green-400 border-green-500/30",
-  rare: "text-blue-400 border-blue-500/30",
-  epic: "text-purple-400 border-purple-500/30",
-  legendary: "text-amber-400 border-amber-500/30",
+  rare: "text-blue-400 border-white/10",
+  epic: "text-purple-400 border-white/10",
+  legendary: "text-amber-400 border-white/10",
 };
 
 export default function ProfilePage() {

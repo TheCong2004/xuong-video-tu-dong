@@ -4,9 +4,8 @@
 use crate::core::state::data_dir::app_data_root::AppDataRoot;
 use crate::core::state::task_database::TaskDatabase;
 use crate::services::pipeline::artifact_store::{workflow_artifact_root, ArtifactStore};
-use crate::services::pipeline::caption_segmenter::segment_script_to_captions;
 use crate::services::pipeline::capcut::{prepare_capcut, CapcutInput};
-use crate::services::pipeline::clients::capcut_mate_client::{add_audio as capcut_add_audio, add_captions as capcut_add_captions, add_video_assets as capcut_add_video_assets, create_draft as capcut_create_draft, gen_video as capcut_gen_video, health_check as capcut_mate_health_check, inspect_draft as capcut_inspect_draft, materialize_rendered_video, poll_gen_video_status as capcut_poll_gen_video_status, publish_draft as capcut_publish_draft, register_artifact_asset, save_draft as capcut_save_draft, verify_draft_exists as capcut_verify_draft_exists, DraftManifest, DEFAULT_HEIGHT, DEFAULT_WIDTH};
+use crate::services::pipeline::capcut_draft_engine::{build_draft as build_native_capcut_draft, render_video as render_native_capcut_video, EditingPreset};
 use crate::services::pipeline::clients::omniroute_client::{execute_story_script_request, generate_structured_script, list_video_models, StructuredScript};
 use crate::services::pipeline::contracts::{is_direct_video_or_media_url, ArtifactKind, ArtifactRef, ContentSource, PipelineContext, StageError, StageId, StageState};
 use crate::services::pipeline::events::{emit_job_complete, emit_job_failed, emit_stage_complete, emit_stage_state, JobCompletePayload, JobFailedPayload, StageCompletePayload, StageStatePayload};
@@ -42,7 +41,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tauri::AppHandle;
 use tokens::tokens::sqlite::pipeline_jobs::PipelineJobId;
-use tokio::sync::OnceCell as TokioOnceCell;
 use app_lib::services::pipeline::PipelineDownloadConfig;
 
 /// Idle sleep when there is nothing to do.
@@ -98,14 +96,6 @@ fn extract_pipeline_error(err: &anyhow::Error) -> PipelineRunError {
     let err_code = extract_error_code(&err_str);
     PipelineRunError::new(PipelineStage::PreflightCheck, &err_code, err_str)
   }
-}
-
-/// A lazily-initialized shared HTTP client for CapCut Mate calls.
-pub(crate) static CAPCUT_CLIENT: TokioOnceCell<reqwest::Client> = TokioOnceCell::const_new();
-
-async fn get_capcut_client() -> AnyhowResult<&'static reqwest::Client> {
-  let client = CAPCUT_CLIENT.get_or_init(|| async { reqwest::Client::builder().timeout(std::time::Duration::from_secs(120)).build().expect("Failed to build CapCut Mate HTTP client") }).await;
-  Ok(client)
 }
 
 /// Statuses that mean "the worker should still act on this job".
@@ -258,7 +248,13 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
   let source_url = first_input_string(&input, "source_url", "source_urls");
   let story_url = first_input_string(&input, "story_url", "story_urls");
   let workflow_mode = input.get("workflow_mode").and_then(Value::as_str).unwrap_or("source_based");
-  let original_creation = matches!(workflow_mode, "original" | "original_creation");
+  // `grok_feature_film_pipeline` uses Grok/Donut for the visual asset, then
+  // deliberately rejoins the canonical voice, OpenMontage and CapCut stages.
+  // It is therefore an original-creation workflow for contract purposes, but
+  // must not require an OmniRoute video model once Grok has produced its
+  // verified GeneratedVideo artifact.
+  let grok_feature_film = workflow_mode == "grok_feature_film_pipeline";
+  let original_creation = matches!(workflow_mode, "original" | "original_creation") || grok_feature_film;
   let research_enabled = input.get("research_enabled").and_then(Value::as_bool).unwrap_or(false);
   let research_query = input.get("research_query").and_then(Value::as_str);
   let declared_source = input.get("content_source").and_then(Value::as_str);
@@ -355,7 +351,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
   }
 
   // Production Grok Content Full Pipeline Workflow Call Site (Fail-Closed)
-  let is_grok_content_pipeline = workflow_mode == "grok_content_pipeline" || workflow_mode == "grok_full" || workflow_mode == "grok_pipeline" || (workflow_mode == "grok" && input.get("method").is_none());
+  let is_grok_content_pipeline = grok_feature_film || workflow_mode == "grok_content_pipeline" || workflow_mode == "grok_full" || workflow_mode == "grok_pipeline" || (workflow_mode == "grok" && input.get("method").is_none());
 
   if is_grok_content_pipeline {
     check_cancelled(&job_id_str, PipelineStage::ScriptGenerating)?;
@@ -386,7 +382,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     let video_prompt = input.get("video_prompt").and_then(Value::as_str).filter(|s| !s.trim().is_empty()).unwrap_or(page_config.default_video_prompt.as_deref().filter(|s| !s.trim().is_empty()).unwrap_or(default_video_fallback));
 
     // True Resume Check 1: Already LOCAL_SAVED
-    if outputs.get("status").and_then(Value::as_str) == Some("LOCAL_SAVED") {
+    if !grok_feature_film && outputs.get("status").and_then(Value::as_str) == Some("LOCAL_SAVED") {
       if let Some(final_path) = outputs.get("final_video_path").and_then(Value::as_str) {
         if std::path::Path::new(final_path).exists() {
           info!("[GrokPipeline] Job {} already LOCAL_SAVED at {}; finalizing directly without re-execution", job_id_str, final_path);
@@ -420,6 +416,69 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     } else {
       return Err(PipelineRunError::new(PipelineStage::ScriptGenerating, "SOURCE_IMAGE_REQUIRED", "Grok content pipeline requires a source image artifact".to_string()).into());
     };
+
+    // A feature-film request retains the visible production order: brief /
+    // optional research -> script -> Grok visual -> voice -> timeline.  The
+    // legacy Grok-only request below intentionally keeps its original fast
+    // visual-only order.
+    if grok_feature_film {
+      if stage_needs_run(&context, StageId::IngestAnalyze) {
+        let state = context.stage_states.iter_mut().find(|state| state.stage_id == StageId::IngestAnalyze).expect("ingest stage contract");
+        state.skip_stage(chrono::Utc::now().to_rfc3339()).map_err(contract_pipeline_run_error)?;
+        outputs["ingest_analyze"] = json!({ "artifact_ids": [], "stage": state.clone() });
+      }
+
+      if stage_needs_run(&context, StageId::Research) {
+        match prepare_research(&mut context, &chrono::Utc::now().to_rfc3339()).map_err(research_contract_pipeline_run_error)? {
+          ResearchPreparation::Skipped => {
+            let state = context.stage_states.iter().find(|state| state.stage_id == StageId::Research).cloned().expect("research stage contract");
+            outputs["research"] = json!({ "artifact_ids": [], "stage": state });
+          },
+          ResearchPreparation::Ready(research_input) => {
+            emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::PreflightCheck, PipelineStage::Research, 14, "Running MediaCrawler research").await?;
+            let (payload, artifact_ref, stage) = run_research_stage(app_handle, &research_input, &work_dir, &job_id_str, cancel_flag).await.map_err(|(error, failed_state)| {
+              if let Some(state) = context.stage_states.iter_mut().find(|state| state.stage_id == StageId::Research) {
+                *state = failed_state;
+              }
+              error
+            })?;
+            context.artifact_refs.push(artifact_ref.clone());
+            *research_state_mut(&mut context).map_err(research_contract_pipeline_run_error)? = stage.clone();
+            outputs["research"] = json!({ "artifact_ids": [artifact_ref.artifact_id], "artifact": payload, "stage": stage });
+          },
+        }
+        outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|error| PipelineRunError::new(PipelineStage::Research, "RESEARCH_SERIALIZATION_FAILED", error.to_string()))?;
+        persist_outputs(task_database, &job.id, PipelineStage::Research, &serialize_outputs(&outputs)?).await?;
+      }
+
+      if stage_needs_run(&context, StageId::StoryScript) {
+        let story_input = prepare_story_script(&context).map_err(|error| PipelineRunError::new(PipelineStage::ScriptGenerating, "STORY_SCRIPT_DEPENDENCY_INVALID", error.to_string()))?;
+        match run_story_script_stage(app_handle, &story_input, model_id.as_deref(), &work_dir, &job_id_str, cancel_flag).await {
+          Ok(result) => {
+            let artifact_ids = result.artifact_refs.iter().map(|artifact| artifact.artifact_id.clone()).collect::<Vec<_>>();
+            context.artifact_refs.extend(result.artifact_refs);
+            if let Some(state) = context.stage_states.iter_mut().find(|state| state.stage_id == StageId::StoryScript) {
+              *state = result.stage.clone();
+            }
+            outputs["story"] = result.story;
+            outputs["script_request"] = result.script_request;
+            outputs["script"] = serde_json::to_value(&result.script).unwrap_or(Value::Null);
+            outputs["story_script"] = json!({ "artifact_ids": artifact_ids, "stage": result.stage });
+          },
+          Err((run_error, failed_state)) => {
+            if let Some(state) = context.stage_states.iter_mut().find(|state| state.stage_id == StageId::StoryScript) {
+              *state = failed_state.clone();
+            }
+            outputs["story_script"] = json!({ "artifact_ids": [], "stage": failed_state });
+            outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|error| PipelineRunError::new(PipelineStage::ScriptGenerating, "STORY_SCRIPT_SERIALIZATION_FAILED", error.to_string()))?;
+            persist_outputs(task_database, &job.id, PipelineStage::ScriptGenerating, &serialize_outputs(&outputs)?).await?;
+            return Err(run_error.into());
+          },
+        }
+        outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|error| PipelineRunError::new(PipelineStage::ScriptGenerating, "STORY_SCRIPT_SERIALIZATION_FAILED", error.to_string()))?;
+        persist_outputs(task_database, &job.id, PipelineStage::ScriptReady, &serialize_outputs(&outputs)?).await?;
+      }
+    }
 
     // Stage 1: Grok Image Edit (or recover from previous attempt)
     let edit_output: GrokImageEditOutput = if let Some(saved_edit) = outputs.get("image_edit").cloned().and_then(|v| serde_json::from_value::<GrokImageEditOutput>(v).ok()).filter(|o| std::path::Path::new(&o.generated_artifact.location).exists()) {
@@ -510,51 +569,65 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       out
     };
 
-    // Stage 4: Local Save Policy (D:\<Page>\<DD-MM-YYYY>\<HH-mm-ss_shortId_video.mp4/webm>)
-    let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: &job.id, current_stage: PipelineStage::DraftSaving, maybe_stage_outputs: None, maybe_business_status: Some("SAVING_LOCAL") }).await;
+    // A full film job does not terminate at the Grok output.  Its verified
+    // GeneratedVideo artifact is handed to the existing voice/subtitle,
+    // OpenMontage and CapCut stages below.  The legacy Grok-only mode keeps
+    // its historical local-save behaviour unchanged.
+    if grok_feature_film {
+      outputs["media_assets"] = json!({
+        "artifact_ids": [video_output.video_artifact.artifact_id.clone()],
+        "service": "grok_donut",
+        "asset_type": "video"
+      });
+      outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::MediaTimeline, "CONTEXT_SERIALIZATION_FAILED", e.to_string()))?;
+      persist_stage_checkpoint(task_database, &job.id, PipelineStage::MediaTimeline, &outputs).await?;
+    } else {
+      // Stage 4: Local Save Policy (D:\<Page>\<DD-MM-YYYY>\<HH-mm-ss_shortId_video.mp4/webm>)
+      let _ = update_pipeline_job_stage(UpdatePipelineJobStageArgs { db: task_database.get_connection(), pipeline_job_id: &job.id, current_stage: PipelineStage::DraftSaving, maybe_stage_outputs: None, maybe_business_status: Some("SAVING_LOCAL") }).await;
 
-    let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &job_id_str, sequence: 9, stage_id: Some("SAVING_LOCAL"), business_status: Some("SAVING_LOCAL"), event_type: "SAVING_LOCAL", level: "INFO", message: "Stage 4/4: Saving final video to Page date directory", error_code: None, metadata_json: None }).await;
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &job_id_str, sequence: 9, stage_id: Some("SAVING_LOCAL"), business_status: Some("SAVING_LOCAL"), event_type: "SAVING_LOCAL", level: "INFO", message: "Stage 4/4: Saving final video to Page date directory", error_code: None, metadata_json: None }).await;
 
-    emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::MediaTimeline, PipelineStage::DraftSaving, 90, "4/4 Publishing output to Page directory").await?;
-    let target_dir = crate::services::pipeline::output_policy::OutputPathResolver::prepare_output_directory(output_root, page_name).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "OUTPUT_DIR_PREPARATION_FAILED", e))?;
+      emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::MediaTimeline, PipelineStage::DraftSaving, 90, "4/4 Publishing output to Page directory").await?;
+      let target_dir = crate::services::pipeline::output_policy::OutputPathResolver::prepare_output_directory(output_root, page_name).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "OUTPUT_DIR_PREPARATION_FAILED", e))?;
 
-    let ext = if video_output.mime_type.contains("webm") { "webm" } else { "mp4" };
-    let filename = crate::services::pipeline::output_policy::OutputPathResolver::generate_final_filename(&job_id_str, "video", ext);
-    let video_file = std::path::Path::new(&video_output.video_artifact.location);
-    let published_path = crate::services::pipeline::output_policy::OutputPathResolver::publish_final_file(video_file, &target_dir, &filename).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "OUTPUT_PUBLISH_FAILED", e))?;
+      let ext = if video_output.mime_type.contains("webm") { "webm" } else { "mp4" };
+      let filename = crate::services::pipeline::output_policy::OutputPathResolver::generate_final_filename(&job_id_str, "video", ext);
+      let video_file = std::path::Path::new(&video_output.video_artifact.location);
+      let published_path = crate::services::pipeline::output_policy::OutputPathResolver::publish_final_file(video_file, &target_dir, &filename).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "OUTPUT_PUBLISH_FAILED", e))?;
 
-    let final_path_str = published_path.to_string_lossy().to_string();
-    outputs["final_video_path"] = json!(final_path_str);
-    outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "CONTEXT_SERIALIZATION_FAILED", e.to_string()))?;
-    outputs["status"] = json!("LOCAL_SAVED");
-    persist_stage_checkpoint(task_database, &job.id, PipelineStage::DraftSaving, &outputs).await?;
+      let final_path_str = published_path.to_string_lossy().to_string();
+      outputs["final_video_path"] = json!(final_path_str);
+      outputs["pipeline_context"] = serde_json::to_value(&context).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "CONTEXT_SERIALIZATION_FAILED", e.to_string()))?;
+      outputs["status"] = json!("LOCAL_SAVED");
+      persist_stage_checkpoint(task_database, &job.id, PipelineStage::DraftSaving, &outputs).await?;
 
-    let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &job_id_str, sequence: 10, stage_id: Some("LOCAL_SAVED"), business_status: Some("READY_TO_POST"), event_type: "LOCAL_SAVE_COMPLETED", level: "INFO", message: &format!("Local save completed: {}", final_path_str), error_code: None, metadata_json: None }).await;
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &job_id_str, sequence: 10, stage_id: Some("LOCAL_SAVED"), business_status: Some("READY_TO_POST"), event_type: "LOCAL_SAVE_COMPLETED", level: "INFO", message: &format!("Local save completed: {}", final_path_str), error_code: None, metadata_json: None }).await;
 
-    let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &job_id_str, sequence: 11, stage_id: Some("READY_TO_POST"), business_status: Some("READY_TO_POST"), event_type: "JOB_READY_TO_POST", level: "INFO", message: "Job is ready for Phase 2 publishing", error_code: None, metadata_json: None }).await;
+      let _ = insert_pipeline_job_event(InsertPipelineJobEventArgs { db: task_database.get_connection(), id: None, job_id: &job_id_str, sequence: 11, stage_id: Some("READY_TO_POST"), business_status: Some("READY_TO_POST"), event_type: "JOB_READY_TO_POST", level: "INFO", message: "Job is ready for Phase 2 publishing", error_code: None, metadata_json: None }).await;
 
-    let serialized_outputs = serialize_outputs(&outputs)?;
-    finalize_video_done(app_handle, task_database, &job.id, &final_path_str, &serialized_outputs).await?;
+      let serialized_outputs = serialize_outputs(&outputs)?;
+      finalize_video_done(app_handle, task_database, &job.id, &final_path_str, &serialized_outputs).await?;
 
-    let (pub_title, pub_caption, pub_hashtags, pub_description) = if let Some(payload_str) = &job.maybe_input_payload {
-      if let Ok(v) = serde_json::from_str::<serde_json::Value>(payload_str) {
-        let t = v.get("title").or_else(|| v.get("topic")).and_then(|s| s.as_str()).map(|s| s.to_string());
-        let c = v.get("caption").and_then(|s| s.as_str()).map(|s| s.to_string());
-        let d = v.get("description").and_then(|s| s.as_str()).map(|s| s.to_string());
-        let h: Vec<String> = v.get("hashtags").and_then(|arr| arr.as_array()).map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
-        (t, c, h, d)
+      let (pub_title, pub_caption, pub_hashtags, pub_description) = if let Some(payload_str) = &job.maybe_input_payload {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(payload_str) {
+          let t = v.get("title").or_else(|| v.get("topic")).and_then(|s| s.as_str()).map(|s| s.to_string());
+          let c = v.get("caption").and_then(|s| s.as_str()).map(|s| s.to_string());
+          let d = v.get("description").and_then(|s| s.as_str()).map(|s| s.to_string());
+          let h: Vec<String> = v.get("hashtags").and_then(|arr| arr.as_array()).map(|arr| arr.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect()).unwrap_or_default();
+          (t, c, h, d)
+        } else {
+          (None, None, Vec::new(), None)
+        }
       } else {
         (None, None, Vec::new(), None)
-      }
-    } else {
-      (None, None, Vec::new(), None)
-    };
+      };
 
-    let page_id_val = job.maybe_page_id.clone().unwrap_or_else(|| "general".to_string());
+      let page_id_val = job.maybe_page_id.clone().unwrap_or_else(|| "general".to_string());
 
-    let _ = crate::services::publishing::publication_manager::create_publications_for_completed_job(task_database.get_connection(), job.id.as_str(), &page_id_val, &final_path_str, pub_title.as_deref(), pub_caption.as_deref(), &pub_hashtags, pub_description.as_deref()).await;
+      let _ = crate::services::publishing::publication_manager::create_publications_for_completed_job(task_database.get_connection(), job.id.as_str(), &page_id_val, &final_path_str, pub_title.as_deref(), pub_caption.as_deref(), &pub_hashtags, pub_description.as_deref()).await;
 
-    return Ok(());
+      return Ok(());
+    }
   }
 
   if let Some(resume_from) = prepare_resume(&mut context).map_err(contract_pipeline_run_error)? {
@@ -804,19 +877,14 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
     persist_outputs(task_database, &job.id, PipelineStage::ScriptReady, &serialize_outputs(&outputs)?).await?;
   }
 
-  // Build narration text used for caption segmentation.
-  let narration = script.scenes.iter().map(|s| s.narration.as_str()).collect::<Vec<_>>().join(" ");
-
   let capcut_input: Option<CapcutInput> = phase6_context.as_ref().map(prepare_capcut).transpose().map_err(|error| PipelineRunError::new(PipelineStage::DraftCreating, "CAPCUT_DEPENDENCY_INVALID", error.to_string()))?;
-  let client = get_capcut_client().await?;
-  let captions = capcut_input.as_ref().map(|input| input.captions.clone()).unwrap_or_else(|| segment_script_to_captions(&narration));
+  let capcut_input = capcut_input.ok_or_else(|| PipelineRunError::new(PipelineStage::DraftCreating, "CAPCUT_DEPENDENCY_INVALID", "Canonical CapCut input is unavailable".to_string()))?;
+  let editing_preset = EditingPreset::from_payload(&input);
   let mut capcut_state = phase6_context.as_ref().and_then(|context| context.stage_states.iter().find(|state| state.stage_id == StageId::Capcut)).cloned().unwrap_or_else(|| StageState::pending(StageId::Capcut));
-  if let Some(input) = capcut_input.as_ref() {
-    capcut_state.input_artifact_ids = input.input_artifact_ids.clone();
-  }
-  let (_draft_url, draft_id, saved_url, manifest, published) = loop {
-    capcut_state.start_stage(Some("capcut_mate".to_string()), chrono::Utc::now().to_rfc3339()).map_err(contract_pipeline_error)?;
-    emit_stage_state(app_handle, StageStatePayload { job_id: job_id_str.clone(), stage: capcut_state.clone(), progress: Some(45), message: Some("Creating verified CapCut draft from timeline artifacts".to_string()) });
+  capcut_state.input_artifact_ids = capcut_input.input_artifact_ids.clone();
+  let native_draft = loop {
+    capcut_state.start_stage(Some("capcut_cli_rust".to_string()), chrono::Utc::now().to_rfc3339()).map_err(contract_pipeline_error)?;
+    emit_stage_state(app_handle, StageStatePayload { job_id: job_id_str.clone(), stage: capcut_state.clone(), progress: Some(45), message: Some("Building editable CapCut draft with the native Rust engine".to_string()) });
     if let Some(context) = phase6_context.as_mut() {
       *context.stage_states.iter_mut().find(|state| state.stage_id == StageId::Capcut).expect("capcut stage contract") = capcut_state.clone();
       outputs["pipeline_context"] = serde_json::to_value(&*context)?;
@@ -826,43 +894,14 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
 
     let attempt = tokio::time::timeout(std::time::Duration::from_secs(stage_policy(StageId::Capcut).timeout_seconds), async {
       check_cancelled(&job_id_str, PipelineStage::DraftCreating).map_err(|error| extract_pipeline_error(&error))?;
-      emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptReady, PipelineStage::DraftCreating, 45, "Creating CapCut draft").await.map_err(|error| extract_pipeline_error(&error))?;
-      info!("[JOB][CAPCUT] Creating draft project...");
-      let created = capcut_create_draft(client, DEFAULT_WIDTH, DEFAULT_HEIGHT).await.map_err(|error| map_capcut_error(PipelineStage::DraftCreating, &error))?;
-      let draft_url = created.draft_url.clone();
-      let draft_id = created.draft_id.clone();
-      outputs["draft_url"] = json!(draft_url);
-      outputs["draft_id"] = json!(draft_id);
-      persist_outputs(task_database, &job.id, PipelineStage::DraftCreated, &serialize_outputs(&outputs).map_err(|error| extract_pipeline_error(&error))?).await.map_err(|error| extract_pipeline_error(&error))?;
-
-      if let Some(input) = capcut_input.as_ref() {
-        check_cancelled(&job_id_str, PipelineStage::DraftCreating).map_err(|error| extract_pipeline_error(&error))?;
-        let mut visual_urls = std::collections::HashMap::new();
-        for segment in &input.video_segments {
-          if !visual_urls.contains_key(&segment.artifact_id) {
-            let url = register_artifact_asset(client, &segment.artifact_id, std::path::Path::new(&segment.path)).await.map_err(|error| map_capcut_error(PipelineStage::DraftCreating, &error))?;
-            visual_urls.insert(segment.artifact_id.clone(), url);
-          }
-        }
-        let voice_url = register_artifact_asset(client, &input.voice_audio_artifact_id, std::path::Path::new(&input.voice_segment.path)).await.map_err(|error| map_capcut_error(PipelineStage::DraftCreating, &error))?;
-        capcut_add_video_assets(client, &draft_url, &visual_urls, &input.video_segments).await.map_err(|error| map_capcut_error(PipelineStage::DraftCreating, &error))?;
-        capcut_add_audio(client, &draft_url, &voice_url, &input.voice_segment).await.map_err(|error| map_capcut_error(PipelineStage::DraftCreating, &error))?;
-      }
-
-      check_cancelled(&job_id_str, PipelineStage::CaptionAdding).map_err(|error| extract_pipeline_error(&error))?;
-      emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::DraftCreated, PipelineStage::CaptionAdding, 60, "Adding captions to draft").await.map_err(|error| extract_pipeline_error(&error))?;
-      capcut_add_captions(client, &draft_url, &captions).await.map_err(|error| map_capcut_error(PipelineStage::CaptionAdding, &error))?;
-
-      check_cancelled(&job_id_str, PipelineStage::DraftSaving).map_err(|error| extract_pipeline_error(&error))?;
-      emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::CaptionAdding, PipelineStage::DraftSaving, 75, "Saving draft project").await.map_err(|error| extract_pipeline_error(&error))?;
-      let saved_url = capcut_save_draft(client, &draft_url).await.map_err(|error| map_capcut_error(PipelineStage::DraftSaving, &error))?;
-      capcut_verify_draft_exists(client, &draft_id).await.map_err(|error| map_capcut_error(PipelineStage::DraftSaving, &error))?;
-      let manifest = capcut_inspect_draft(client, &draft_id, &created.draft_path).await.map_err(|error| map_capcut_error(PipelineStage::DraftSaving, &error))?;
-      if capcut_input.is_some() && (manifest.visual_track_count.unwrap_or(0) == 0 || manifest.audio_track_count.unwrap_or(0) == 0 || manifest.caption_track_count.unwrap_or(0) == 0) {
-        return Err(PipelineRunError::new(PipelineStage::DraftSaving, "DRAFT_INSPECT_FAILED", "Verified draft is missing video, voice, or caption tracks".to_string()));
-      }
-      let published = capcut_publish_draft(client, &created).await.map_err(|error| map_capcut_error(PipelineStage::DraftSaving, &error))?;
-      Ok((draft_url, draft_id, saved_url, manifest, published))
+      emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::ScriptReady, PipelineStage::DraftCreating, 45, "Creating native CapCut project").await.map_err(|error| extract_pipeline_error(&error))?;
+      let build_input = capcut_input.clone();
+      let build_preset = editing_preset.clone();
+      let build_job_id = job_id_str.clone();
+      tokio::task::spawn_blocking(move || build_native_capcut_draft(&build_input, &build_preset, &build_job_id))
+        .await
+        .map_err(|error| PipelineRunError::new(PipelineStage::DraftCreating, "CAPCUT_ENGINE_TASK_FAILED", error.to_string()))?
+        .map_err(|error| map_capcut_error(PipelineStage::DraftSaving, &error))
     })
     .await;
 
@@ -912,28 +951,28 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
   let capcut_dir = work_dir.join("capcut");
   std::fs::create_dir_all(&capcut_dir).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "PIPELINE_ERROR", format!("Failed to create capcut dir: {e}")))?;
   let draft_manifest_path = capcut_dir.join("draft_manifest.json");
-  let canonical_duration_us = manifest.timeline_duration_us.or_else(|| capcut_input.as_ref().map(|input| input.duration_us));
-  let final_draft_path = published.final_path.to_string_lossy().to_string();
-  let staging_draft_path = published.staging_path.to_string_lossy().to_string();
-  let desktop_root = published.desktop_root.to_string_lossy().to_string();
+  let canonical_duration_us = native_draft.timeline.duration.max(0) as u64;
+  let final_draft_path = native_draft.draft_path.to_string_lossy().to_string();
+  let desktop_root = native_draft.desktop_root.to_string_lossy().to_string();
   let manifest_payload = json!({
-    "draftId": draft_id,
+    "draftId": native_draft.draft_id,
     "draftPath": final_draft_path,
-    "stagingPath": staging_draft_path,
     "desktopRoot": desktop_root,
-    "draftUrl": saved_url,
-    "visualTrackCount": manifest.visual_track_count,
-    "audioTrackCount": manifest.audio_track_count,
-    "captionTrackCount": manifest.caption_track_count,
+    "draftUrl": final_draft_path,
+    "visualTrackCount": native_draft.visual_track_count,
+    "audioTrackCount": native_draft.audio_track_count,
+    "captionTrackCount": native_draft.caption_track_count,
     "timelineDurationUs": canonical_duration_us,
-    "inputArtifactIds": capcut_input.as_ref().map(|input| &input.input_artifact_ids),
-    "timelineArtifactId": capcut_input.as_ref().map(|input| &input.timeline_artifact_id),
-    "captionsArtifactId": capcut_input.as_ref().map(|input| &input.captions_artifact_id),
-    "source": manifest.source,
+    "inputArtifactIds": capcut_input.input_artifact_ids,
+    "timelineArtifactId": capcut_input.timeline_artifact_id,
+    "captionsArtifactId": capcut_input.captions_artifact_id,
+    "editingPreset": editing_preset,
+    "lintWarnings": native_draft.lint_warnings,
+    "source": "capcut_cli_rust",
   });
   std::fs::write(&draft_manifest_path, serde_json::to_string_pretty(&manifest_payload).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "PIPELINE_ERROR", format!("{e}")))?).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "PIPELINE_ERROR", format!("Failed to write manifest: {e}")))?;
 
-  let capcut_artifact = ArtifactStore::register_typed_artifact(&work_dir, job.id.as_str(), StageId::Capcut, "capcut_mate", ArtifactKind::CapcutDraft, &draft_manifest_path, json!({ "draft_id": draft_id, "final_path": final_draft_path, "staging_path": staging_draft_path, "input_artifact_ids": capcut_input.as_ref().map(|input| &input.input_artifact_ids) })).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "PIPELINE_ERROR", format!("{e:?}")))?;
+  let capcut_artifact = ArtifactStore::register_typed_artifact(&work_dir, job.id.as_str(), StageId::Capcut, "capcut_cli_rust", ArtifactKind::CapcutDraft, &draft_manifest_path, json!({ "draft_id": native_draft.draft_id, "final_path": final_draft_path, "input_artifact_ids": capcut_input.input_artifact_ids, "editing_preset": editing_preset })).map_err(|e| PipelineRunError::new(PipelineStage::DraftSaving, "PIPELINE_ERROR", format!("{e:?}")))?;
 
   if let Some(context) = phase6_context.as_mut() {
     let artifact_ref = capcut_artifact.to_artifact_ref(StageId::Capcut).map_err(contract_pipeline_error)?;
@@ -963,18 +1002,19 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
       emit_stage_progress(app_handle, task_database, &job.id, PipelineStage::DraftReady, PipelineStage::Rendering, 85, "Rendering video").await?;
       let _gpu_permit = dispatcher.acquire_gpu().await;
 
-      info!("[JOB][CAPCUT] Rendering video (output_mode=render_video)...");
-      let render_res = async {
-        capcut_gen_video(client, &saved_url).await?;
-        capcut_poll_gen_video_status(client, &saved_url, Some(Arc::clone(cancel_flag))).await
-      }
-      .await;
+      info!("[JOB][CAPCUT] Rendering through capcut-ffmpeg (output_mode=render_video)...");
+      let rendered_path = work_dir.join("capcut").join("rendered_video.mp4");
+      let render_draft_id = native_draft.draft_id.clone();
+      let render_path_for_task = rendered_path.clone();
+      let render_res = tokio::task::spawn_blocking(move || render_native_capcut_video(&native_draft, &render_path_for_task))
+        .await
+        .map_err(|error| anyhow::anyhow!("CAPCUT_RENDER_TASK_FAILED: {error}"))
+        .and_then(|result| result);
 
       match render_res {
-        Ok(video_url) => {
-          let rendered_path = work_dir.join("capcut").join("rendered_video.mp4");
-          materialize_rendered_video(client, &video_url, &rendered_path).await.map_err(|error| map_capcut_error(PipelineStage::Rendering, &error))?;
-          let rendered = ArtifactStore::register_typed_artifact(&work_dir, job.id.as_str(), StageId::Capcut, "capcut_mate", ArtifactKind::RenderedVideo, &rendered_path, json!({ "draft_id": draft_id, "render_url": video_url })).map_err(|error| PipelineRunError::new(PipelineStage::Rendering, "RENDER_FAILED", error.to_string()))?;
+        Ok(render_result) => {
+          let video_url = render_result.output_path.to_string_lossy().to_string();
+          let rendered = ArtifactStore::register_typed_artifact(&work_dir, job.id.as_str(), StageId::Capcut, "capcut_ffmpeg", ArtifactKind::RenderedVideo, &rendered_path, json!({ "draft_id": render_draft_id, "render_path": video_url, "size_bytes": render_result.size_bytes })).map_err(|error| PipelineRunError::new(PipelineStage::Rendering, "RENDER_FAILED", error.to_string()))?;
           if let Some(context) = phase6_context.as_mut() {
             context.artifact_refs.push(rendered.to_artifact_ref(StageId::Capcut).map_err(contract_pipeline_error)?);
           }
@@ -1032,7 +1072,7 @@ async fn run_job_pipeline(app_handle: &AppHandle, task_database: &TaskDatabase, 
               outputs["pipeline_context"] = serde_json::to_value(context)?;
               outputs["capcut"] = json!({ "artifact_ids": [capcut_artifact.id.clone()], "stage": context.stage_states.iter().find(|state| state.stage_id == StageId::Capcut) });
             }
-            finalize_draft_ready(app_handle, task_database, &job.id, &saved_url, &serialize_outputs(&outputs)?).await?;
+            finalize_draft_ready(app_handle, task_database, &job.id, &final_draft_path, &serialize_outputs(&outputs)?).await?;
           } else {
             // User asked for a real video and we could not produce one: fail.
             return Err(PipelineRunError::new(PipelineStage::Rendering, &code, err_str).into());

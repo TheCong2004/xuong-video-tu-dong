@@ -54,7 +54,7 @@ export function RiskNoticeModal({
       aria-modal="true"
       aria-labelledby="risk-modal-title"
     >
-      <div className="w-full max-w-md rounded-xl border border-amber-500/30 bg-card p-6 shadow-xl">
+      <div className="w-full max-w-md rounded-xl border border-white/10 bg-card p-6 shadow-xl">
         <div className="flex items-start gap-3 mb-4">
           <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500 shrink-0">
             <span className="material-symbols-outlined text-[20px]">warning</span>

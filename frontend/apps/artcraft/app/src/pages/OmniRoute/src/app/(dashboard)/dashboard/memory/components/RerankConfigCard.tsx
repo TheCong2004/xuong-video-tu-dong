@@ -65,7 +65,7 @@ export default function RerankConfigCard({ settings, providers, onSave, saving }
       {rerankEnabled && (
         <>
           {/* Latency / cost warning */}
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400 flex items-start gap-2">
+          <div className="p-3 rounded-lg bg-amber-500/10 border border-white/10 text-xs text-amber-400 flex items-start gap-2">
             <span className="material-symbols-outlined text-[14px] mt-0.5 shrink-0">warning</span>
             <span>{t("rerank.warning")}</span>
           </div>

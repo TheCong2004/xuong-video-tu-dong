@@ -5,10 +5,12 @@ import {
   Clapperboard,
   FileText,
   Film,
+  FolderOpen,
   Image as ImageIcon,
   Loader2,
   Mic2,
   Play,
+  RefreshCw,
   Upload,
   Wand2,
   XCircle,
@@ -20,6 +22,9 @@ import {
   DonutProfileEnriched,
   IngestFlowordSourceImageResponse,
   ingestFlowordSourceImage,
+  EditingPreset,
+  openFlowordCapcutDraft,
+  rebuildFlowordCapcutDraft,
 } from "../../api/flowordClient";
 import { WorkflowInput, WorkflowRun } from "../../services/workflowEngine";
 import { ScriptMarketItem } from "./ScriptMarketView";
@@ -30,6 +35,8 @@ type PipelinePhase = {
   description: string;
   stages: string[];
 };
+
+type VisualEngine = "grok_web" | "omniroute_video";
 
 const phases: PipelinePhase[] = [
   {
@@ -177,18 +184,35 @@ export const ProductionPipelineView: React.FC<Props> = ({
   const [sceneCount, setSceneCount] = useState(6);
   const [duration, setDuration] = useState(60);
   const [voiceStyle, setVoiceStyle] = useState("storytelling_vietnamese");
+  const [editingPreset, setEditingPreset] = useState<EditingPreset>({
+    aspect: "9:16",
+    subtitle_style: "dynamic",
+    transition_style: "smooth",
+    music_volume: 0.18,
+    video_speed: 1,
+  });
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [rebuiltDraftPath, setRebuiltDraftPath] = useState("");
+  // Existing Grok inputs live in the main production surface so there is no
+  // second, competing Studio workflow.
+  const [visualEngine, setVisualEngine] = useState<VisualEngine>("grok_web");
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [expand916Prompt, setExpand916Prompt] = useState("");
+  const [videoPrompt, setVideoPrompt] = useState("");
   const [anchor, setAnchor] = useState<StoredArtifactRef | null>(null);
   const [anchorPreview, setAnchorPreview] = useState("");
   const [ingesting, setIngesting] = useState(false);
+  const [dismissedErrorRunId, setDismissedErrorRunId] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const page =
     pages.find((candidate) => candidate.id === activePageId) ?? pages[0];
   const profile = profiles.find(
     (candidate) => candidate.id === page?.browser_profile_id,
   );
-  const donutReady = Boolean(
-    profile?.is_running && profile.grok_logged_in && profile.extension_ready,
-  );
+  // OmniBridge controls the selected Donut profile via CDP/Playwright.
+  // Profile running is sufficient; if Grok is not yet logged in, the browser tab
+  // will open directly to Grok for the user to login or continue automatically.
+  const donutReady = Boolean(profile?.is_running);
   const video = useMemo(
     () =>
       activeRun?.artifacts.find(
@@ -197,6 +221,11 @@ export const ProductionPipelineView: React.FC<Props> = ({
       ),
     [activeRun],
   );
+  const draftPath = rebuiltDraftPath || activeRun?.finalDraftUrl;
+
+  useEffect(() => {
+    setRebuiltDraftPath("");
+  }, [activeRun?.id]);
 
   useEffect(() => {
     if (!scriptToLoad) return;
@@ -252,22 +281,35 @@ export const ProductionPipelineView: React.FC<Props> = ({
       return toast.error("Nhập brief để tạo kịch bản phân cảnh.");
     if (!anchor)
       return toast.error("Thêm anchor nhân vật trước khi chạy luồng phim AI.");
+    if (visualEngine === "grok_web" && !page.browser_profile_id) {
+      return toast.error(
+        "Page chưa được gán Profile Donut Browser. Vui lòng bấm ✏️ bên cạnh tên Page để chọn Profile.",
+      );
+    }
+    const usesGrok = visualEngine === "grok_web";
     await onRunWorkflow({
-      workflowName: "floword_feature_film_pipeline",
-      workflowMode: "original_creation",
+      workflowName: usesGrok
+        ? "grok_feature_film_pipeline"
+        : "floword_feature_film_pipeline",
+      workflowMode: usesGrok
+        ? "grok_feature_film_pipeline"
+        : "original_creation",
       pageId: page.id,
       prompt: brief.trim(),
       topic: brief.trim(),
+      title: brief.trim(),
+      caption: brief.trim(),
       sourceUrls: parseSources(sources),
       // An anchor is a character reference, never a source video. Sending it
       // as sourceFiles makes the ingest worker try to extract audio from JPG/PNG.
       sourceFiles: [],
       sourceImageArtifact: anchor,
-      targetPlatform: "tiktok",
+      targetPlatform: (page.target_platform as any) || "tiktok",
       targetDurationSeconds: duration,
       language: page.default_language || "vi",
       tone: "storytelling",
       aspectRatio: "9:16",
+      editingPreset,
       scriptMode: "original",
       contentSource: useTrendResearch ? "trend_research" : "prompt_only",
       outputMode: "render_video",
@@ -276,15 +318,43 @@ export const ProductionPipelineView: React.FC<Props> = ({
       researchQuery: brief.trim(),
       researchMode: "search",
       voiceId: voiceStyle,
-      customPrompt: `${brief.trim()}\nScene count: ${sceneCount}. Character anchor: ${anchor.artifact_id}.`,
+      imagePrompt: usesGrok ? imagePrompt.trim() || brief.trim() : undefined,
+      expand916Prompt: usesGrok ? expand916Prompt.trim() || undefined : undefined,
+      videoPrompt: usesGrok ? videoPrompt.trim() || undefined : undefined,
+      customPrompt: brief.trim(),
       generateImage: true,
       generateDraft: true,
     });
   };
 
+  const openDraft = async () => {
+    if (!draftPath) return;
+    try {
+      await openFlowordCapcutDraft(draftPath);
+      toast.success("Đã mở CapCut và vị trí project.");
+    } catch (error) {
+      toast.error(`Không thể mở project: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const rebuildDraft = async () => {
+    if (!activeRun?.id) return;
+    setDraftBusy(true);
+    const toastId = toast.loading("Đang dựng lại project CapCut…");
+    try {
+      const result = await rebuildFlowordCapcutDraft(activeRun.id, editingPreset);
+      setRebuiltDraftPath(result.draft_path);
+      toast.success(`Đã dựng lại project ${result.draft_id.slice(0, 8)}.`, { id: toastId });
+    } catch (error) {
+      toast.error(`Dựng lại thất bại: ${error instanceof Error ? error.message : String(error)}`, { id: toastId });
+    } finally {
+      setDraftBusy(false);
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 p-5 lg:p-7">
-      <header className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5 shadow-xl shadow-black/10">
+      <header className="rounded-2xl border border-white/10 bg-[#121622] p-5 shadow-xl shadow-black/10">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-rose-500 text-white shadow-lg shadow-fuchsia-500/20">
@@ -321,7 +391,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
 
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.9fr)]">
         <div className="space-y-5">
-          <div className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
+          <div className="rounded-2xl border border-white/10 bg-[#121622] p-5">
             <div className="mb-4 flex items-center gap-2">
               <Wand2 className="h-4 w-4 text-fuchsia-300" />
               <h2 className="font-bold text-white">
@@ -335,7 +405,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
                 onChange={(event) => setBrief(event.target.value)}
                 rows={5}
                 placeholder="Ví dụ: Câu chuyện lịch sử 60 giây, 6 cảnh, nhân vật chính xuyên suốt…"
-                className="placeholder:text-zinc-600 mt-2 w-full resize-y rounded-xl border border-white/[0.1] bg-[#0d1017] p-3 text-sm text-white outline-none focus:border-fuchsia-400"
+                className="placeholder:text-zinc-600 mt-2 w-full resize-y rounded-xl border border-white/10 bg-[#0d1017] p-3 text-sm text-white outline-none focus:border-fuchsia-400"
               />
             </label>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -347,7 +417,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
                   onChange={(event) => setSources(event.target.value)}
                   rows={3}
                   placeholder="https://…"
-                  className="placeholder:text-zinc-600 mt-2 w-full resize-y rounded-xl border border-white/[0.1] bg-[#0d1017] p-3 text-sm text-white outline-none focus:border-fuchsia-400"
+                  className="placeholder:text-zinc-600 mt-2 w-full resize-y rounded-xl border border-white/10 bg-[#0d1017] p-3 text-sm text-white outline-none focus:border-fuchsia-400"
                 />
                 <span className="mt-2 flex items-center gap-2 text-xs text-zinc-400">
                   <input
@@ -372,7 +442,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
                         Math.max(1, Number(event.target.value) || 1),
                       )
                     }
-                    className="mt-2 w-full rounded-xl border border-white/[0.1] bg-[#0d1017] p-3 text-white outline-none focus:border-fuchsia-400"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#0d1017] p-3 text-white outline-none focus:border-fuchsia-400"
                   />
                 </label>
                 <label className="text-zinc-300 text-sm">
@@ -387,7 +457,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
                         Math.max(10, Number(event.target.value) || 10),
                       )
                     }
-                    className="mt-2 w-full rounded-xl border border-white/[0.1] bg-[#0d1017] p-3 text-white outline-none focus:border-fuchsia-400"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#0d1017] p-3 text-white outline-none focus:border-fuchsia-400"
                   />
                 </label>
                 <label className="text-zinc-300 col-span-2 text-sm">
@@ -395,7 +465,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
                   <select
                     value={voiceStyle}
                     onChange={(event) => setVoiceStyle(event.target.value)}
-                    className="mt-2 w-full rounded-xl border border-white/[0.1] bg-[#0d1017] p-3 text-white outline-none focus:border-fuchsia-400"
+                    className="mt-2 w-full rounded-xl border border-white/10 bg-[#0d1017] p-3 text-white outline-none focus:border-fuchsia-400"
                   >
                     <option value="storytelling_vietnamese">
                       Kể chuyện tiếng Việt, có ngắt nghỉ
@@ -411,67 +481,130 @@ export const ProductionPipelineView: React.FC<Props> = ({
               </div>
             </div>
           </div>
-          <div className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
-            <div className="mb-4 flex items-center gap-2">
-              <ImageIcon className="h-4 w-4 text-fuchsia-300" />
-              <h2 className="font-bold text-white">2. Anchor nhân vật</h2>
+          <div className="rounded-2xl border border-white/10 bg-[#121622] p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-fuchsia-300" />
+                <h2 className="font-bold text-white">2. Nhân vật & Động cơ Video</h2>
+              </div>
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-fuchsia-500/10 text-fuchsia-300 border border-white/10 font-medium">
+                {visualEngine === "grok_web" ? "Grok Web (Donut)" : "OmniRoute Video API"}
+              </span>
             </div>
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
+
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px] items-start">
               <div>
                 <p className="text-zinc-400 text-sm">
-                  Anchor là artifact cục bộ được gắn vào request. Nó là điều
-                  kiện cần để Donut/Grok có thể giữ nhận diện qua các scene.
+                  Tải 1 ảnh chân dung/nhân vật mẫu. AI Grok sẽ giữ nhận diện khuôn mặt và phong cách nhân vật này xuyên suốt mọi cảnh video.
                 </p>
-                <input
-                  ref={fileInput}
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void ingestAnchor(file);
-                    event.currentTarget.value = "";
-                  }}
-                />
-                <button
-                  type="button"
-                  disabled={ingesting}
-                  onClick={() => fileInput.current?.click()}
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl border border-fuchsia-400/40 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-500/20 disabled:opacity-60"
-                >
-                  {ingesting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Upload className="h-4 w-4" />
-                  )}
-                  {anchor ? "Thay anchor" : "Thêm anchor nhân vật"}
-                </button>
+
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      if (file) void ingestAnchor(file);
+                      event.currentTarget.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={ingesting}
+                    onClick={() => fileInput.current?.click()}
+                    className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-fuchsia-500/10 px-4 py-2.5 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-500/20 disabled:opacity-60 cursor-pointer"
+                  >
+                    {ingesting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="h-4 w-4" />
+                    )}
+                    {anchor ? "Thay ảnh nhân vật" : "Tải ảnh nhân vật mẫu (Anchor)"}
+                  </button>
+
+                  <select
+                    value={visualEngine}
+                    onChange={(event) =>
+                      setVisualEngine(event.target.value as VisualEngine)
+                    }
+                    className="rounded-xl border border-white/10 bg-[#0d1017] px-3 py-2.5 text-xs text-zinc-300 outline-none focus:border-fuchsia-400"
+                  >
+                    <option value="grok_web">Động cơ: Grok Web qua Donut</option>
+                    <option value="omniroute_video">Động cơ: OmniRoute Video API</option>
+                  </select>
+                </div>
+
                 {anchor && (
-                  <p className="mt-3 break-all font-mono text-[11px] text-emerald-300">
-                    Artifact: {anchor.artifact_id} · SHA:{" "}
-                    {anchor.sha256?.slice(0, 12) || "chưa có SHA"}
-                    {anchor.sha256 ? "…" : ""}
+                  <p className="mt-2.5 break-all font-mono text-[11px] text-emerald-300">
+                    ✓ Đã nhận diện Anchor: {anchor.artifact_id.slice(0, 16)}…
                   </p>
                 )}
               </div>
-              <div className="flex min-h-36 items-center justify-center overflow-hidden rounded-xl border border-dashed border-white/[0.15] bg-black/20">
+
+              <div className="flex h-28 w-full max-w-[180px] items-center justify-center overflow-hidden rounded-xl border border-dashed border-white/10 bg-black/30">
                 {anchorPreview ? (
                   <img
                     src={anchorPreview}
                     alt="Anchor nhân vật"
-                    className="h-40 w-full object-cover"
+                    className="h-full w-full object-cover"
                   />
                 ) : (
-                  <span className="text-zinc-600 px-4 text-center text-xs">
-                    Chưa có ảnh anchor
-                  </span>
+                  <div className="text-center p-2 text-zinc-600">
+                    <ImageIcon className="h-6 w-6 mx-auto mb-1 opacity-40" />
+                    <span className="text-[11px]">Chưa có ảnh</span>
+                  </div>
                 )}
               </div>
             </div>
+
+            {visualEngine === "grok_web" && (
+              <details className="mt-4 pt-4 border-t border-white/10 group text-xs">
+                <summary className="cursor-pointer font-medium text-zinc-400 hover:text-zinc-200 transition select-none flex items-center gap-1.5">
+                  <span className="text-fuchsia-400 group-open:rotate-90 transition-transform inline-block">▸</span>
+                  Tùy chỉnh Prompt nâng cao (Không bắt buộc - Tự động tạo từ Brief nếu để trống)
+                </summary>
+                <div className="mt-3 grid gap-3 pl-3">
+                  <label className="text-zinc-300 text-xs">
+                    Prompt tạo ảnh Grok (để trống sẽ dùng Brief)
+                    <textarea
+                      value={imagePrompt}
+                      onChange={(event) => setImagePrompt(event.target.value)}
+                      rows={2}
+                      placeholder="Giữ khuôn mặt, trang phục từ anchor; mô tả bối cảnh…"
+                      className="placeholder:text-zinc-600 mt-1.5 w-full resize-y rounded-xl border border-white/10 bg-[#0d1017] p-2.5 text-xs text-white outline-none focus:border-fuchsia-400"
+                    />
+                  </label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <label className="text-zinc-300 text-xs">
+                      Prompt mở rộng 9:16 (tùy chọn)
+                      <textarea
+                        value={expand916Prompt}
+                        onChange={(event) => setExpand916Prompt(event.target.value)}
+                        rows={2}
+                        placeholder="Mở rộng 9:16 giữ chủ thể…"
+                        className="placeholder:text-zinc-600 mt-1.5 w-full resize-y rounded-xl border border-white/10 bg-[#0d1017] p-2.5 text-xs text-white outline-none focus:border-fuchsia-400"
+                      />
+                    </label>
+                    <label className="text-zinc-300 text-xs">
+                      Prompt chuyển động video (tùy chọn)
+                      <textarea
+                        value={videoPrompt}
+                        onChange={(event) => setVideoPrompt(event.target.value)}
+                        rows={2}
+                        placeholder="Chuyển động điện ảnh mượt mà…"
+                        className="placeholder:text-zinc-600 mt-1.5 w-full resize-y rounded-xl border border-white/10 bg-[#0d1017] p-2.5 text-xs text-white outline-none focus:border-fuchsia-400"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </details>
+            )}
           </div>
         </div>
         <aside className="space-y-5">
-          <div className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
+          <div className="rounded-2xl border border-white/10 bg-[#121622] p-5">
             <div className="flex items-center gap-2">
               <Film className="h-4 w-4 text-fuchsia-300" />
               <h2 className="font-bold text-white">Điều phối Donut Browser</h2>
@@ -481,7 +614,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
               <select
                 value={page?.id || ""}
                 onChange={(event) => onSelectPage(event.target.value)}
-                className="mt-1.5 w-full rounded-xl border border-white/[0.1] bg-[#0d1017] p-2.5 text-sm text-white outline-none"
+                className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0d1017] p-2.5 text-sm text-white outline-none"
               >
                 {pages.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -503,26 +636,37 @@ export const ProductionPipelineView: React.FC<Props> = ({
               <StatusRow
                 label="Grok đăng nhập"
                 value={
-                  profile?.grok_logged_in ? "Đã xác nhận" : "Chưa xác nhận"
+                  profile?.grok_logged_in
+                    ? "Đã xác nhận"
+                    : profile?.is_running
+                      ? "Sẵn sàng (Tự mở tab)"
+                      : "Chờ bật profile"
                 }
-                good={Boolean(profile?.grok_logged_in)}
+                good={Boolean(profile?.is_running)}
               />
               <StatusRow
-                label="Extension"
-                value={profile?.extension_ready ? "Sẵn sàng" : "Chưa sẵn sàng"}
-                good={Boolean(profile?.extension_ready)}
+                label="Động cơ hình"
+                value={
+                  visualEngine === "grok_web"
+                    ? "Grok Web / Donut"
+                    : "Video API / OmniRoute"
+                }
+                good={visualEngine === "grok_web" ? Boolean(profile?.is_running) : undefined}
               />
             </dl>
-            {!donutReady && (
-              <p className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-5 text-amber-200">
-                Donut chưa sẵn sàng cho bridge Grok. Điều này không chặn luồng
-                phim hiện tại: worker dùng visual provider nội bộ/OmniRoute.
-                Chỉ khi adapter Donut trả receipt và artifact thật, bridge mới
-                được dùng để gửi từng scene sang Grok.
+            {visualEngine === "grok_web" && (
+              <p className="mt-4 rounded-xl border border-white/10 bg-fuchsia-500/10 p-3 text-xs leading-5 text-fuchsia-200">
+                💡 <strong>Quy trình Grok Web:</strong> OmniBridge sẽ kết nối trực tiếp với Profile Donut. Nếu phiên trình duyệt chưa đăng nhập, tab Grok sẽ mở ra để bạn đăng nhập và tự động tiếp tục tác vụ ngay sau đó.
+              </p>
+            )}
+            {visualEngine === "omniroute_video" && (
+              <p className="mt-4 rounded-xl border border-white/10 bg-cyan-500/10 p-3 text-xs leading-5 text-cyan-100">
+                Chế độ Video API không cần Donut. Pipeline sẽ chạy preflight bằng
+                provider video thật của OmniRoute trước khi sinh cảnh.
               </p>
             )}
           </div>
-          <div className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
+          <div className="rounded-2xl border border-white/10 bg-[#121622] p-5">
             <div className="flex items-center gap-2">
               <AudioLines className="h-4 w-4 text-fuchsia-300" />
               <h2 className="font-bold text-white">Lệnh sản xuất</h2>
@@ -534,7 +678,7 @@ export const ProductionPipelineView: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={() => void onCancelWorkflow()}
-                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 font-semibold text-rose-200"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-rose-500/10 px-4 py-3 font-semibold text-rose-200"
               >
                 <XCircle className="h-4 w-4" />
                 Hủy job hiện tại
@@ -550,9 +694,47 @@ export const ProductionPipelineView: React.FC<Props> = ({
               </button>
             )}
           </div>
+          <div className="rounded-2xl border border-white/10 bg-[#121622] p-5">
+            <div className="flex items-center gap-2">
+              <Clapperboard className="h-4 w-4 text-fuchsia-300" />
+              <h2 className="font-bold text-white">Preset dựng phim</h2>
+            </div>
+            <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+              <label className="text-zinc-400">
+                Tỷ lệ
+                <select value={editingPreset.aspect} onChange={(event) => setEditingPreset((current) => ({ ...current, aspect: event.target.value as EditingPreset["aspect"] }))} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#0d1017] p-2.5 text-white">
+                  <option value="9:16">9:16 Dọc</option>
+                  <option value="16:9">16:9 Ngang</option>
+                  <option value="1:1">1:1 Vuông</option>
+                  <option value="4:5">4:5 Dọc</option>
+                </select>
+              </label>
+              <label className="text-zinc-400">
+                Phụ đề
+                <select value={editingPreset.subtitle_style} onChange={(event) => setEditingPreset((current) => ({ ...current, subtitle_style: event.target.value as EditingPreset["subtitle_style"] }))} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#0d1017] p-2.5 text-white">
+                  <option value="dynamic">Năng động</option>
+                  <option value="cinematic">Điện ảnh</option>
+                  <option value="clean">Tối giản</option>
+                </select>
+              </label>
+              <label className="col-span-2 text-zinc-400">
+                Chuyển cảnh
+                <select value={editingPreset.transition_style} onChange={(event) => setEditingPreset((current) => ({ ...current, transition_style: event.target.value }))} className="mt-1.5 w-full rounded-lg border border-white/10 bg-[#0d1017] p-2.5 text-white">
+                  <option value="smooth">Mượt (Dissolve)</option>
+                  <option value="fade">Fade đen</option>
+                  <option value="flash">Flash trắng</option>
+                  <option value="none">Không chuyển cảnh</option>
+                </select>
+              </label>
+              <label className="col-span-2 text-zinc-400">
+                Tốc độ video: {editingPreset.video_speed.toFixed(2)}x
+                <input type="range" min="0.5" max="2" step="0.05" value={editingPreset.video_speed} onChange={(event) => setEditingPreset((current) => ({ ...current, video_speed: Number(event.target.value) }))} className="mt-2 w-full accent-fuchsia-500" />
+              </label>
+            </div>
+          </div>
         </aside>
       </section>
-      <section className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
+      <section className="rounded-2xl border border-white/10 bg-[#121622] p-5">
         <div className="mb-4 flex items-center gap-2">
           <FileText className="h-4 w-4 text-fuchsia-300" />
           <h2 className="font-bold text-white">Tiến trình job thực tế</h2>
@@ -567,19 +749,54 @@ export const ProductionPipelineView: React.FC<Props> = ({
             />
           ))}
         </div>
-        {activeRun?.errorMessage && (
-          <div className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
-            <p>{translatePipelineError(activeRun.errorMessage)}</p>
-            <details className="mt-2 text-xs text-rose-200/70">
-              <summary className="cursor-pointer">Chi tiết kỹ thuật</summary>
-              <p className="mt-1 break-words font-mono">{activeRun.errorMessage}</p>
+        {activeRun?.errorMessage && dismissedErrorRunId !== activeRun.id && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-rose-500/10 p-4 text-sm text-rose-200 flex flex-col gap-2 relative">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium">{translatePipelineError(activeRun.errorMessage)}</p>
+                <p className="text-xs text-rose-300/80 mt-1">
+                  (Đây là log của tác vụ cũ <code className="bg-black/30 px-1 py-0.5 rounded font-mono">#{activeRun.id?.slice(0, 8)}</code>. Bạn có thể đóng lại hoặc nhập Brief để bấm chạy tác vụ mới)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDismissedErrorRunId(activeRun.id)}
+                className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-semibold transition cursor-pointer shrink-0 border border-white/10"
+              >
+                ✕ Đóng thông báo
+              </button>
+            </div>
+            <details className="mt-1 text-xs text-rose-200/70">
+              <summary className="cursor-pointer font-mono">Chi tiết kỹ thuật</summary>
+              <p className="mt-1 break-words font-mono bg-black/30 p-2 rounded-lg border border-white/10">{activeRun.errorMessage}</p>
             </details>
           </div>
         )}
         {video && (
-          <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+          <p className="mt-4 rounded-xl border border-white/10 bg-emerald-500/10 p-3 text-sm text-emerald-200">
             Video output: {video.name}
           </p>
+        )}
+        {draftPath && (
+          <div className="mt-4 rounded-xl border border-white/10 bg-fuchsia-500/[0.08] p-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <p className="font-semibold text-white">Project CapCut có thể chỉnh sửa đã sẵn sàng</p>
+                <p className="mt-1 truncate font-mono text-[11px] text-zinc-400">{draftPath}</p>
+                <p className="mt-2 text-xs text-emerald-300">✓ Video · ✓ Giọng đọc · ✓ Phụ đề · ✓ Timeline · ✓ CapCut Draft</p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button type="button" disabled={draftBusy} onClick={() => void rebuildDraft()} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-white/10 disabled:opacity-50">
+                  <RefreshCw className={`h-4 w-4 ${draftBusy ? "animate-spin" : ""}`} />
+                  Dựng lại Draft
+                </button>
+                <button type="button" onClick={() => void openDraft()} className="inline-flex items-center gap-2 rounded-lg bg-fuchsia-600 px-3 py-2 text-xs font-semibold text-white hover:bg-fuchsia-500">
+                  <FolderOpen className="h-4 w-4" />
+                  Mở trong CapCut
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </section>
     </div>
@@ -598,7 +815,7 @@ function Metric({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2">
+    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2">
       <span className="text-zinc-500 block">{label}</span>
       <span
         className={`${good === undefined ? "text-zinc-200" : good ? "text-emerald-400" : "text-amber-300"} ${mono ? "font-mono text-[11px]" : "font-semibold"} block max-w-28 truncate`}
@@ -645,12 +862,12 @@ function PhaseCard({
 }) {
   const style =
     state === "done"
-      ? "border-emerald-500/30 bg-emerald-500/[0.06]"
+      ? "border-white/10 bg-emerald-500/[0.06]"
       : state === "running"
-        ? "border-sky-500/40 bg-sky-500/[0.08]"
+        ? "border-white/10 bg-sky-500/[0.08]"
         : state === "failed"
-          ? "border-rose-500/40 bg-rose-500/[0.08]"
-          : "border-white/[0.07] bg-black/10";
+          ? "border-white/10 bg-rose-500/[0.08]"
+          : "border-white/10 bg-black/10";
   const Icon =
     state === "done"
       ? CheckCircle2

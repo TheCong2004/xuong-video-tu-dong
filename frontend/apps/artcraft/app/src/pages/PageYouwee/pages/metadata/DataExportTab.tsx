@@ -388,7 +388,7 @@ export function DataExportTab() {
 
         {error && <p className="text-xs text-red-500">{error}</p>}
         {warnings.length > 0 && (
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+          <div className="rounded-md border border-white/10 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
             {warnings.slice(0, 3).map((warning) => (
               <p key={warning}>{warning}</p>
             ))}

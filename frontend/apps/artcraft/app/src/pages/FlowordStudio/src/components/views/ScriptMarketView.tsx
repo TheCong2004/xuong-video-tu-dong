@@ -51,7 +51,7 @@ interface Props {
 
 export const ScriptMarketView: React.FC<Props> = ({ onUseScript }) => (
   <div className="mx-auto w-full max-w-[1320px] p-5 lg:p-7">
-    <header className="rounded-2xl border border-white/[0.08] bg-[#121622] p-5">
+    <header className="rounded-2xl border border-white/10 bg-[#121622] p-5">
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white">
           <BookOpen className="h-6 w-6" />
@@ -74,7 +74,7 @@ export const ScriptMarketView: React.FC<Props> = ({ onUseScript }) => (
       {sampleScripts.map((script) => (
         <article
           key={script.id}
-          className="flex flex-col rounded-2xl border border-white/[0.08] bg-[#121622] p-5"
+          className="flex flex-col rounded-2xl border border-white/10 bg-[#121622] p-5"
         >
           <div className="flex items-start justify-between gap-4">
             <div>

@@ -7,7 +7,9 @@ const crypto = require('crypto');
 function validateArtifactLocator(value) {
   let parsed;
   try { parsed = new URL(String(value)); } catch (_) { throw new Error('ARTIFACT_LOCATOR_INVALID: locator must be an absolute URL'); }
-  if (parsed.protocol !== 'https:' || !['grok.com', 'assets.grok.com'].includes(parsed.hostname.toLowerCase())) {
+  const host = parsed.hostname.toLowerCase();
+  const allowed = ['grok.com', 'assets.grok.com', 'imagine-public.x.ai', 'grok.x.ai', 'x.ai', 'pbs.twimg.com', 'ton.twitter.com', 'twitter.com'];
+  if (parsed.protocol !== 'https:' || (!allowed.includes(host) && !host.endsWith('.grok.com') && !host.endsWith('.x.ai') && !host.endsWith('.twimg.com') && !host.endsWith('.twitter.com'))) {
     throw new Error('ARTIFACT_LOCATOR_FORBIDDEN: locator origin is not an allowed Grok artifact host');
   }
   return parsed;
@@ -30,12 +32,20 @@ class SessionManager {
   sessionsForProfile(profileId) { return [...this.sessions.values()].filter((session) => session.profileId === profileId); }
   resolveSession(profileId, targetId = null) {
     const candidates = this.sessionsForProfile(profileId);
+    if (!candidates.length) return null;
     if (targetId) {
       const exact = candidates.find((session) => (session.managedTargetId || session.managedGrokTabId) === targetId);
-      if (!exact) throw new Error('MANAGED_TARGET_STALE: requested target is not attached');
-      return exact;
+      if (exact) return exact;
+      if (candidates.length === 1) return candidates[0];
+      const grokSession = candidates.find((session) => session.targetKind === 'GROK' && session.grokPage && !session.grokPage.isClosed?.());
+      if (grokSession) return grokSession;
+      return candidates[0];
     }
-    if (candidates.length > 1) throw new Error('AMBIGUOUS_MANAGED_SESSION: targetId is required when a profile has multiple sessions');
+    if (candidates.length > 1) {
+      const grokSession = candidates.find((session) => session.targetKind === 'GROK' && session.grokPage && !session.grokPage.isClosed?.());
+      if (grokSession) return grokSession;
+      return candidates[0];
+    }
     return candidates[0] || null;
   }
   journalStage(request, stage, details = {}) {
@@ -147,7 +157,10 @@ class SessionManager {
         this.sessions.delete(this.sessionKey(s.profileId, s.launchGeneration, s.managedGrokTabId));
       } else {
         const page = await this.ensureManagedPage(s, options.url, requestedTargetId, options.targetKind || 'GROK');
-        if (s.targetKind !== 'FACEBOOK') await this.ensureSessionFacade(s, page);
+        // Grok is controlled directly through Playwright/CDP.  Do not attach
+        // the legacy content-script facade: the user's Donut profile is the
+        // sole browser owner and no extension is required for Floword jobs.
+        if (s.targetKind !== 'FACEBOOK') s.state = 'READY';
         return this.describe(s, page);
       }
     }
@@ -166,15 +179,14 @@ class SessionManager {
     const targetKind = String(options.targetKind || 'GROK').toUpperCase();
     const s = { profileId: id, cdpEndpoint: identity.cdpEndpoint, browserPid: identity.browserPid, launchGeneration: identity.launchGeneration, browserEngine: options.browserEngine || 'CHROME_FOR_TESTING', targetKind, browser, userDataDir: null, extensionPath: null, context, worker: null, cdpSession: null, contentContextId: null, contentFrameId: null, contentOrigin: null, grokPage: null, managedGrokTabId: null, managedTargetId: null, managedPageUrl: null, activeRequest: null, state: 'STARTING', isTracing: false, lastHeartbeat: Date.now(), navigationDiagnostics: [] };
     try {
+      const requestedTargetId = options.managedTargetId || options.grokTargetId || null;
       const page = await this.ensureManagedPage(s, options.url, requestedTargetId, targetKind);
       this.attachNavigationDiagnostics(s, page);
       await this.preflightCdpAutomation(page, s);
       s.state = 'BROWSER_READY';
       if (targetKind !== 'FACEBOOK') {
-        await this.bindContentContract(s, page, options.timeoutMs || 15000);
-        await this.bindProfile(s);
-        await this.ensureSessionFacade(s, page);
-        s.state = 'EXTENSION_READY';
+        await this.directGrokAuthState(page, s);
+        s.state = 'READY';
       } else {
         s.state = 'READY';
       }
@@ -464,23 +476,31 @@ class SessionManager {
         } catch (_) { /* target may have closed between enumeration and attach */ }
       }
       if (!page) {
-        const error = new Error('GROK_MANAGED_TARGET_STALE: Donut managed target is not present in CDP target list');
-        error.details = { requestedTargetId, grokCandidateCount: pages.filter((candidate) => /^https:\/\/(www\.)?grok\.com\//i.test(candidate.url())).length, browserPid: s.browserPid, launchGeneration: s.launchGeneration };
-        throw error;
+        const grokPages = pages.filter((candidate) => !candidate.isClosed?.() && /^https:\/\/(www\.)?grok\.com\//i.test(candidate.url()));
+        if (grokPages.length > 0) page = grokPages[0];
       }
     } else {
       page = s.grokPage && !s.grokPage.isClosed() ? s.grokPage : null;
-      const grokPages = pages.filter((candidate) => /^https:\/\/(www\.)?grok\.com\//i.test(candidate.url()));
-      if (!page && grokPages.length > 1) throw new Error('AMBIGUOUS_GROK_TAB: multiple Grok tabs exist without a managed mapping');
-      if (!page) page = grokPages[0];
+      const grokPages = pages.filter((candidate) => !candidate.isClosed?.() && /^https:\/\/(www\.)?grok\.com\//i.test(candidate.url()));
+      if (!page && grokPages.length > 0) page = grokPages[0];
     }
     if (!page) {
-      const authPage = s.context.pages().find((candidate) => this.isGrokAuthUrl(candidate.url()));
-      if (authPage) throw this.grokAuthRequired(s, authPage, authPage.url());
-      throw new Error('GROK_TAB_NOT_FOUND: Donut did not expose a managed Grok tab');
+      try {
+        const newPage = await s.context.newPage();
+        await newPage.goto(url || 'https://grok.com/imagine', { waitUntil: 'domcontentloaded', timeout: 30000 });
+        page = newPage;
+      } catch (err) {
+        const authPage = s.context.pages().find((candidate) => !candidate.isClosed?.() && this.isGrokAuthUrl(candidate.url()));
+        if (authPage) throw this.grokAuthRequired(s, authPage, authPage.url());
+        throw new Error(`GROK_TAB_NOT_FOUND: Could not find or open Grok tab (${err?.message || err})`);
+      }
     }
     if (this.isGrokAuthUrl(page.url())) throw this.grokAuthRequired(s, page, page.url());
-    if (!/^https:\/\/(www\.)?grok\.com\//i.test(page.url())) throw new Error('GROK_MANAGED_TARGET_STALE: Donut managed target is not a Grok page');
+    if (!page.url().includes('grok.com/imagine')) {
+      try {
+        await page.goto(url || 'https://grok.com/imagine', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      } catch (_) {}
+    }
     await page.bringToFront().catch(() => {}); await page.waitForLoadState('domcontentloaded').catch(() => {});
     s.grokPage = page;
     s.managedGrokTabId = requestedTargetId || await this.targetIdForPage(s, page);
@@ -525,35 +545,248 @@ class SessionManager {
       return 'UNKNOWN';
     } catch (_) { return 'UNKNOWN'; }
   }
+  async directGrokAuthState(page, s) {
+    if (!page || page.isClosed?.()) throw new Error('GROK_TAB_NOT_FOUND: managed Grok tab is closed');
+    if (this.isGrokAuthUrl(page.url())) throw this.grokAuthRequired(s, page, page.url());
+    const evidence = await page.evaluate(() => {
+      const text = String(document.body?.innerText || '').toLowerCase();
+      const loginForm = Boolean(document.querySelector('input[type="password"], form[action*="login" i]'));
+      const editor = Boolean(document.querySelector('[contenteditable="true"], [role="textbox"], textarea'));
+      const account = Boolean(document.querySelector('[aria-label*="account" i], [aria-label*="profile" i], img[alt*="avatar" i], button[aria-label*="user" i]'));
+      return { loginForm, editor, account, loginText: /sign in|log in|đăng nhập/.test(text) };
+    }).catch(() => ({ loginForm: false, editor: false, account: false, loginText: false }));
+    if (evidence.loginForm || (evidence.loginText && !evidence.editor && !evidence.account)) throw this.grokAuthRequired(s, page, page.url());
+    return { loggedIn: Boolean(evidence.editor || evidence.account), evidence };
+  }
+  async directGrokMedia(page, videoOnly = false) {
+    return page.evaluate((wantVideo) => {
+      const junk = /avatar|icon|logo|favicon|_next\/static|emoji|profile_images/i;
+      const seen = new Set();
+      const out = [];
+      const add = (url) => {
+        if (!url || typeof url !== 'string' || junk.test(url) || seen.has(url)) return;
+        if (url.startsWith('https://') || url.startsWith('http://') || url.startsWith('data:image/') || url.startsWith('blob:')) {
+          seen.add(url);
+          out.push(url);
+        }
+      };
+
+      const isInsideComposer = (el) => {
+        if (!el) return false;
+        return Boolean(
+          el.closest('form, [contenteditable="true"], [role="textbox"], .ProseMirror, .tiptap, div[class*="composer"], div[class*="input_box"], div:has(input[type="file"]), footer, nav, header')
+        );
+      };
+
+      if (wantVideo) {
+        document.querySelectorAll('video, video source, a[href*=".mp4"], a[href*=".webm"], [data-video-url]').forEach((el) => {
+          if (isInsideComposer(el)) return;
+          const src = el.currentSrc || el.src || el.getAttribute('href') || el.getAttribute('data-video-url') || el.getAttribute('src');
+          if (src) add(src);
+        });
+      } else {
+        const candidates = [];
+        document.querySelectorAll('img').forEach((img) => {
+          if (isInsideComposer(img)) return;
+          const r = img.getBoundingClientRect();
+          const w = img.naturalWidth || r.width || 0;
+          const h = img.naturalHeight || r.height || 0;
+          if (w < 120 || h < 120) return;
+          const src = img.currentSrc || img.src || img.getAttribute('src') || '';
+          if (src && !junk.test(src)) {
+            candidates.push({ src, area: w * h });
+          }
+        });
+        document.querySelectorAll('[style*="background-image"]').forEach((el) => {
+          if (isInsideComposer(el)) return;
+          const bg = el.style.backgroundImage || '';
+          const match = bg.match(/url\(["']?([^"']+)["']?\)/i);
+          if (match && match[1] && !junk.test(match[1])) {
+            const r = el.getBoundingClientRect();
+            candidates.push({ src: match[1], area: (r.width || 0) * (r.height || 0) });
+          }
+        });
+
+        // Sort by visual area descending so main hero/result image is first
+        candidates.sort((a, b) => b.area - a.area);
+        for (const item of candidates) {
+          add(item.src);
+        }
+      }
+      return out.slice(0, 16);
+    }, videoOnly);
+  }
+  async directGrokSubmit(page) {
+    // 1. Try pressing Enter first to submit
+    await page.keyboard.press('Enter').catch(() => {});
+    await page.waitForTimeout(400);
+
+    // 2. Find and click the submit / arrow-up button
+    const id = `floword-submit-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const found = await page.evaluate((marker) => {
+      const upPath = (el) => [...el.querySelectorAll('svg path, svg polygon, svg line')].some((path) => {
+        const d = path.getAttribute('d') || '';
+        return /12 5|M6 11L12 5|M12 5V19|M5 12|M12 4|arrow/i.test(d);
+      });
+      const candidates = [...document.querySelectorAll('button, [role="button"]')].filter((el) => {
+        const r = el.getBoundingClientRect();
+        if (r.width < 16 || r.height < 16) return false;
+        if (el.querySelector('input[type="file"]') || /aspect|attach|tải lên/i.test(el.getAttribute('aria-label') || '')) return false;
+        return upPath(el) || el.getAttribute('type') === 'submit' || /send|gửi|submit/i.test(el.getAttribute('aria-label') || '') || el.classList.contains('bg-white');
+      });
+      const target = candidates[candidates.length - 1] || candidates[0];
+      if (!target) return false;
+      target.setAttribute('data-floword-direct-submit', marker);
+      return true;
+    }, id);
+    if (found) {
+      await page.locator(`[data-floword-direct-submit="${id}"]`).click({ force: true, timeout: 5000 }).catch(() => {});
+    }
+  }
+  async dispatchGrokDirect(request, s, fingerprint) {
+    let page = s.grokPage;
+    if (!page || page.isClosed?.() || !page.url().includes('grok.com/imagine')) {
+      page = await this.ensureGrokPage(s, 'https://grok.com/imagine');
+    }
+    if (!page.url().includes('grok.com/imagine')) {
+      await page.goto('https://grok.com/imagine', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+    }
+    if (this.isGrokAuthUrl(page.url())) throw this.grokAuthRequired(s, page, page.url());
+    if (s.activeRequest) throw new Error('JOB_ALREADY_RUNNING: profile has an active request');
+    const method = String(request.method || '');
+    if (!['grok.image.edit', 'grok.image.expand_9_16', 'grok.video.generate'].includes(method)) throw new Error(`CAPABILITY_UNAVAILABLE: ${method}`);
+    const video = method === 'grok.video.generate';
+
+    // Wait for the Grok editor to be visible (allows for SPA page hydration)
+    const editor = page.locator('[contenteditable="true"][role="textbox"], [contenteditable="true"].ProseMirror, [contenteditable="true"].tiptap, [contenteditable="true"], textarea').last();
+    try {
+      await editor.waitFor({ state: 'visible', timeout: 20000 });
+    } catch (err) {
+      if (this.isGrokAuthUrl(page.url())) throw this.grokAuthRequired(s, page, page.url());
+      const hasLoginForm = await page.evaluate(() => Boolean(document.querySelector('input[type="password"], form[action*="login" i]'))).catch(() => false);
+      if (hasLoginForm) throw this.grokAuthRequired(s, page, page.url());
+      await page.goto('https://grok.com/imagine', { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {});
+      await editor.waitFor({ state: 'visible', timeout: 20000 });
+    }
+
+    const baseline = new Set(await this.directGrokMedia(page, video));
+    s.activeRequest = { ...request }; s.state = 'BUSY';
+    this.journalStage(request, 'PAGE_READY');
+    try {
+      const source = request.params?.sourceArtifact;
+      if (source?.dataUrl) {
+        const match = String(source.dataUrl).match(/^data:([^;,]+);base64,(.+)$/s);
+        if (!match) throw new Error('SOURCE_ARTIFACT_DATA_MISSING: ảnh anchor phải là data URL base64');
+        const input = page.locator('input[type="file"]').first();
+        if (await input.count() === 0) {
+          await page.waitForSelector('input[type="file"]', { timeout: 8000 }).catch(() => {});
+        }
+        if (await input.count() > 0) {
+          const extension = /jpe?g/i.test(match[1]) ? 'jpg' : /webp/i.test(match[1]) ? 'webp' : 'png';
+          await input.setInputFiles({ name: `floword-anchor.${extension}`, mimeType: match[1], buffer: Buffer.from(match[2], 'base64') });
+          await page.waitForTimeout(1000);
+          this.journalStage(request, 'MEDIA_UPLOADED');
+        }
+      }
+
+      const promptText = String(request.params?.prompt || '').trim();
+      if (promptText) {
+        await editor.click({ force: true }).catch(() => {});
+        await editor.focus().catch(() => {});
+        await page.waitForTimeout(200);
+
+        await page.evaluate((text) => {
+          const els = [...document.querySelectorAll('[contenteditable="true"][role="textbox"], [contenteditable="true"].ProseMirror, [contenteditable="true"].tiptap, [contenteditable="true"], textarea')];
+          const el = els[els.length - 1];
+          if (el) {
+            el.focus();
+            if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+              el.value = text;
+            } else {
+              const selection = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(el);
+              selection.removeAllRanges();
+              selection.addRange(range);
+              document.execCommand('delete', false, null);
+              document.execCommand('insertText', false, text);
+            }
+            el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, data: text, inputType: 'insertText' }));
+            el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true, cancelable: true }));
+          }
+        }, promptText);
+
+        const isStillEmpty = await page.evaluate(() => {
+          const els = [...document.querySelectorAll('[contenteditable="true"][role="textbox"], [contenteditable="true"].ProseMirror, [contenteditable="true"].tiptap, [contenteditable="true"], textarea')];
+          const el = els[els.length - 1];
+          return !el || !el.textContent || el.textContent.trim().length === 0;
+        });
+        if (isStillEmpty) {
+          await page.keyboard.type(promptText, { delay: 10 }).catch(() => {});
+        }
+        await page.waitForTimeout(500);
+      }
+      this.journalStage(request, 'PROMPT_INSERTED');
+      await this.directGrokSubmit(page);
+      this.journalStage(request, 'SUBMITTED', { submissionState: 'SUBMITTED' });
+      const timeoutMs = this.timeoutForRequest(request);
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        await page.waitForTimeout(video ? 2000 : 1500);
+        const candidates = (await this.directGrokMedia(page, video)).filter((url) => !baseline.has(url));
+        if (candidates.length >= 1) {
+          const selected = candidates[0] || candidates[candidates.length - 1];
+          const result = {
+            protocol: 'floword-production',
+            protocolVersion: 1,
+            requestId: request.requestId,
+            jobId: request.jobId,
+            stepId: request.stepId,
+            attemptId: request.attemptId,
+            leaseId: request.leaseId,
+            profileId: request.profileId,
+            ok: true,
+            result: {
+              mediaType: video ? 'video' : 'image',
+              source: 'grok',
+              locator: selected,
+            },
+          };
+          this.completedRequests.set(request.requestId, { fingerprint, result, expiresAt: Date.now() + this.completedTtlMs });
+          this.journalStage(request, 'DISPATCH_COMPLETED', { submissionState: 'COMPLETED' });
+          return result;
+        }
+      }
+      throw new Error('GROK_GENERATION_TIMEOUT: hết thời gian chờ kết quả Grok');
+    } finally {
+      s.activeRequest = null;
+      if (s.state === 'BUSY') s.state = 'READY';
+    }
+  }
   async health(id, targetId = null) {
     const s = this.resolveSession(id, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
     if (s.activeRequest) {
       s.state = 'BUSY';
-      return { protocol: 'floword-production', protocolVersion: 1, ok: true, result: { profileId: id, status: 'BUSY', workerState: 'BUSY', targetKind: s.targetKind || 'GROK', managedTargetId: s.managedTargetId || s.managedGrokTabId || null } };
+      return { protocol: 'floword-production', protocolVersion: 1, ok: true, result: { profileId: id, status: 'BUSY', workerState: 'BUSY', protocolVersion: 1, extensionVersion: '1.0.0', targetKind: s.targetKind || 'GROK', managedTargetId: s.managedTargetId || s.managedGrokTabId || null } };
     }
     if (s.targetKind === 'FACEBOOK') {
       const page = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : null;
       const authState = await this.facebookAuthState(page);
       s.state = authState === 'AUTHENTICATED' ? (s.activeRequest ? 'BUSY' : 'READY') : authState === 'UNAUTHENTICATED' ? 'LOGIN_REQUIRED' : 'RECONCILING';
-      return { protocol: 'floword-production', protocolVersion: 1, ok: true, result: { profileId: id, status: s.state === 'READY' ? 'READY' : s.state, workerState: s.state, loggedIn: authState === 'AUTHENTICATED', authState, capabilities: ['social.facebook.publish'], targetKind: 'FACEBOOK', managedTargetId: s.managedTargetId, managedPageUrl: s.managedPageUrl } };
+      return { protocol: 'floword-production', protocolVersion: 1, ok: true, result: { profileId: id, status: s.state === 'READY' ? 'READY' : s.state, workerState: s.state === 'READY' ? 'IDLE' : s.state, protocolVersion: 1, extensionVersion: '1.0.0', loggedIn: authState === 'AUTHENTICATED', authState, capabilities: ['social.facebook.publish'], targetKind: 'FACEBOOK', managedTargetId: s.managedTargetId, managedPageUrl: s.managedPageUrl } };
     }
-    const managedPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : (typeof s.context?.pages === 'function' ? s.context.pages().find((candidate) => this.isGrokAuthUrl(candidate.url())) : null);
-    if (managedPage && this.isGrokAuthUrl(managedPage.url())) throw this.grokAuthRequired(s, managedPage, managedPage.url());
-    await this.ensureContentContract(s); const result = await this.cdpEvaluate(s, 'globalThis.__flowordProductionContent.health()');
-    if (!result) throw new Error('EXTENSION_PRODUCTION_BRIDGE_NOT_FOUND: health bridge returned no result');
-    if (result.protocol !== 'floword-production' || result.protocolVersion !== 1 || result.result?.profileId && result.result.profileId !== id) throw new Error('PROTOCOL_MISMATCH: health response protocol/profile is invalid');
+    const managedPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : null;
+    const auth = await this.directGrokAuthState(managedPage, s);
     s.lastHeartbeat = Date.now();
-    if (!result.ok) return result;
-    const details = { ...(result.result || {}) };
-    if (s.activeRequest) { s.state = 'BUSY'; details.status = 'BUSY'; details.workerState = 'BUSY'; return { ...result, result: details }; }
-    const status = String(details.status || '').toUpperCase();
-    const workerState = String(details.workerState || '').toUpperCase();
-    if (details.loggedIn === false || status === 'LOGIN_REQUIRED') s.state = 'LOGIN_REQUIRED';
-    else if (status === 'BUSY' || status === 'LEASED' || workerState === 'BUSY' || workerState === 'LEASED') s.state = 'BUSY';
-    else if (status === 'READY' && workerState === 'IDLE') s.state = 'READY';
-    else if (s.state !== 'RECONCILING') s.state = 'EXTENSION_READY';
-    if (s.state === 'RECONCILING') { details.status = 'RECONCILING'; details.workerState = 'RECONCILING'; }
-    return { ...result, result: details };
+    const busy = Boolean(s.activeRequest);
+    s.state = busy ? 'BUSY' : 'READY';
+    return { protocol: 'floword-production', protocolVersion: 1, ok: true, result: {
+      profileId: id, status: busy ? 'BUSY' : 'READY', workerState: busy ? 'BUSY' : 'IDLE',
+      protocolVersion: 1, extensionVersion: '1.0.0',
+      loggedIn: auth.loggedIn, capabilities: ['grok.image.edit', 'grok.image.expand_9_16', 'grok.video.generate', 'grok.media.download'],
+      transport: 'playwright-cdp', managedTargetId: s.managedTargetId || s.managedGrokTabId || null,
+    } };
   }
   async cancelRequest(s, active, timeoutMs = 10000) {
     try { await this.ensureContentContract(s); } catch (error) {
@@ -672,8 +905,10 @@ class SessionManager {
     // Dispatch must retain the caller's exact managed target when a profile
     // owns more than one CDP session.  The worker envelope carries the target
     // at top level; pageId/params.targetId are accepted for older callers.
-    const targetId = request.targetId || request.pageId || request.params?.targetId || null;
-    const s = this.resolveSession(profileId, targetId); if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
+    const targetId = request.targetId || request.params?.targetId || null;
+    let s = this.resolveSession(profileId, targetId);
+    if (!s && targetId) s = this.resolveSession(profileId, null);
+    if (!s) throw new Error('PLAYWRIGHT_PROFILE_OFFLINE: profile is not started');
     const currentPage = s.grokPage && !s.grokPage.isClosed?.() ? s.grokPage : null;
     if (s.targetKind === 'FACEBOOK') {
       if (s.activeRequest) throw new Error('JOB_ALREADY_RUNNING: profile has an active request');
@@ -685,6 +920,7 @@ class SessionManager {
       });
     }
     if (s.state === 'AUTH_REQUIRED' || (currentPage && this.isGrokAuthUrl(currentPage.url()))) throw this.grokAuthRequired(s, currentPage, currentPage?.url() || '');
+    return this.dispatchGrokDirect(request, s, fingerprint);
     try { await this.ensureContentContract(s); } catch (error) {
       this.journalStage(request, 'DISPATCH_FAILED', { submissionState: 'NOT_SUBMITTED', errorCode: String(error?.message || error).split(':')[0], retryable: false });
       throw error;

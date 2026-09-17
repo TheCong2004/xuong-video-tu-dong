@@ -118,7 +118,7 @@ export default function NotionSourceCard() {
                 className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm ${
                   message.type === "success"
                     ? "border-green-500/30 bg-green-500/10 text-green-400"
-                    : "border-red-500/30 bg-red-500/10 text-red-400"
+                    : "border-white/10 bg-red-500/10 text-red-400"
                 }`}
               >
                 <span className="material-symbols-outlined text-[18px]">
@@ -163,7 +163,7 @@ export default function NotionSourceCard() {
                   loading={busy}
                   variant="secondary"
                   size="sm"
-                  className="border-red-500/30! text-red-400! hover:bg-red-500/10!"
+                  className="border-white/10! text-red-400! hover:bg-red-500/10!"
                 >
                   Disconnect
                 </Button>

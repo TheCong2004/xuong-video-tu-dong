@@ -200,7 +200,7 @@ export default function ProxyLogger() {
           onClick={() => setRecording(!recording)}
           className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
             recording
-              ? "bg-red-500/10 border-red-500/30 text-red-400"
+              ? "bg-red-500/10 border-white/10 text-red-400"
               : "bg-bg-subtle border-border text-text-muted"
           }`}
         >
@@ -330,11 +330,11 @@ export default function ProxyLogger() {
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border transition-all ${
               activeFilter === f.key
                 ? f.key === "error"
-                  ? "bg-red-500/20 text-red-400 border-red-500/40"
+                  ? "bg-red-500/20 text-red-400 border-white/10"
                   : f.key === "ok"
-                    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                    ? "bg-emerald-500/20 text-emerald-400 border-white/10"
                     : f.key === "timeout"
-                      ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                      ? "bg-amber-500/20 text-amber-400 border-white/10"
                       : "bg-primary text-white border-primary"
                 : "bg-bg-subtle border-border text-text-muted hover:border-text-muted"
             }`}
@@ -355,7 +355,7 @@ export default function ProxyLogger() {
               onClick={() => setSelectedProvider(isActive ? "" : p)}
               className={`px-3 py-1 rounded-full text-xs font-bold uppercase border transition-all ${
                 isActive
-                  ? "border-white/40 ring-1 ring-white/20"
+                  ? "border-white/10 ring-1 ring-white/20"
                   : "border-transparent opacity-70 hover:opacity-100"
               }`}
               style={{

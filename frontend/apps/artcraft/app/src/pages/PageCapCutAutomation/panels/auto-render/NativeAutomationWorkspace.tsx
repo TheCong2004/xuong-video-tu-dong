@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import { Video, RotateCcw, Play, Sparkles, Plus } from "lucide-react";
 import { ModelStatusPanel } from "./ModelStatusPanel";
 import {
   cancelNativeJob,
@@ -239,7 +240,7 @@ export function NativeAutomationWorkspace() {
     const selected = await open({ multiple: false, directory: false, filters: [{ name: "Audio", extensions: ["wav", "mp3", "m4a", "flac", "ogg"] }] });
     if (typeof selected !== "string") return;
     try {
-      const inferredName = selected.split(/[\\\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Giọng ArtCraft";
+      const inferredName = selected.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "Giọng Xưởng Video";
       await ensureArtcraftSpeechRuntime(voiceModelTermsAccepted);
       const result = await uploadVoiceStudioClip({ path: selected, name: voiceProfileName.trim() || inferredName });
       const voiceId = typeof result.voice_id === "string" ? result.voice_id : typeof result.id === "string" ? result.id : null;
@@ -508,7 +509,7 @@ export function NativeAutomationWorkspace() {
             await startNativeAutomationJob({
               inputPath: item.path,
               outputRoot: outputRoot || undefined,
-              pageName: "ArtCraft",
+              pageName: "Xưởng Sản Xuất Video",
               jobId: item.id,
               requestId: item.id,
               preset,
@@ -590,21 +591,51 @@ export function NativeAutomationWorkspace() {
   };
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#0f171e] p-6 text-white">
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Tự động hóa nội bộ</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Quy trình FFmpeg nội bộ của ArtCraft, hàng đợi FIFO, mặc định 3 video chạy song song (có thể cấu hình tối đa 10).
-          </p>
+    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#0d1017] p-6 text-white space-y-6">
+      {/* Top Header Card synchronized with Floword Style */}
+      <div className="rounded-2xl border border-white/10 bg-[#121622] p-5 shadow-xl shadow-black/10 space-y-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-rose-500 text-white shadow-lg shadow-indigo-500/20">
+              <Video className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-white tracking-wide">Tự Động Hóa Xuất Video</h2>
+              <p className="mt-0.5 text-xs text-zinc-400">
+                Quy trình FFmpeg nội bộ hàng đợi FIFO (mặc định 3 luồng song song, tối đa 10).
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setPreset(DEFAULT_PRESET)}
+              className="flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Đặt lại cấu hình
+            </button>
+            <button
+              type="button"
+              disabled={running || !queued.length}
+              onClick={() => void runQueue()}
+              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-md transition hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40"
+            >
+              <Play className="h-3.5 w-3.5" /> Xử lý tự động toàn bộ
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-3 rounded-xl border border-cyan-300/20 bg-cyan-300/5 px-3 py-2 text-xs">
-          <span className="font-semibold text-cyan-100">Tự động toàn bộ</span>
-          <Toggle label="Whisper" checked={Boolean(preset.autoTranscribe)} onChange={(value) => setPreset((current) => ({ ...current, autoTranscribe: value }))} />
-          <Toggle label="Dịch" checked={Boolean(preset.autoTranslate)} onChange={(value) => setPreset((current) => ({ ...current, autoTranslate: value }))} />
-          <Toggle label="OCR" checked={Boolean(preset.autoOcr)} onChange={(value) => setPreset((current) => ({ ...current, autoOcr: value }))} />
+
+        {/* Auto Modules Checkbox Bar */}
+        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-white/10 bg-[#0d1017]/80 px-4 py-2.5 text-xs">
+          <span className="font-semibold text-indigo-300 flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-indigo-400" /> Tự động toàn bộ:
+          </span>
+          <Toggle label="Whisper (Nhận diện giọng)" checked={Boolean(preset.autoTranscribe)} onChange={(value) => setPreset((current) => ({ ...current, autoTranscribe: value }))} />
+          <Toggle label="Dịch phụ đề" checked={Boolean(preset.autoTranslate)} onChange={(value) => setPreset((current) => ({ ...current, autoTranslate: value }))} />
+          <Toggle label="OCR chữ video" checked={Boolean(preset.autoOcr)} onChange={(value) => setPreset((current) => ({ ...current, autoOcr: value }))} />
           <Toggle
-            label="Giọng nói"
+            label="Lồng tiếng AI"
             checked={Boolean(preset.autoDiarize && preset.autoTts)}
             onChange={(value) => setPreset((current) => ({
               ...current,
@@ -618,21 +649,6 @@ export function NativeAutomationWorkspace() {
             }))}
           />
         </div>
-        <button
-          type="button"
-          onClick={() => setPreset(DEFAULT_PRESET)}
-          className="rounded-lg border border-slate-700/70 bg-slate-900/50 px-3 py-2 text-xs text-slate-200 transition hover:border-cyan-300/40 hover:text-white"
-        >
-          Đặt lại cấu hình
-        </button>
-        <button
-          type="button"
-          disabled={running || !queued.length}
-          onClick={() => void runQueue()}
-          className="rounded-lg bg-violet-400 px-5 py-2.5 font-semibold text-[#160b24] shadow-[0_8px_20px_rgba(167,139,250,0.18)] transition hover:bg-violet-300 disabled:opacity-40"
-        >
-          Xử lý tự động toàn bộ
-        </button>
       </div>
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <div className="space-y-4">
@@ -641,8 +657,9 @@ export function NativeAutomationWorkspace() {
               type="button"
               disabled={addingVideos}
               onClick={() => void addVideos()}
-              className="w-full rounded-lg bg-cyan-400 px-3 py-2 text-sm font-semibold text-[#071018] shadow-[0_8px_20px_rgba(34,211,238,0.16)] transition hover:bg-cyan-300 disabled:cursor-wait disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-blue-500 hover:to-indigo-500 disabled:cursor-wait disabled:opacity-60"
             >
+              <Plus className="h-4 w-4" />
               {addingVideos ? "Đang mở hộp thoại…" : "Thêm video"}
             </button>
             {videoDialogError && (
@@ -654,40 +671,40 @@ export function NativeAutomationWorkspace() {
               {items.map((item) => (
                 <div
                   key={item.id}
-                  className="rounded-lg border border-slate-700/70 bg-[#18212a] p-2 text-xs"
+                  className="rounded-xl border border-white/10 bg-[#0b0f17] p-2.5 text-xs space-y-1"
                 >
                   <div className="flex justify-between gap-2">
-                    <span className="truncate">
+                    <span className="truncate font-semibold text-zinc-200">
                       {item.path.split(/[\\/]/).pop()}
                     </span>
-                    <span>
+                    <span className="font-mono text-[11px] text-indigo-300">
                       {item.state === "FAILED" || item.state === "CANCELLED"
                         ? item.state
                         : item.stage ?? item.state}
                     </span>
                   </div>
                   {(item.attempt ?? 1) > 1 && (
-                    <p className="mt-1 text-[10px] text-white/45">
+                    <p className="mt-1 text-[10px] text-zinc-500">
                       Lần thử {item.attempt}
                     </p>
                   )}
                   {item.processedMs != null &&
                     item.expectedDurationMs != null && (
-                      <p className="mt-1 text-[10px] text-white/45">
+                      <p className="mt-1 text-[10px] text-zinc-400">
                         {Math.round(item.processedMs / 1000)}s /{" "}
                         {Math.round(item.expectedDurationMs / 1000)}s
                       </p>
                     )}
                   {(item.decodedFrames ?? 0) > 0 && (
-                    <p className="mt-1 text-[10px] text-cyan-100/70">
+                    <p className="mt-1 text-[10px] text-indigo-300/80">
                       Khung: {item.decodedFrames} · OCR: {item.ocrFrames ?? 0} · Ứng viên: {item.changeCandidateFrames ?? 0} · Vùng: {item.mergedTrackCount ?? 0}
                     </p>
                   )}
                   {(item.receipt?.detectedLanguages?.length ?? 0) > 0 && (
-                    <p className="mt-1 text-[10px] text-cyan-100/70">Ngôn ngữ: {item.receipt?.detectedLanguages?.join(", ")}</p>
+                    <p className="mt-1 text-[10px] text-indigo-300/80">Ngôn ngữ: {item.receipt?.detectedLanguages?.join(", ")}</p>
                   )}
                   {item.estimatedRemainingMs != null && item.state !== "COMPLETED" && (
-                    <p className="mt-1 text-[10px] text-white/45">Còn khoảng {Math.ceil(item.estimatedRemainingMs / 1000)}s</p>
+                    <p className="mt-1 text-[10px] text-zinc-500">Còn khoảng {Math.ceil(item.estimatedRemainingMs / 1000)}s</p>
                   )}
                   {(item.state === "PROBING" ||
                     item.state === "PREPARING" ||
@@ -695,9 +712,9 @@ export function NativeAutomationWorkspace() {
                     item.state === "VERIFYING" ||
                     item.state === "CANCEL_REQUESTED") && (
                     <>
-                      <div className="mt-2 h-1.5 rounded bg-white/10">
+                      <div className="mt-2 h-1.5 rounded-full bg-white/10 overflow-hidden">
                         <div
-                          className="h-full rounded bg-cyan-400"
+                          className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
                           style={{
                             width: `${Math.round(item.progress * 100)}%`,
                           }}
@@ -772,7 +789,7 @@ export function NativeAutomationWorkspace() {
               value={outputRoot}
               onChange={(event) => setOutputRoot(event.target.value)}
               placeholder="Thư mục xuất (không bắt buộc)"
-              className="mt-3 w-full rounded-lg border border-slate-700/70 bg-[#10171e] px-3 py-2 text-xs outline-none transition focus:border-cyan-300/60"
+              className="mt-3 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             />
           </Panel>
           <Panel title="Âm thanh">
@@ -785,7 +802,7 @@ export function NativeAutomationWorkspace() {
                     .value as LocalAutomationPreset["audioPolicy"],
                 }))
               }
-              className="w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+              className="w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             >
               <option value="KEEP_IF_RIGHTS_CONFIRMED">
                 Giữ âm thanh nếu đã xác nhận quyền
@@ -806,54 +823,54 @@ export function NativeAutomationWorkspace() {
                     ttsAudioMode: "REPLACE",
                   }))
                 }
-                className="mt-2 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
                 aria-label="Chế độ âm thanh giọng nói"
               >
                 <option value="REPLACE">Thay âm thanh gốc bằng giọng Việt</option>
               </select>
             )}
             {preset.autoTts && (
-              <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-300/5 p-2">
-                <label className="block text-xs text-white/75">
+              <div className="mt-3 rounded-xl border border-white/10 bg-[#0b0f17]/50 p-3 space-y-2.5">
+                <label className="block text-xs text-zinc-300">
                   Bộ máy giọng nói
                   <select
                     value={preset.voiceProvider ?? "PIPER"}
                     onChange={(event) => setPreset((current) => ({ ...current, voiceProvider: event.target.value as "PIPER" | "ARTCRAFT_SPEECH" }))}
-                    className="mt-1 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
                     aria-label="Bộ máy giọng nói"
                   >
                     <option value="PIPER">Piper nội bộ</option>
-                    <option value="ARTCRAFT_SPEECH">ArtCraft Voice Clone (OmniVoice)</option>
+                    <option value="ARTCRAFT_SPEECH">Giọng AI Xưởng Video (OmniVoice)</option>
                   </select>
                 </label>
                 {(preset.voiceProvider ?? "PIPER") === "ARTCRAFT_SPEECH" && (
                   <>
-                    <label className="mt-2 block text-xs text-white/75">
+                    <label className="mt-2 block text-xs text-zinc-300">
                       Tên voice profile mới
                       <input
                         value={voiceProfileName}
                         onChange={(event) => setVoiceProfileName(event.target.value)}
                         placeholder="Ví dụ: Giọng dẫn chuyện"
-                        className="mt-1 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                        className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
                       />
                     </label>
-                    <label className="mt-2 flex items-start gap-2 text-[11px] text-white/70">
-                      <input type="checkbox" aria-label="Xác nhận quyền audio mẫu" checked={voiceConsent} onChange={(event) => setVoiceConsent(event.target.checked)} className="mt-0.5" />
+                    <label className="mt-2 flex items-start gap-2 text-xs text-zinc-400">
+                      <input type="checkbox" aria-label="Xác nhận quyền audio mẫu" checked={voiceConsent} onChange={(event) => setVoiceConsent(event.target.checked)} className="mt-0.5 rounded border-white/20 bg-white/5 text-indigo-500" />
                       Tôi có quyền sử dụng audio mẫu và đồng ý tạo voice profile cục bộ.
                     </label>
-                    <label className="mt-2 flex items-start gap-2 text-[11px] text-white/70">
-                      <input type="checkbox" aria-label="Chấp nhận điều khoản model OmniVoice" checked={voiceModelTermsAccepted} onChange={(event) => setVoiceModelTermsAccepted(event.target.checked)} className="mt-0.5" />
+                    <label className="mt-2 flex items-start gap-2 text-xs text-zinc-400">
+                      <input type="checkbox" aria-label="Chấp nhận điều khoản model OmniVoice" checked={voiceModelTermsAccepted} onChange={(event) => setVoiceModelTermsAccepted(event.target.checked)} className="mt-0.5 rounded border-white/20 bg-white/5 text-indigo-500" />
                       Tôi đã đọc và chấp nhận điều khoản riêng của model OmniVoice để tổng hợp giọng cục bộ.
                     </label>
                   </>
                 )}
-                <label className="block text-xs text-white/75">
+                <label className="block text-xs text-zinc-300">
                   Voice profile VoiceStudio
                   <select
                     value={preset.voiceProfileId ?? ""}
                     onChange={(event) => setPreset((current) => ({ ...current, voiceProfileId: event.target.value || null }))}
                     disabled={(preset.voiceProvider ?? "PIPER") !== "ARTCRAFT_SPEECH"}
-                    className="mt-1 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
                   >
                     <option value="">Mặc định từ cấu hình môi trường</option>
                     {voiceProfiles.map((profile, index) => {
@@ -864,8 +881,8 @@ export function NativeAutomationWorkspace() {
                   </select>
                 </label>
                 <div className="mt-2 flex gap-2">
-                  <button type="button" onClick={() => void refreshVoiceProfiles()} className="rounded border border-cyan-300/30 px-2 py-1 text-[11px] text-cyan-100">Tải profile</button>
-                  <button type="button" onClick={() => void uploadVoiceClip()} className="rounded border border-cyan-300/30 px-2 py-1 text-[11px] text-cyan-100">Tải clip clone</button>
+                  <button type="button" onClick={() => void refreshVoiceProfiles()} className="rounded border border-white/10 px-2 py-1 text-[11px] text-cyan-100">Tải profile</button>
+                  <button type="button" onClick={() => void uploadVoiceClip()} className="rounded border border-white/10 px-2 py-1 text-[11px] text-cyan-100">Tải clip clone</button>
                 </div>
                 {voiceStudioMessage && <p className="mt-1 text-[10px] text-white/55">{voiceStudioMessage}</p>}
               </div>
@@ -938,8 +955,8 @@ export function NativeAutomationWorkspace() {
                   }
                   className={`rounded-md border px-2 py-1 text-[10px] transition ${
                     Math.abs(preset.playbackRate - rate) < 0.001
-                      ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-100"
-                      : "border-slate-700/70 bg-slate-900/40 text-white/65 hover:border-cyan-300/50 hover:text-white"
+                      ? "border-white/10 bg-cyan-400/15 text-cyan-100"
+                      : "border-white/10 bg-slate-900/40 text-white/65 hover:border-cyan-300/50 hover:text-white"
                   }`}
                 >
                   {formatPlaybackRate(rate)}
@@ -953,7 +970,7 @@ export function NativeAutomationWorkspace() {
               <select
                 value={preset.localization.sourceLanguage || preset.sourceLanguage}
                 onChange={(event) => setSourceLanguage(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700/70 bg-[#10171e] px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
               >
                 <option value="auto">Tự động phát hiện</option>
                 <option value="zh">Tiếng Trung giản thể</option>
@@ -965,7 +982,7 @@ export function NativeAutomationWorkspace() {
               </span>
             </label>
             <div className="mb-3 flex flex-wrap gap-2">
-              <button type="button" disabled={!previewInput || localAiBusy !== null} onClick={() => void transcribe()} className="rounded-lg border border-cyan-300/30 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100 disabled:opacity-50">{localAiBusy === "transcribe" ? "Đang nhận dạng…" : "Nhận dạng giọng nói"}</button>
+              <button type="button" disabled={!previewInput || localAiBusy !== null} onClick={() => void transcribe()} className="rounded-lg border border-white/10 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100 disabled:opacity-50">{localAiBusy === "transcribe" ? "Đang nhận dạng…" : "Nhận dạng giọng nói"}</button>
               <button type="button" disabled={!transcript.length || localAiBusy !== null} onClick={() => void translate()} className="rounded-lg border border-violet-300/30 bg-violet-300/5 px-3 py-2 text-xs text-violet-100 disabled:opacity-50">{localAiBusy === "translate" ? "Đang dịch…" : "Dịch sang tiếng Việt"}</button>
             </div>
             <Toggle
@@ -994,7 +1011,7 @@ export function NativeAutomationWorkspace() {
             <button
               type="button"
               onClick={() => void addSubtitle()}
-              className="mt-3 rounded-lg border border-cyan-300/30 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-300/10"
+              className="mt-3 rounded-lg border border-white/10 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-300/10"
             >
               Nhập SRT/ASS
             </button>
@@ -1003,7 +1020,7 @@ export function NativeAutomationWorkspace() {
                 {preset.localization.subtitlePath}
               </p>
             )}
-            <div className="mt-3 rounded-lg border border-slate-700/70 bg-slate-950/20 p-2">
+            <div className="mt-3 rounded-lg border border-white/10 bg-slate-950/20 p-2">
               <div className="flex items-center justify-between text-[10px] text-white/60">
                 <span>Mốc phụ đề thủ công</span>
                 <button type="button" onClick={addCue} className="text-cyan-200">Thêm mốc</button>
@@ -1035,7 +1052,7 @@ export function NativeAutomationWorkspace() {
                   hook: { ...current.hook, text: event.target.value },
                 }))
               }
-              className="mt-2 w-full rounded bg-[#17191e] px-2 py-2 text-xs"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             />
           </Panel>
           <Panel title="OCR / Làm mờ / Nhãn dán">
@@ -1061,7 +1078,7 @@ export function NativeAutomationWorkspace() {
                   },
                 }))
               }
-              className="mt-2 w-full rounded-lg border border-slate-700/70 bg-[#10171e] px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             >
               <option value="MANUAL">Vùng thủ công</option>
               <option value="OCR">OCR nội bộ</option>
@@ -1081,26 +1098,28 @@ export function NativeAutomationWorkspace() {
                   },
                 }))
               }
-              className="mt-2 w-full rounded-lg border border-slate-700/70 bg-[#10171e] px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             >
               <option value="BLUR">Làm mờ vùng</option>
               <option value="COVER">Che phủ vùng</option>
               <option value="STICKER">Nhãn dán / mặt nạ</option>
             </select>
-            <button
-              type="button"
-              onClick={addRegion}
-              className="mr-2 mt-2 rounded-lg border border-cyan-300/30 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-300/10"
-            >
-              Thêm vùng
-            </button>
-            <button
-              type="button"
-              onClick={() => void addSticker()}
-              className="mt-2 rounded-lg border border-cyan-300/30 bg-cyan-300/5 px-3 py-2 text-xs text-cyan-100 transition hover:bg-cyan-300/10"
-            >
-              Chọn nhãn dán
-            </button>
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button"
+                onClick={addRegion}
+                className="flex-1 rounded-xl border border-indigo-500/30 bg-indigo-500/20 px-3 py-2 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/30"
+              >
+                Thêm vùng
+              </button>
+              <button
+                type="button"
+                onClick={() => void addSticker()}
+                className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.08]"
+              >
+                Chọn nhãn dán
+              </button>
+            </div>
             {preset.foreignText.stickerPath && (
               <p className="mt-2 truncate text-[10px] text-white/50">
                 {preset.foreignText.stickerPath}
@@ -1173,19 +1192,19 @@ export function NativeAutomationWorkspace() {
             <select
               value={preset.output.ratio}
               onChange={(event) => updateOutput("ratio", event.target.value)}
-              className="mt-2 w-full rounded bg-[#20232a] px-2 py-2 text-xs"
+              className="mt-2 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
             >
               <option>9:16</option>
               <option>16:9</option>
               <option>1:1</option>
               <option>4:5</option>
             </select>
-            <label className="mt-3 block text-xs text-white/75">
+            <label className="mt-3 block text-xs text-zinc-300">
               Cách đổi khung hình
               <select
                 value={preset.output.scaleMode}
                 onChange={(event) => updateOutput("scaleMode", event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700/70 bg-[#10171e] px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
               >
                 <option value="fill">Cắt giữa (9:16)</option>
                 <option value="fit_with_background">Vừa khung, nền hai bên</option>
@@ -1194,12 +1213,12 @@ export function NativeAutomationWorkspace() {
                 <option value="keep_source_ratio">Giữ tỷ lệ gốc</option>
               </select>
             </label>
-            <label className="mt-3 block text-xs text-white/75">
+            <label className="mt-3 block text-xs text-zinc-300">
               Chất lượng xuất
               <select
                 value={preset.output.qualityPreset}
                 onChange={(event) => updateOutput("qualityPreset", event.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-700/70 bg-[#10171e] px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
               >
                 <option value="fast">Nhanh</option>
                 <option value="balanced">Cân bằng</option>
@@ -1211,14 +1230,14 @@ export function NativeAutomationWorkspace() {
             <Toggle label="Bật lịch nhắc đăng" checked={Boolean(preset.publishSchedule)} onChange={setSchedule} />
             {preset.publishSchedule && (
               <>
-                <p className="mt-2 text-[11px] text-white/55">Múi giờ: Asia/Ho_Chi_Minh · ArtCraft chỉ lưu lịch, không tự đăng.</p>
+                <p className="mt-2 text-[11px] text-white/55">Múi giờ: Asia/Ho_Chi_Minh · Xưởng Sản Xuất Video chỉ lưu lịch, không tự đăng.</p>
                 <label className="mt-2 block text-xs text-white/75">
                   Khung giờ (HH:mm, cách nhau bằng dấu phẩy)
                   <input
                     value={preset.publishSchedule.slots.join(", ")}
                     onChange={(event) => updateScheduleSlots(event.target.value)}
                     placeholder="11:30, 20:00"
-                    className="mt-1 w-full rounded-lg border border-slate-700/70 bg-[#10171e] px-3 py-2 text-xs outline-none focus:border-cyan-300/60"
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-2 text-xs text-zinc-200 outline-none focus:border-indigo-400/50"
                   />
                 </label>
               </>
@@ -1233,7 +1252,7 @@ export function NativeAutomationWorkspace() {
                   return (
                     <div
                       key={item.id}
-                      className="rounded-lg border border-slate-700/70 bg-slate-950/20 p-2"
+                      className="rounded-lg border border-white/10 bg-slate-950/20 p-2"
                     >
                       <div className="mb-2 flex items-center justify-between gap-2 text-[10px] text-white/65">
                         <span className="truncate" title={inputName}>
@@ -1276,19 +1295,20 @@ export function NativeAutomationWorkspace() {
           type="button"
           disabled={running || !queued.length}
           onClick={() => void runQueue()}
-          className="rounded-lg bg-cyan-400 px-5 py-2.5 font-semibold text-[#071018] shadow-[0_8px_20px_rgba(34,211,238,0.16)] transition hover:bg-cyan-300 disabled:opacity-40"
+          className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-5 py-2.5 text-xs font-semibold text-white shadow-md transition hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40"
         >
+          <Play className="h-4 w-4" />
           {running ? "Đang xếp hàng…" : "Chạy hàng đợi"}
         </button>
         <button
           type="button"
           disabled={!previewInput || previewing}
           onClick={() => void preview()}
-          className="rounded-lg border border-cyan-300/40 bg-cyan-300/5 px-4 py-2.5 text-cyan-100 transition hover:bg-cyan-300/10 disabled:opacity-40"
+          className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-xs font-semibold text-zinc-300 transition hover:bg-white/[0.08] hover:text-white disabled:opacity-40"
         >
           {previewing ? "Đang xem trước…" : "Xem trước 5 giây"}
         </button>
-        <span className="text-xs text-white/50">
+        <span className="text-xs text-zinc-400">
           {items.length} video · {queued.length} đang chờ · mặc định 3 chạy song song (tối đa 10 theo cấu hình) · tiến độ/hủy do máy xử lý
         </span>
       </div>
@@ -1298,12 +1318,13 @@ export function NativeAutomationWorkspace() {
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-slate-700/70 bg-[#18212a] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-      <h3 className="mb-3 text-sm font-semibold text-slate-100">{title}</h3>
+    <div className="rounded-2xl border border-white/10 bg-[#121622] p-5 shadow-xl shadow-black/10">
+      <h3 className="mb-4 text-sm font-bold text-white tracking-wide">{title}</h3>
       {children}
     </div>
   );
 }
+
 function Toggle({
   label,
   checked,
@@ -1314,16 +1335,18 @@ function Toggle({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="mt-2 flex items-center justify-between text-xs">
-      <span>{label}</span>
+    <label className="flex items-center gap-2 text-xs font-medium text-zinc-300 cursor-pointer select-none hover:text-white transition">
       <input
         type="checkbox"
+        className="rounded border-white/20 bg-white/5 text-indigo-500 focus:ring-0 h-4 w-4 cursor-pointer"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
       />
+      <span>{label}</span>
     </label>
   );
 }
+
 function Slider({
   label,
   value,
@@ -1346,11 +1369,11 @@ function Slider({
   return (
     <label className="mt-3 block text-xs">
       <span className="flex items-center justify-between gap-3">
-        <span>{label}</span>
-        <span className="font-mono text-cyan-100">{valueLabel ?? value}</span>
+        <span className="font-medium text-zinc-300">{label}</span>
+        <span className="font-mono text-xs font-bold text-indigo-300">{valueLabel ?? value}</span>
       </span>
       <input
-        className="mt-1 w-full accent-cyan-400"
+        className="mt-1.5 w-full accent-indigo-500 cursor-pointer"
         type="range"
         min={min}
         max={max}
@@ -1359,11 +1382,11 @@ function Slider({
         aria-valuetext={valueLabel ?? String(value)}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-      <span className="mt-0.5 flex justify-between text-[10px] text-white/40">
+      <span className="mt-0.5 flex justify-between text-[10px] text-zinc-500 font-mono">
         <span>{formatSliderBoundary(min, step)}</span>
         <span>{formatSliderBoundary(max, step)}</span>
       </span>
-      {hint ? <span className="mt-1 block text-[10px] text-white/45">{hint}</span> : null}
+      {hint ? <span className="mt-1 block text-[10px] text-zinc-400">{hint}</span> : null}
     </label>
   );
 }
@@ -1394,13 +1417,13 @@ function NumberInput({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="text-[10px]">
+    <label className="text-xs font-medium text-zinc-400">
       {label}
       <input
         type="number"
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="mt-1 w-full rounded bg-[#17191e] px-2 py-1.5 text-xs"
+        className="mt-1 w-full rounded-xl border border-white/10 bg-[#0b0f17] px-3 py-1.5 text-xs font-semibold text-zinc-200 outline-none focus:border-indigo-400/50"
       />
     </label>
   );

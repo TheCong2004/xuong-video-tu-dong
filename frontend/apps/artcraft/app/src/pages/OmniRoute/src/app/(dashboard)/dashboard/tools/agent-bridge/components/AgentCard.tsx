@@ -176,7 +176,7 @@ export function AgentCard({
 
             {/* Investigating notice */}
             {isInvestigating && (
-              <div className="rounded-lg border border-zinc-500/20 bg-zinc-500/5 p-3">
+              <div className="rounded-lg border border-white/10 bg-zinc-500/5 p-3">
                 <p className="text-xs text-text-muted">
                   {t("investigatingNotice") ||
                     "This agent is under investigation. Hosts and API surface are still being confirmed. Setup will be available once the upstream API is documented."}

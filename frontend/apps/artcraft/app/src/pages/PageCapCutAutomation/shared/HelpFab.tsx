@@ -37,7 +37,7 @@ export function HelpFab() {
   return (
     <button
       type="button"
-      className="fixed right-5 bottom-5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-[#252830] text-white/70 shadow-lg hover:bg-[#2f333c]"
+      className="fixed right-5 bottom-5 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#252830] text-white/70 shadow-lg hover:bg-[#2f333c]"
       title="Help — kiểm tra BE thật"
       onClick={() => void onHelp()}
     >

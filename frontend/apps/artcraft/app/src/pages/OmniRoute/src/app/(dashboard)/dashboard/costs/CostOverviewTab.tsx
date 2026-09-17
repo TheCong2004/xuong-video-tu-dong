@@ -491,7 +491,7 @@ export default function CostOverviewTab() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {summary.streak > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/10 border border-white/10">
                 <span className="material-symbols-outlined text-amber-400 text-sm">
                   local_fire_department
                 </span>

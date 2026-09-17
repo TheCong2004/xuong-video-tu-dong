@@ -350,7 +350,7 @@ export default function SecurityTab() {
                     disabled={loading}
                     className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                       isBlocked
-                        ? "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
+                        ? "bg-red-500/10 border-white/10 text-red-600 dark:text-red-400"
                         : "bg-black/[0.02] dark:bg-white/[0.02] border-transparent text-text-muted hover:bg-black/[0.05] dark:hover:bg-white/[0.05]"
                     }`}
                     title={
@@ -439,7 +439,7 @@ export default function SecurityTab() {
               {customBannedSignals.map((keyword, index) => (
                 <div
                   key={index}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border bg-red-500/10 border-white/10 text-red-600 dark:text-red-400"
                 >
                   {keyword}
                   <button

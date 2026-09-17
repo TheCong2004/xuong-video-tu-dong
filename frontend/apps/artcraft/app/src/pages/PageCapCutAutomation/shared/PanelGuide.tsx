@@ -23,29 +23,29 @@ export function PanelGuide({
   return (
     <div
       className={twMerge(
-        "shrink-0 border-b px-3 py-2 text-[11px] leading-relaxed",
+        "shrink-0 border-b px-4 py-2.5 text-xs leading-relaxed",
         tone === "warn"
-          ? "border-amber-500/20 bg-amber-500/5 text-amber-100/85"
-          : "border-white/6 bg-[#121318] text-white/45",
+          ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
+          : "border-white/10 bg-[#131926]/60 text-zinc-400",
         className,
       )}
     >
       <p>
-        <span className="font-medium text-white/65">Mục này: </span>
+        <span className="font-semibold text-zinc-200">Mục này: </span>
         {what}
       </p>
       <p className="mt-0.5">
-        <span className="font-medium text-white/65">Cách dùng: </span>
+        <span className="font-semibold text-zinc-200">Cách dùng: </span>
         {how}
       </p>
       {need ? (
         <p
           className={twMerge(
             "mt-0.5",
-            tone === "warn" ? "text-amber-200/90" : "text-white/40",
+            tone === "warn" ? "text-amber-300 font-medium" : "text-zinc-400",
           )}
         >
-          <span className="font-medium text-white/55">Cần: </span>
+          <span className="font-semibold text-zinc-300">Cần: </span>
           {need}
         </p>
       ) : null}

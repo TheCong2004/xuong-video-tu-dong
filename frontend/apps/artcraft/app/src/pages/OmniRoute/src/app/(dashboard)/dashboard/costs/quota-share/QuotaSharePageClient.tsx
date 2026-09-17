@@ -407,7 +407,7 @@ export default function QuotaSharePageClient() {
       </div>
 
       {/* Beta banner — scoped to this page only */}
-      <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-200">
+      <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-200">
         <span className="material-symbols-outlined text-[16px] text-amber-500 shrink-0">
           science
         </span>

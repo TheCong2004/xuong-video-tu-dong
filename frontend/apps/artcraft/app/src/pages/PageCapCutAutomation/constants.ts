@@ -20,12 +20,7 @@ import {
   faBoxOpen,
   faHardDrive,
 } from "@fortawesome/pro-solid-svg-icons";
-import type {
-  AudioClip,
-  FootageClip,
-  SideNavItem,
-  SyncTabItem,
-} from "./types";
+import type { AudioClip, FootageClip, SideNavItem, SyncTabItem } from "./types";
 
 /** Side nav — nhãn tiếng Việt. */
 export const SIDE_NAV: SideNavItem[] = [
@@ -94,14 +89,28 @@ export const DEMO_FOOTAGE: FootageClip[] = [
     label: "01_Image",
     durationSec: 4.1,
     kind: "image",
-    swatches: ["#6B4F3A", "#8B6A4A", "#4A3A2A", "#A67C52", "#5C4033", "#7A5A40"],
+    swatches: [
+      "#6B4F3A",
+      "#8B6A4A",
+      "#4A3A2A",
+      "#A67C52",
+      "#5C4033",
+      "#7A5A40",
+    ],
   },
   {
     id: "f2",
     label: "02_Video",
     durationSec: 4.9,
     kind: "video",
-    swatches: ["#3A5568", "#4A6578", "#2D3748", "#5A7588", "#3A4A58", "#1A2A38"],
+    swatches: [
+      "#3A5568",
+      "#4A6578",
+      "#2D3748",
+      "#5A7588",
+      "#3A4A58",
+      "#1A2A38",
+    ],
   },
   {
     id: "f3",

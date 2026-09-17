@@ -46,7 +46,7 @@ function StatusAlert({ status }: { status: BackupRetentionStatus }) {
       className={`mt-3 p-3 rounded-lg text-sm ${
         isSuccess
           ? "bg-green-500/10 text-green-500 border border-green-500/20"
-          : "bg-red-500/10 text-red-500 border border-red-500/20"
+          : "bg-red-500/10 text-red-500 border border-white/10"
       }`}
       role="alert"
     >

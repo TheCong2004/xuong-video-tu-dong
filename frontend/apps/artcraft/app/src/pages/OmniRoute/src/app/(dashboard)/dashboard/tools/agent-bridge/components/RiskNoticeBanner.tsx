@@ -36,7 +36,7 @@ export function RiskNoticeBanner() {
   return (
     <div
       role="alert"
-      className="flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3"
+      className="flex items-start gap-3 rounded-xl border border-white/10 bg-amber-500/5 px-4 py-3"
     >
       <span className="material-symbols-outlined text-amber-500 shrink-0 mt-0.5">warning</span>
       <div className="flex-1 min-w-0">

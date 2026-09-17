@@ -230,7 +230,7 @@ export default function AgentBridgePageClient({
       {actionError && (
         <div
           role="alert"
-          className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400"
+          className="flex items-center gap-2 rounded-xl border border-white/10 bg-red-500/5 px-4 py-3 text-sm text-red-600 dark:text-red-400"
         >
           <span className="material-symbols-outlined text-[16px]">error</span>
           {actionError}
@@ -249,7 +249,7 @@ export default function AgentBridgePageClient({
       {certGuide && (
         <div
           role="status"
-          className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
+          className="rounded-xl border border-white/10 bg-amber-500/5 px-4 py-3 text-sm text-amber-700 dark:text-amber-300"
         >
           <div className="flex items-center gap-2 font-medium">
             <span className="material-symbols-outlined text-[16px]">info</span>

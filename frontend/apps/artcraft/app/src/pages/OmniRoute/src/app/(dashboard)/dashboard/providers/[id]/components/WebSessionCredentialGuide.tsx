@@ -36,7 +36,7 @@ export default function WebSessionCredentialGuide({
 
   if (requirement.kind === "none") {
     return (
-      <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-3 text-sm text-text-muted">
+      <div className="rounded-lg border border-white/10 bg-emerald-500/10 px-3 py-3 text-sm text-text-muted">
         <div className="flex items-start gap-2">
           <span className="material-symbols-outlined mt-0.5 text-[18px] text-emerald-500">
             check_circle
@@ -65,7 +65,7 @@ export default function WebSessionCredentialGuide({
     requirement.kind === "token" ? "Required token: {credential}" : "Required cookie: {credential}";
 
   return (
-    <div className="rounded-lg border border-purple-500/25 bg-purple-500/10 px-3 py-3 text-sm text-text-muted">
+    <div className="rounded-lg border border-white/10 bg-purple-500/10 px-3 py-3 text-sm text-text-muted">
       <div className="flex items-start gap-2">
         <span className="material-symbols-outlined mt-0.5 text-[18px] text-purple-500">cookie</span>
         <div className="space-y-2">

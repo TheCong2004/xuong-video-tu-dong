@@ -151,9 +151,9 @@ export default function ComplianceTab() {
   };
 
   const severityClass = (value: Severity) => {
-    if (value === "critical") return "border-red-500/30 bg-red-500/10 text-red-600";
-    if (value === "warning") return "border-amber-500/30 bg-amber-500/10 text-amber-600";
-    return "border-blue-500/30 bg-blue-500/10 text-blue-600";
+    if (value === "critical") return "border-white/10 bg-red-500/10 text-red-600";
+    if (value === "warning") return "border-white/10 bg-amber-500/10 text-amber-600";
+    return "border-white/10 bg-blue-500/10 text-blue-600";
   };
 
   return (
@@ -292,7 +292,7 @@ export default function ComplianceTab() {
       </Card>
 
       {error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-lg border border-white/10 bg-red-500/10 px-4 py-3 text-sm text-red-600">
           {error}
         </div>
       )}

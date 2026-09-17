@@ -47,7 +47,7 @@ export function ProxyBatchActions({
             icon="delete"
             onClick={onBatchDelete}
             loading={batchDeleting}
-            className="!text-red-400 !border-red-500/30"
+            className="!text-red-400 !border-white/10"
             data-testid="proxy-registry-batch-delete"
           >
             {t("batchDeleteSelected", { count: selectedCount })}

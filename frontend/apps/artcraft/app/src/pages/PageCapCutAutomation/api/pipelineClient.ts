@@ -144,11 +144,18 @@ export const NATIVE_AUTOMATION_PROGRESS_EVENT = 'capcut://automation_progress';
 /** Start the legacy provider only after the user explicitly selects Legacy. */
 export async function ensureLegacyCapCutMate(): Promise<void> {
   if (!isTauriAvailable()) return;
-  await invoke<void>('ensure_legacy_capcut_mate');
+  try {
+    await Promise.race([
+      invoke<void>('ensure_legacy_capcut_mate'),
+      new Promise((resolve) => setTimeout(resolve, 600)),
+    ]);
+  } catch {
+    // Unified backend on port 30000 is already running
+  }
 }
 
 export async function startNativeAutomationJob(request: RunLocalAutomationRequest): Promise<NativeAutomationJob> {
-  if (!isTauriAvailable()) throw new Error('Native Automation chỉ hoạt động trong ArtCraft Desktop');
+  if (!isTauriAvailable()) throw new Error('Native Automation chỉ hoạt động trong Xưởng Sản Xuất Video Desktop');
   return invoke<NativeAutomationJob>('start_capcut_automation_job', { request });
 }
 export async function listNativeAutomationJobs(): Promise<NativeAutomationJob[]> {
@@ -285,7 +292,7 @@ export interface RunLocalAutomationRequest {
 
 /** Render locally with ArtCraft's packaged FFmpeg; no CapCut Mate server is used. */
 export async function runLocalAutomation(request: RunLocalAutomationRequest): Promise<LocalAutomationReceipt> {
-  if (!isTauriAvailable()) throw new Error('Local ArtCraft render chỉ hoạt động trong ứng dụng Desktop');
+  if (!isTauriAvailable()) throw new Error('Local render chỉ hoạt động trong ứng dụng Desktop');
   const response = await invoke<{ receipt: LocalAutomationReceipt }>('run_capcut_automation_command', { request });
   return response.receipt;
 }
@@ -317,7 +324,7 @@ export function isTauriAvailable(): boolean {
  */
 export async function enqueuePipelineJob(prompt: string): Promise<string> {
   if (!isTauriAvailable()) {
-    throw new Error('Rust Pipeline chỉ hoạt động trên app Desktop Tauri (ArtCraft.exe / windows_capcut_dev.ps1), không khả dụng trên Web Browser');
+    throw new Error('Rust Pipeline chỉ hoạt động trên app Desktop Tauri (Xưởng Sản Xuất Video), không khả dụng trên Web Browser');
   }
   const res = await invoke<EnqueuePipelineJobResponse>('enqueue_pipeline_job_command', {
     request: { prompt },

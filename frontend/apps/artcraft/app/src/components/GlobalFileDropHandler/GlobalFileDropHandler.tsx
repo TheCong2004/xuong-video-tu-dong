@@ -181,7 +181,7 @@ export function GlobalFileDropHandler() {
     <>
       {isDragging && modalType === null && (
         <div className="pointer-events-none fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
-          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-white/60 bg-black/30 px-16 py-12 text-white backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-white/10 bg-black/30 px-16 py-12 text-white backdrop-blur-sm">
             <FontAwesomeIcon icon={faUpRightAndDownLeftFromCenter} className="text-4xl opacity-80" />
             <div className="text-xl font-semibold">Drop to Upload</div>
             <div className="text-sm opacity-60">GLB, PNG, JPG, JPEG, SPZ</div>

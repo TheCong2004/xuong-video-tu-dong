@@ -212,7 +212,7 @@ export default function TraeAuthModal({
     <Modal isOpen={isOpen} title="Connect Trae SOLO" onClose={onClose}>
       <div className="flex flex-col gap-4">
         {/* Primary path: browser-based OAuth via trae.ai/authorization */}
-        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 p-4 rounded-lg border border-white/10 dark:border-white/10">
           <p className="text-sm text-emerald-900 dark:text-emerald-200 mb-2">
             Authorize via <span className="font-mono">trae.ai</span> in a popup. The popup will
             close itself once the token has been imported.
@@ -243,7 +243,7 @@ export default function TraeAuthModal({
           <span className="flex-1 border-t border-border" />
         </div>
 
-        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-white/10 dark:border-white/10">
           <p className="text-sm text-blue-800 dark:text-blue-200">
             Sign in to <span className="font-mono">solo.trae.ai</span>, open DevTools → Network,
             send any chat message, and copy the JWT from the{" "}
@@ -315,7 +315,7 @@ export default function TraeAuthModal({
         </div>
 
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-white/10 dark:border-white/10">
             <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
           </div>
         )}

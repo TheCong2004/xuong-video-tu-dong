@@ -290,23 +290,23 @@ function FeatureChip({
 }) {
   const colorMap = {
     purple: {
-      shell: "border-purple-500/20 bg-purple-500/5",
+      shell: "border-white/10 bg-purple-500/5",
       icon: "text-purple-500",
     },
     blue: {
-      shell: "border-blue-500/20 bg-blue-500/5",
+      shell: "border-white/10 bg-blue-500/5",
       icon: "text-blue-500",
     },
     amber: {
-      shell: "border-amber-500/20 bg-amber-500/5",
+      shell: "border-white/10 bg-amber-500/5",
       icon: "text-amber-500",
     },
     emerald: {
-      shell: "border-emerald-500/20 bg-emerald-500/5",
+      shell: "border-white/10 bg-emerald-500/5",
       icon: "text-emerald-500",
     },
     cyan: {
-      shell: "border-cyan-500/20 bg-cyan-500/5",
+      shell: "border-white/10 bg-cyan-500/5",
       icon: "text-cyan-500",
     },
     orange: {
@@ -314,11 +314,11 @@ function FeatureChip({
       icon: "text-orange-500",
     },
     pink: {
-      shell: "border-pink-500/20 bg-pink-500/5",
+      shell: "border-white/10 bg-pink-500/5",
       icon: "text-pink-500",
     },
     indigo: {
-      shell: "border-indigo-500/20 bg-indigo-500/5",
+      shell: "border-white/10 bg-indigo-500/5",
       icon: "text-indigo-500",
     },
   }[color];

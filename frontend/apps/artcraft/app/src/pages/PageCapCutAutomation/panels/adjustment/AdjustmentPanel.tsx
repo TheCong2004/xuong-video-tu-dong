@@ -142,12 +142,12 @@ export function AdjustmentPanel() {
         tone={mate.draftUrl || mate.localProject.trim() ? "default" : "warn"}
       />
       {loadingLib && (
-        <div className="border-b border-white/6 px-3 py-1 text-[11px] text-white/40">
+        <div className="border-b border-white/10 px-3 py-1 text-[11px] text-white/40">
           Đang tải get_filters từ BE…
         </div>
       )}
       {applying && (
-        <div className="border-b border-white/6 px-3 py-1 text-center text-[11px] text-lime-300/80">
+        <div className="border-b border-white/10 px-3 py-1 text-center text-[11px] text-lime-300/80">
           Đang apply filter/LUT…
         </div>
       )}

@@ -144,7 +144,7 @@ export default function PrivacyPage() {
           </section>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-white/[0.06] text-sm text-text-muted">
+        <div className="mt-12 pt-8 border-t border-white/10 text-sm text-text-muted">
           <p>
             {t("questionsVisit")}{" "}
             <a

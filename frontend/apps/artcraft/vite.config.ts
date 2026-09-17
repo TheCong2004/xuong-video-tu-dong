@@ -126,6 +126,10 @@ const multiTargetAliasResolver = (): Plugin => ({
 
 export default defineConfig({
   root: appRoot,
+  define: {
+    "process.env": {},
+    process: { env: {} },
+  },
   optimizeDeps: {
     exclude: ["@sparkjsdev/spark"],
   },
@@ -146,39 +150,20 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     proxy: {
-      // OmniRoute page routes. `/home` matters: OmniRoute's `/dashboard`
-      // server-redirects to `/home`, and without a proxy entry that landing
-      // page fell through to ArtCraft's SPA index.html (the iframe showed
-      // ArtCraft's own sign-up screen instead of the router dashboard).
-      // ArtCraft itself is tab-driven and claims no URL path, so this is safe.
-      // `login`/`forgot-password` are intentionally absent — OmniRoute's login
-      // was removed now that it runs embedded on loopback.
-      "^/(omniroute|home|dashboard|auth|callback|connect|docs|terms|privacy)": {
-        target: "http://127.0.0.1:20128",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/omniroute/, ""),
-      },
-      "/_next": {
-        target: "http://127.0.0.1:20128",
-        changeOrigin: true,
-      },
-      // Next serves its self-hosted fonts from this root namespace. Unproxied,
-      // the request fell through to index.html and the browser reported
-      // "Failed to decode downloaded font / invalid sfntVersion".
-      "/__nextjs_font": {
-        target: "http://127.0.0.1:20128",
-        changeOrigin: true,
-      },
-      // OmniRoute's root-level icons/manifest. ArtCraft ships favicon.ico
-      // (left alone); these three names belong only to OmniRoute.
-      "^/(favicon\\.svg|icon-512\\.png|manifest\\.webmanifest)$": {
-        target: "http://127.0.0.1:20128",
-        changeOrigin: true,
-      },
+      // OmniRoute UI is rendered directly by ArtCraft. Only its core API
+      // transport remains behind this development proxy; it is never a UI URL.
       "/api": {
         target: "http://127.0.0.1:20128",
         changeOrigin: true,
-      }
+      },
+      "/openapi": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+      },
+      "/health": {
+        target: "http://127.0.0.1:30000",
+        changeOrigin: true,
+      },
     },
     watch: {
       ignored: ["**/pages/freellmapi/server/**"],
@@ -212,9 +197,16 @@ export default defineConfig({
       "@ipc": path.resolve(repoRoot, "vynaro/src/ipc"),
       "@lib": path.resolve(repoRoot, "vynaro/src/lib"),
       "@styles": path.resolve(repoRoot, "vynaro/src/styles"),
+      // Reuse the provider catalog used by the existing OmniRoute component
+      // when it is rendered in ArtCraft's React tree. This resolves source
+      // code only; no OmniRoute UI server is loaded by the frontend.
+      "@omniroute/open-sse": path.resolve(
+        projectRoot,
+        "app/src/pages/OmniRoute/open-sse",
+      ),
       "next/navigation": path.resolve(projectRoot, "app/src/pages/OmniRoute/next-mocks.tsx"),
       "next/link": path.resolve(projectRoot, "app/src/pages/OmniRoute/next-mocks.tsx"),
-      "next/dynamic": path.resolve(projectRoot, "app/src/pages/OmniRoute/next-mocks.tsx"),
+      "next/dynamic": path.resolve(projectRoot, "app/src/pages/OmniRoute/next-dynamic.tsx"),
       "next-intl": path.resolve(projectRoot, "app/src/pages/OmniRoute/next-mocks.tsx"),
       "next/font/google": path.resolve(projectRoot, "app/src/pages/OmniRoute/next-mocks.tsx"),
     },

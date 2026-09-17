@@ -115,9 +115,9 @@ export const TopBar = ({ pageName }: Props) => {
       case "FLOWORD_STUDIO":
         return "Floword Studio";
       case "CAPCUT_AUTOMATION":
-        return "CapCut Automation";
+        return "Xưởng Sản Xuất Video";
       case "OMNI_ROUTE":
-        return "OmniRoute AI Router";
+        return "Trung tâm kết nối AI";
       case "YOUWEE":
         return "Youwee Video Processor";
       case "MEDIA_CRAWLER":

@@ -101,7 +101,7 @@ export default function CacheEntriesTab() {
       {loading ? (
         <div className="text-sm text-text-muted">{t("loading")}</div>
       ) : error ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-red-500/5 px-4 py-3">
           <div className="text-sm text-red-300">{error}</div>
           <Button variant="secondary" size="sm" onClick={() => fetchEntries(pagination.page)}>
             {t("refresh")}

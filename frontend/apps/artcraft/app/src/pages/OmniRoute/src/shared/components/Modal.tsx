@@ -130,7 +130,7 @@ export default function Modal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Overlay */}
       <div
-        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/75 backdrop-blur-md"
         onClick={closeOnOverlay ? onClose : undefined}
         aria-hidden="true"
       />
@@ -142,9 +142,9 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
         className={cn(
-          "relative w-full bg-surface",
-          "border border-black/10 dark:border-white/10",
-          "rounded-card shadow-2xl",
+          "relative w-full bg-[#131926]",
+          "border border-white/10",
+          "rounded-2xl shadow-2xl text-white",
           "animate-in fade-in zoom-in-95 duration-200",
           sizes[size],
           className
@@ -154,8 +154,8 @@ export default function Modal({
         {(title || showCloseButton) && (
           <div
             className={cn(
-              "flex items-center justify-between border-b border-black/5 dark:border-white/5",
-              compactHeader ? "px-4 py-2.5" : "p-6"
+              "flex items-center justify-between border-b border-white/10 bg-[#161f2e]/60",
+              compactHeader ? "px-4 py-3" : "px-6 py-4"
             )}
           >
             <div className="flex items-center min-w-0">
@@ -189,8 +189,8 @@ export default function Modal({
                 <h2
                   id={titleId}
                   className={cn(
-                    "font-semibold text-text-main truncate min-w-0",
-                    compactHeader ? "text-sm" : "text-lg"
+                    "font-bold text-white tracking-wide truncate min-w-0",
+                    compactHeader ? "text-sm" : "text-base sm:text-lg"
                   )}
                 >
                   {title}
@@ -201,7 +201,7 @@ export default function Modal({
               <button
                 onClick={onClose}
                 aria-label={t("close")}
-                className="p-1.5 rounded-lg text-text-muted hover:bg-black/5 dark:hover:bg-white/5 transition-colors shrink-0"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
               >
                 <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
                   close
@@ -218,7 +218,7 @@ export default function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="flex items-center justify-end gap-3 p-6 border-t border-black/5 dark:border-white/5">
+          <div className="flex items-center justify-end gap-3 p-6 border-t border-white/10 bg-[#161f2e]/40">
             {footer}
           </div>
         )}
@@ -261,7 +261,7 @@ export function ConfirmModal({
         </>
       }
     >
-      <p className="text-text-muted">{message}</p>
+      <p className="text-slate-400">{message}</p>
     </Modal>
   );
 }

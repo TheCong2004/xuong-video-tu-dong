@@ -446,7 +446,7 @@ export default function Sidebar({
       <aside
         ref={sidebarRef}
         className={cn(
-          "flex h-full min-h-0 flex-col border-r border-black/5 bg-sidebar transition-all duration-300 ease-in-out dark:border-white/5",
+          "flex h-full min-h-0 flex-col border-r border-black/5 bg-sidebar transition-all duration-300 ease-in-out dark:border-white/10",
           collapsed ? "w-16" : "w-[220px]"
         )}
         style={{ paddingTop: isMacElectron ? "var(--desktop-safe-top)" : undefined }}
@@ -562,7 +562,7 @@ export default function Sidebar({
               return (
                 <div key={section.id}>
                   {!isFirst && (
-                    <div className="border-t border-black/5 dark:border-white/5 my-1.5" />
+                    <div className="border-t border-black/5 dark:border-white/10 my-1.5" />
                   )}
                   {sectionItems.map(renderNavLink)}
                 </div>
@@ -659,7 +659,7 @@ export default function Sidebar({
 
         <div
           className={cn(
-            "shrink-0 border-t border-black/5 dark:border-white/5",
+            "shrink-0 border-t border-black/5 dark:border-white/10",
             collapsed ? "p-2 flex flex-col gap-1" : "p-2 flex gap-2"
           )}
           style={{
@@ -671,7 +671,7 @@ export default function Sidebar({
             title={t("restart")}
             className={cn(
               "flex items-center justify-center gap-2 rounded-lg font-medium transition-all",
-              "text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 hover:border-amber-500/40",
+              "text-amber-500 hover:bg-amber-500/10 border border-white/10 hover:border-amber-500/40",
               collapsed ? "p-2" : "flex-1 min-w-0 px-2 py-1.5 text-xs"
             )}
           >
@@ -683,7 +683,7 @@ export default function Sidebar({
             title={t("shutdown")}
             className={cn(
               "flex items-center justify-center gap-2 rounded-lg font-medium transition-all",
-              "text-red-500 hover:bg-red-500/10 border border-red-500/20 hover:border-red-500/40",
+              "text-red-500 hover:bg-red-500/10 border border-white/10 hover:border-red-500/40",
               collapsed ? "p-2" : "flex-1 min-w-0 px-2 py-1.5 text-xs"
             )}
           >

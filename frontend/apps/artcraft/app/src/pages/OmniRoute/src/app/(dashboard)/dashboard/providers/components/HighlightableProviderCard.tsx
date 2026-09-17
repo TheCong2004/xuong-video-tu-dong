@@ -23,7 +23,12 @@ export default function HighlightableProviderCard(props: ProviderCardProps) {
 
   const handleCardClick = useCallback((id: string) => {
     recordProviderNavigation(id);
-  }, []);
+    if (props.onConfigure) {
+      props.onConfigure(id);
+    } else {
+      window.dispatchEvent(new CustomEvent("omniroute:configure-provider", { detail: { providerId: id } }));
+    }
+  }, [props.onConfigure]);
 
   const highlightedCardRef = useCallback(
     (handle: ProviderCardHandle | null) => {
@@ -32,5 +37,20 @@ export default function HighlightableProviderCard(props: ProviderCardProps) {
     [highlightedProviderId]
   );
 
-  return <ProviderCard {...props} onCardClick={handleCardClick} ref={highlightedCardRef} />;
+  const handleConfigure = useCallback((id: string) => {
+    if (props.onConfigure) {
+      props.onConfigure(id);
+    } else {
+      window.dispatchEvent(new CustomEvent("omniroute:configure-provider", { detail: { providerId: id } }));
+    }
+  }, [props.onConfigure]);
+
+  return (
+    <ProviderCard
+      {...props}
+      onCardClick={handleCardClick}
+      onConfigure={handleConfigure}
+      ref={highlightedCardRef}
+    />
+  );
 }

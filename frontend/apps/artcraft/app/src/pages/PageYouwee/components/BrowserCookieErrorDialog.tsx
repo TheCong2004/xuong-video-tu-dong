@@ -45,7 +45,7 @@ export function BrowserCookieErrorDialog({
         </div>
 
         <div className="px-5 py-4 space-y-3">
-          <div className="flex items-start gap-2.5 rounded-md border border-amber-500/25 bg-amber-500/10 p-3">
+          <div className="flex items-start gap-2.5 rounded-md border border-white/10 bg-amber-500/10 p-3">
             <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
             <div className="text-sm">
               <p className="font-medium text-foreground">{displayBrowserName} is currently open</p>

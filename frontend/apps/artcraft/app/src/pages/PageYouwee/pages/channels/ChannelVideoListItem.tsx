@@ -54,8 +54,8 @@ export function ChannelVideoListItem({
         'border-border bg-card hover:bg-muted/40',
         isSelected && !videoState && 'border-primary/40 bg-primary/5',
         isActive && 'border-primary/40 bg-primary/5',
-        isCompleted && 'border-emerald-500/30 bg-emerald-500/5',
-        isError && 'border-red-500/30 bg-red-500/5',
+        isCompleted && 'border-white/10 bg-emerald-500/5',
+        isError && 'border-white/10 bg-red-500/5',
       )}
     >
       <div className="flex shrink-0 items-center pl-0.5">
@@ -132,8 +132,8 @@ export function ChannelVideoListItem({
                 isPending && 'border-border bg-muted text-muted-foreground',
                 isActive && 'border-primary/30 bg-primary/10 text-primary',
                 isCompleted &&
-                  'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-                isError && 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+                  'border-white/10 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
+                isError && 'border-white/10 bg-red-500/10 text-red-600 dark:text-red-400',
               )}
             >
               {isPending && <Clock className="h-3 w-3" />}

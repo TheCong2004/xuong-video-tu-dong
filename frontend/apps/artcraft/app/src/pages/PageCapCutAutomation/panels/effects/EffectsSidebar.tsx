@@ -54,7 +54,7 @@ export function EffectsSidebar({
   const empty = selected.length === 0;
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/8 bg-[#16171b]">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/10 bg-[#16171b]">
       {/* Selected header */}
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <h2 className="text-[14px] font-semibold text-white/90">
@@ -104,7 +104,7 @@ export function EffectsSidebar({
       </div>
 
       {/* Selected list */}
-      <div className="min-h-[100px] max-h-[180px] overflow-y-auto border-y border-white/6 px-2 py-1">
+      <div className="min-h-[100px] max-h-[180px] overflow-y-auto border-y border-white/10 px-2 py-1">
         {empty ? (
           <div className="px-2 py-6 text-center text-[12px] text-white/30">
             No effects selected. Press + in the library.
@@ -153,7 +153,7 @@ export function EffectsSidebar({
       </div>
 
       {/* Effect settings */}
-      <div className="border-b border-white/6 px-4 py-4">
+      <div className="border-b border-white/10 px-4 py-4">
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-[13px] font-semibold text-white/85">
             Effect Settings
@@ -182,7 +182,7 @@ export function EffectsSidebar({
       </div>
 
       {/* Apply mode */}
-      <div className="space-y-4 px-4 py-4 border-t border-white/8">
+      <div className="space-y-4 px-4 py-4 border-t border-white/10">
         <div>
           <h3 className="mb-2 text-[13px] font-semibold text-white/85">
             Apply Mode
@@ -237,13 +237,13 @@ export function EffectsSidebar({
       </div>
 
       {/* Footer actions */}
-      <div className="mt-auto flex items-center justify-between gap-3 border-t border-white/8 px-4 py-3">
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-white/10 px-4 py-3">
         <label className="flex cursor-pointer items-center gap-2 text-[12px] text-white/55 select-none">
           <input
             type="checkbox"
             checked={replaceExisting}
             onChange={(e) => onReplaceExistingChange(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+            className="h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
           />
           Replace existing effects
         </label>

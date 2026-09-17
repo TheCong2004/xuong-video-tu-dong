@@ -53,9 +53,9 @@ export function CaptionSidebar({
   const [topSlider, setTopSlider] = useState(50);
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/8 bg-[#16171b]">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/10 bg-[#16171b]">
       {/* Header: Captions / Text / Animation + Export */}
-      <div className="flex items-center justify-between gap-2 border-b border-white/8 px-2 py-2">
+      <div className="flex items-center justify-between gap-2 border-b border-white/10 px-2 py-2">
         <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
           {EDITOR_TABS.map((tab) => {
             const active = editorTab === tab.id;
@@ -92,7 +92,7 @@ export function CaptionSidebar({
       </div>
 
       {/* Tools — undo/redo BE chưa có; không toast mock giả thành công */}
-      <div className="flex items-center gap-1 border-b border-white/8 px-3 py-2 text-white/45">
+      <div className="flex items-center gap-1 border-b border-white/10 px-3 py-2 text-white/45">
         <ToolBtn
           icon={faArrowRotateLeft}
           title="Undo — BE chưa hỗ trợ"
@@ -136,7 +136,7 @@ export function CaptionSidebar({
             <div className="min-h-[100px] rounded-b-md border border-t-0 border-white/10 bg-[#141518]" />
           </div>
 
-          <div className="space-y-4 border-t border-white/8 px-4 py-4">
+          <div className="space-y-4 border-t border-white/10 px-4 py-4">
             <SliderRow
               label=""
               value={topSlider}

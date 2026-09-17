@@ -49,7 +49,7 @@ export function FiltersSidebar({
   const empty = selected.length === 0;
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/8 bg-[#16171b]">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/10 bg-[#16171b]">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <h2 className="text-[14px] font-semibold text-white/90">
           Selected Filters
@@ -96,7 +96,7 @@ export function FiltersSidebar({
         </button>
       </div>
 
-      <div className="min-h-[140px] flex-1 overflow-y-auto border-y border-white/6 px-2 py-1">
+      <div className="min-h-[140px] flex-1 overflow-y-auto border-y border-white/10 px-2 py-1">
         {empty ? (
           <div className="flex h-full min-h-[140px] items-center justify-center px-2 py-8 text-center text-[12px] text-white/25">
             {/* Empty like CapCut Pilot — blank area until filters added */}
@@ -177,7 +177,7 @@ export function FiltersSidebar({
             type="checkbox"
             checked={replaceExisting}
             onChange={(e) => onReplaceExistingChange(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+            className="h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
           />
           Replace existing filters
         </label>

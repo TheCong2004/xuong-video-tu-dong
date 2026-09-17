@@ -286,7 +286,7 @@ export function DiscoveryPageClient() {
           role="status"
           className={
             d.feedback.type === "error"
-              ? "rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700"
+              ? "rounded-md border border-white/10 bg-red-50 px-3 py-2 text-sm text-red-700"
               : "rounded-md border border-green-300 bg-green-50 px-3 py-2 text-sm text-green-700"
           }
         >

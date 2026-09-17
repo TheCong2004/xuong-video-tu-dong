@@ -13,7 +13,7 @@ export function ToolCallBlock({ id, name, input }: ToolCallBlockProps) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="rounded border border-amber-500/40 bg-amber-900/20 px-3 py-2 text-sm">
+    <div className="rounded border border-white/10 bg-amber-900/20 px-3 py-2 text-sm">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
@@ -26,7 +26,7 @@ export function ToolCallBlock({ id, name, input }: ToolCallBlockProps) {
         <span className="text-text-muted text-xs font-mono ml-auto">{id.slice(0, 8)}</span>
       </button>
       {expanded && (
-        <div className="mt-2 border-t border-amber-500/20 pt-2">
+        <div className="mt-2 border-t border-white/10 pt-2">
           <JsonViewer data={input} />
         </div>
       )}

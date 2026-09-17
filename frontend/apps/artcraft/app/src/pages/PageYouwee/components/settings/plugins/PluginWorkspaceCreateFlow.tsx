@@ -131,7 +131,7 @@ export const PluginWorkspaceCreateFlow = memo(function PluginWorkspaceCreateFlow
   return (
     <>
       {controller.createdWorkspace && (
-        <div className="rounded-md border border-dashed border-emerald-500/40 bg-emerald-500/5 p-4">
+        <div className="rounded-md border border-dashed border-white/10 bg-emerald-500/5 p-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
               <p className="text-sm font-semibold">{t('download.pluginWorkspaceCreatedTitle')}</p>
@@ -463,7 +463,7 @@ export const PluginWorkspaceCreateFlow = memo(function PluginWorkspaceCreateFlow
                         className={cn(
                           'flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors',
                           selected
-                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                            ? 'border-white/10 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                             : 'border-border/60 bg-background text-muted-foreground hover:bg-muted/60',
                         )}
                       >
@@ -504,7 +504,7 @@ export const PluginWorkspaceCreateFlow = memo(function PluginWorkspaceCreateFlow
                         className={cn(
                           'flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors',
                           selected
-                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                            ? 'border-white/10 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                             : 'border-border/60 bg-background text-muted-foreground hover:bg-muted/60',
                         )}
                       >

@@ -46,14 +46,14 @@ export function SkillsConceptCard({ variant, className = "" }: SkillsConceptCard
       </div>
 
       {/* Comparison table */}
-      <div className="rounded-lg border border-black/5 dark:border-white/5 overflow-hidden">
+      <div className="rounded-lg border border-black/5 dark:border-white/10 overflow-hidden">
         {/* Column headers */}
-        <div className="grid grid-cols-3 bg-bg-subtle border-b border-black/5 dark:border-white/5">
+        <div className="grid grid-cols-3 bg-bg-subtle border-b border-black/5 dark:border-white/10">
           <div className="px-3 py-2" />
-          <div className="px-3 py-2 text-xs font-semibold text-text-muted border-l border-black/5 dark:border-white/5">
+          <div className="px-3 py-2 text-xs font-semibold text-text-muted border-l border-black/5 dark:border-white/10">
             {t("conceptCard.comparison.colAgent")}
           </div>
-          <div className="px-3 py-2 text-xs font-semibold text-text-muted border-l border-black/5 dark:border-white/5">
+          <div className="px-3 py-2 text-xs font-semibold text-text-muted border-l border-black/5 dark:border-white/10">
             {t("conceptCard.comparison.colOmni")}
           </div>
         </div>
@@ -63,15 +63,15 @@ export function SkillsConceptCard({ variant, className = "" }: SkillsConceptCard
           <div
             key={row}
             data-testid={`comparison-row-${row}`}
-            className={`grid grid-cols-3 ${i < COMPARISON_ROWS.length - 1 ? "border-b border-black/5 dark:border-white/5" : ""}`}
+            className={`grid grid-cols-3 ${i < COMPARISON_ROWS.length - 1 ? "border-b border-black/5 dark:border-white/10" : ""}`}
           >
             <div className="px-3 py-2 text-xs font-medium text-text-muted bg-bg-subtle/50">
               {t(`conceptCard.comparison.${row}.label`)}
             </div>
-            <div className="px-3 py-2 text-xs text-text-main border-l border-black/5 dark:border-white/5">
+            <div className="px-3 py-2 text-xs text-text-main border-l border-black/5 dark:border-white/10">
               {t(`conceptCard.comparison.${row}.agent`)}
             </div>
-            <div className="px-3 py-2 text-xs text-text-main border-l border-black/5 dark:border-white/5">
+            <div className="px-3 py-2 text-xs text-text-main border-l border-black/5 dark:border-white/10">
               {t(`conceptCard.comparison.${row}.omni`)}
             </div>
           </div>

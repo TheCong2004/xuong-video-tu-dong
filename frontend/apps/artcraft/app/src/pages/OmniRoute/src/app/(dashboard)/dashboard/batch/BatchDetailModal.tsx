@@ -70,18 +70,18 @@ interface BatchDetailModalProps {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  completed: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
-  completed_with_failures: "bg-red-500/15 text-red-400 border-red-500/25",
-  failed: "bg-red-500/15 text-red-400 border-red-500/25",
-  in_progress: "bg-blue-500/15 text-blue-400 border-blue-500/25",
+  completed: "bg-emerald-500/15 text-emerald-400 border-white/10",
+  completed_with_failures: "bg-red-500/15 text-red-400 border-white/10",
+  failed: "bg-red-500/15 text-red-400 border-white/10",
+  in_progress: "bg-blue-500/15 text-blue-400 border-white/10",
   in_progress_with_failures: "bg-orange-500/15 text-orange-400 border-orange-500/25",
   finalizing: "bg-violet-500/15 text-violet-400 border-violet-500/25",
   finalizing_with_failures: "bg-orange-500/15 text-orange-400 border-orange-500/25",
-  validating: "bg-yellow-500/15 text-yellow-400 border-yellow-500/25",
+  validating: "bg-yellow-500/15 text-yellow-400 border-white/10",
   cancelling: "bg-orange-500/15 text-orange-400 border-orange-500/25",
-  cancelled: "bg-gray-500/15 text-gray-400 border-gray-500/25",
-  cancelled_with_failures: "bg-red-500/15 text-red-400 border-red-500/25",
-  expired: "bg-gray-500/15 text-gray-400 border-gray-500/25",
+  cancelled: "bg-gray-500/15 text-gray-400 border-white/10",
+  cancelled_with_failures: "bg-red-500/15 text-red-400 border-white/10",
+  expired: "bg-gray-500/15 text-gray-400 border-white/10",
   expired_with_failures: "bg-orange-500/15 text-orange-400 border-orange-500/25",
 };
 
@@ -108,7 +108,7 @@ function effectiveStatus(batch: BatchRecord): string {
 
 function StatusBadge({ batch }: { batch: BatchRecord }) {
   const key = effectiveStatus(batch);
-  const cls = STATUS_STYLES[key] ?? "bg-gray-500/15 text-gray-400 border-gray-500/25";
+  const cls = STATUS_STYLES[key] ?? "bg-gray-500/15 text-gray-400 border-white/10";
   const label = STATUS_LABELS[key] ?? key.replace(/_/g, " ");
   return (
     <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium border ${cls}`}>
@@ -376,7 +376,7 @@ export default function BatchDetailModal({ batch, files, onClose, onActionDone }
               <h3 className="text-[11px] uppercase tracking-wider font-medium text-red-400 mb-3">
                 Errors
               </h3>
-              <pre className="p-3 rounded-lg bg-red-500/5 border border-red-500/20 text-xs font-mono text-red-300 overflow-x-auto">
+              <pre className="p-3 rounded-lg bg-red-500/5 border border-white/10 text-xs font-mono text-red-300 overflow-x-auto">
                 {JSON.stringify(batch.errors, null, 2)}
               </pre>
             </div>
@@ -424,7 +424,7 @@ export default function BatchDetailModal({ batch, files, onClose, onActionDone }
               <a
                 href={downloadHrefErrors(batch.errorFileId) ?? "#"}
                 download={`batch-${batch.id}-errors.jsonl`}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-red-500/10 border border-red-500/25 text-red-400 hover:text-red-300 transition-colors"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-red-500/10 border border-white/10 text-red-400 hover:text-red-300 transition-colors"
               >
                 <span className="material-symbols-outlined text-[16px]">error_outline</span>
                 {t("batchActionDownloadErrors")}
@@ -451,7 +451,7 @@ export default function BatchDetailModal({ batch, files, onClose, onActionDone }
                   }
                 }}
                 disabled={retrying}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-blue-500/10 border border-blue-500/25 text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-blue-500/10 border border-white/10 text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[16px]">
                   {retrying ? "hourglass_empty" : "refresh"}

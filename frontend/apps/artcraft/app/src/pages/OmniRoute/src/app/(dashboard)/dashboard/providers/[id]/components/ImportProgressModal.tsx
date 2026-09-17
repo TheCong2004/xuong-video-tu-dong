@@ -100,14 +100,14 @@ export default function ImportProgressModal({
 
         {/* Error message */}
         {importProgress.phase === "error" && importProgress.error && (
-          <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+          <div className="p-3 rounded-lg bg-red-500/10 border border-white/10">
             <p className="text-sm text-red-400">{importProgress.error}</p>
           </div>
         )}
 
         {/* Log list */}
         {importProgress.logs.length > 0 && (
-          <div className="max-h-48 overflow-y-auto rounded-lg bg-black/5 dark:bg-white/5 p-3 border border-black/5 dark:border-white/5">
+          <div className="max-h-48 overflow-y-auto rounded-lg bg-black/5 dark:bg-white/5 p-3 border border-black/5 dark:border-white/10">
             <div className="flex flex-col gap-1">
               {importProgress.logs.map((log, i) => (
                 <p

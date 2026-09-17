@@ -46,13 +46,13 @@ export function MediaAudioPanel({
             onChange={(e) =>
               onChange({ voiceChangerEnabled: e.target.checked })
             }
-            className="h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+            className="h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
           />
           <span className="text-[13px] text-white/85">Enable voice changer</span>
         </label>
         <div
           className={twMerge(
-            "space-y-3 border-t border-white/6 pt-3",
+            "space-y-3 border-t border-white/10 pt-3",
             !state.voiceChangerEnabled && "pointer-events-none opacity-40",
           )}
         >
@@ -101,7 +101,7 @@ export function MediaAudioPanel({
       </div>
 
       {/* Basic group */}
-      <section className="border-b border-white/6 pb-4">
+      <section className="border-b border-white/10 pb-4">
         <CheckLabel
           checked={state.basicEnabled}
           onChange={(v) => onChange({ basicEnabled: v })}
@@ -144,7 +144,7 @@ export function MediaAudioPanel({
       </section>
 
       {/* Normalize */}
-      <section className="border-b border-white/6 py-3.5">
+      <section className="border-b border-white/10 py-3.5">
         <CheckLabel
           checked={state.normalize}
           onChange={(v) => onChange({ normalize: v })}
@@ -156,7 +156,7 @@ export function MediaAudioPanel({
       </section>
 
       {/* Enhance voice */}
-      <section className="border-b border-white/6 py-3.5">
+      <section className="border-b border-white/10 py-3.5">
         <CheckLabel
           checked={state.enhanceVoice}
           onChange={(v) => onChange({ enhanceVoice: v })}
@@ -182,7 +182,7 @@ export function MediaAudioPanel({
       </section>
 
       {/* Reduce noise */}
-      <section className="border-b border-white/6 py-3.5">
+      <section className="border-b border-white/10 py-3.5">
         <CheckLabel
           checked={state.reduceNoise}
           onChange={(v) => onChange({ reduceNoise: v })}
@@ -191,7 +191,7 @@ export function MediaAudioPanel({
       </section>
 
       {/* Isolate noise */}
-      <section className="border-b border-white/6 py-3.5">
+      <section className="border-b border-white/10 py-3.5">
         <CheckLabel
           checked={state.isolateNoise}
           onChange={(v) => onChange({ isolateNoise: v })}
@@ -297,7 +297,7 @@ function CheckLabel({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+        className="h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
       />
       <span className="text-[13px] text-white/85">{label}</span>
     </label>

@@ -9,6 +9,7 @@ export default {
     "./app/src/pages/freellmapi/client/**/*.{js,jsx,ts,tsx}",
     "./app/src/pages/PageCapCutAutomation/**/*.{js,jsx,ts,tsx}",
     "./app/src/pages/FlowordStudio/**/*.{js,jsx,ts,tsx}",
+    "./app/src/pages/OmniRoute/src/**/*.{js,jsx,ts,tsx}",
     "./app/src/pages/PageMediaCrawler/**/*.{js,jsx,ts,tsx}",
     "./app/src/pages/PageYouwee/**/*.{js,jsx,ts,tsx}",
     "./app/src/components/**/*.{js,jsx,ts,tsx}",
@@ -292,6 +293,25 @@ export default {
       whatsapp: "#25d366",
       x: "#000000",
       email: "#858585",
+
+      // OmniRoute design tokens — bridged from --color-* CSS variables
+      // so Tailwind v3 generates the utility classes that OmniRoute v4 components expect.
+      text: {
+        main: "var(--color-text-main, #e6e6ef)",
+        muted: "var(--color-text-muted, #a1a1aa)",
+        primary: "var(--color-text-primary, #e6e6ef)",
+      },
+      bg: {
+        DEFAULT: "var(--color-bg, #0b0e14)",
+        subtle: "var(--color-bg-subtle, #111520)",
+        alt: "var(--color-bg-alt, #111520)",
+      },
+      surface: {
+        DEFAULT: "var(--color-surface, #161b22)",
+        "2": "var(--surface-2, #1c2230)",
+      },
+      "border-hover": "rgba(255, 255, 255, 0.16)",
+      "primary-foreground": "hsl(var(--primary-foreground, 0 0% 98%))",
     },
   },
   plugins: [],

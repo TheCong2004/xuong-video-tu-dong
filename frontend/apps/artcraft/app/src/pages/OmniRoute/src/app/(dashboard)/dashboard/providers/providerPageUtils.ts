@@ -422,9 +422,15 @@ export interface ProviderPageData {
 }
 
 // Bound each first-paint request so a single stalled connection cannot freeze
-// the page on its skeleton. 20s is generous for a loopback dashboard API while
-// still guaranteeing the skeleton clears in bounded time.
-const PROVIDER_PAGE_FETCH_TIMEOUT_MS = 20_000;
+// the page on its skeleton. 3.5s is plenty for loopback dashboard API while
+// ensuring instantaneous feedback without long freezes.
+const PROVIDER_PAGE_FETCH_TIMEOUT_MS = 3_500;
+
+let cachedProviderPageData: ProviderPageData | null = null;
+
+export function getCachedProviderPageData(): ProviderPageData | null {
+  return cachedProviderPageData;
+}
 
 /**
  * Load the four data sources the providers dashboard renders from, each bounded
@@ -441,6 +447,25 @@ const PROVIDER_PAGE_FETCH_TIMEOUT_MS = 20_000;
  * degrade to a default, so the loader always resolves within the timeout and the
  * page paints from whatever data arrived (matching the fast `/api/providers`).
  */
+const LOCAL_STORAGE_CONNECTIONS_KEY = "omniroute:local_connections";
+
+export function getLocalConnections(): any[] {
+  try {
+    const raw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_CONNECTIONS_KEY) : null;
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalConnections(conns: any[]): void {
+  try {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(LOCAL_STORAGE_CONNECTIONS_KEY, JSON.stringify(conns));
+    }
+  } catch {}
+}
+
 export async function loadProviderPageData(
   fetchImpl: typeof fetch = globalThis.fetch as typeof fetch,
   timeoutMs: number = PROVIDER_PAGE_FETCH_TIMEOUT_MS
@@ -451,7 +476,6 @@ export async function loadProviderPageData(
       if (!res.ok) return null;
       return await res.json();
     } catch {
-      // Timeout/abort/network error → degrade to the default; never hang.
       return null;
     }
   };
@@ -463,8 +487,17 @@ export async function loadProviderPageData(
     safeJson("/api/settings", { cache: "no-store" }),
   ]);
 
-  return {
-    connections: Array.isArray(connectionsData?.connections) ? connectionsData.connections : [],
+  const remoteConns = Array.isArray(connectionsData?.connections) ? connectionsData.connections : [];
+  const localConns = getLocalConnections();
+  const mergedConnections = [...remoteConns];
+  for (const lc of localConns) {
+    if (!mergedConnections.some((c) => c.id === lc.id)) {
+      mergedConnections.push(lc);
+    }
+  }
+
+  const result: ProviderPageData = {
+    connections: mergedConnections,
     providerNodes: Array.isArray(nodesData?.nodes) ? nodesData.nodes : [],
     ccCompatibleProviderEnabled: nodesData?.ccCompatibleProviderEnabled === true,
     expirations: expirationsData ?? null,
@@ -473,4 +506,7 @@ export async function loadProviderPageData(
       : null,
     settings: settingsData ?? null,
   };
+
+  cachedProviderPageData = result;
+  return result;
 }

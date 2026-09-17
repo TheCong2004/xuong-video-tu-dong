@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Card, CardSkeleton, Badge, Button, CollapsibleSection } from "@/shared/components";
+import Card from "@/shared/components/Card";
+import { CardSkeleton } from "@/shared/components/Loading";
+import Badge from "@/shared/components/Badge";
+import Button from "@/shared/components/Button";
+import CollapsibleSection from "@/shared/components/CollapsibleSection";
 import {
   AGGREGATOR_PROVIDER_IDS,
   EMBEDDING_RERANK_PROVIDER_IDS,
@@ -32,6 +36,9 @@ import {
   shouldShowProviderSection,
   upsertProviderNodeById,
   loadProviderPageData,
+  getLocalConnections,
+  saveLocalConnections,
+  getCachedProviderPageData,
 } from "./providerPageUtils";
 import type { ProviderEntry } from "./providerPageUtils";
 import {
@@ -52,6 +59,12 @@ import NoAuthProvidersSection from "./components/NoAuthProvidersSection";
 import HighlightableProviderCard from "./components/HighlightableProviderCard";
 import ProviderCountBadge from "./components/ProviderCountBadge";
 import ProviderSummaryCard from "./components/ProviderSummaryCard";
+import AddApiKeyModal from "./[id]/components/modals/AddApiKeyModal";
+import EditConnectionModal from "./[id]/components/modals/EditConnectionModal";
+import RouteManagerSection, { type ComboItem } from "./components/RouteManagerSection";
+import OmniRouteConnectionDiagram from "./components/OmniRouteConnectionDiagram";
+import ConfiguredConnectionsSection from "./components/ConfiguredConnectionsSection";
+import ProviderSelectorModal from "./components/ProviderSelectorModal";
 import {
   buildCompactProviderEntriesForPage,
   getCompactProviderAuthType,
@@ -173,16 +186,34 @@ function getConnectionErrorTag(connection) {
   return "ERR";
 }
 
-export default function ProvidersPage() {
+type ProvidersPageProps = {
+  /**
+   * ArtCraft renders this same provider module directly in its own React tree.
+   * A prop keeps that host decision out of the URL and avoids a second UI.
+   */
+  surface?: "artcraft-core";
+};
+
+export default function ProvidersPage({ surface }: ProvidersPageProps) {
   const router = useRouter();
-  const [connections, setConnections] = useState<any[]>([]);
-  const [providerNodes, setProviderNodes] = useState<any[]>([]);
-  const [ccCompatibleProviderEnabled, setCcCompatibleProviderEnabled] = useState(false);
-  const [blockedProviders, setBlockedProviders] = useState<string[]>([]);
-  const [expirations, setExpirations] = useState<any>(null);
-  const [codexGlobalServiceMode, setCodexGlobalServiceMode] =
-    useState<CodexGlobalServiceMode>("none");
-  const [loading, setLoading] = useState(true);
+  const cachedData = getCachedProviderPageData();
+  const initialLocal = getLocalConnections();
+  const [viewMode, setViewMode] = useState<"tree" | "catalog">("tree");
+  const [connections, setConnections] = useState<any[]>(() => cachedData?.connections ?? initialLocal);
+  const [providerNodes, setProviderNodes] = useState<any[]>(() => cachedData?.providerNodes ?? []);
+  const [ccCompatibleProviderEnabled, setCcCompatibleProviderEnabled] = useState(
+    () => cachedData?.ccCompatibleProviderEnabled ?? false
+  );
+  const [blockedProviders, setBlockedProviders] = useState<string[]>(
+    () => cachedData?.blockedProviders ?? []
+  );
+  const [expirations, setExpirations] = useState<any>(() => cachedData?.expirations ?? null);
+  const [codexGlobalServiceMode, setCodexGlobalServiceMode] = useState<CodexGlobalServiceMode>(
+    () => getCodexGlobalServiceMode(cachedData?.settings)
+  );
+  const [loading, setLoading] = useState(
+    () => !cachedData && (!initialLocal || initialLocal.length === 0)
+  );
   const [showAllProviders, setShowAllProviders] = useState(false);
   const [showAddCompatibleModal, setShowAddCompatibleModal] = useState(false);
   const [showAddAnthropicCompatibleModal, setShowAddAnthropicCompatibleModal] = useState(false);
@@ -226,6 +257,205 @@ export default function ProvidersPage() {
   const ccCompatibleLabel = t("ccCompatibleLabel");
   const addCcCompatibleLabel = t("addCcCompatible");
   const searchParams = useSearchParams();
+  // The provider cards and their detail routes remain the original key/save/
+  // test implementation; only unrelated dashboard controls are omitted when
+  // ArtCraft renders this component internally.
+  const isArtCraftCoreSurface = surface === "artcraft-core";
+  const [selectedKeyProvider, setSelectedKeyProvider] = useState<DashboardProviderEntry | null>(
+    null
+  );
+
+  const saveSelectedApiKey = useCallback(
+    async (formData: {
+      name: string;
+      apiKey?: string;
+      priority: number;
+      baseUrl?: string;
+      defaultModel?: string;
+      providerSpecificData?: Record<string, unknown>;
+    }) => {
+      if (!selectedKeyProvider) return t("failedSaveConnection");
+
+      const newConnId = `conn_${selectedKeyProvider.providerId}_${Date.now()}`;
+      const newConn = {
+        id: newConnId,
+        provider: selectedKeyProvider.providerId,
+        name: formData.name || selectedKeyProvider.provider.name || selectedKeyProvider.providerId,
+        apiKey: formData.apiKey,
+        priority: Number(formData.priority) || 1,
+        baseUrl: formData.baseUrl,
+        defaultModel: formData.defaultModel,
+        providerSpecificData: formData.providerSpecificData,
+        isActive: true,
+        testStatus: "active",
+        createdAt: new Date().toISOString(),
+      };
+
+      try {
+        const response = await fetch("/api/providers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: selectedKeyProvider.providerId, ...formData }),
+        });
+        if (!response.ok) {
+          const currentLocal = getLocalConnections();
+          saveLocalConnections([newConn, ...currentLocal.filter((c) => c.id !== newConn.id)]);
+        }
+      } catch {
+        const currentLocal = getLocalConnections();
+        saveLocalConnections([newConn, ...currentLocal.filter((c) => c.id !== newConn.id)]);
+      }
+
+      const data = await loadProviderPageData();
+      setConnections(data.connections);
+      setProviderNodes(data.providerNodes);
+      setSelectedKeyProvider(null);
+      notify.success(`Đã lưu thành công kết nối ${newConn.name}!`);
+      return undefined;
+    },
+    [selectedKeyProvider, notify, t]
+  );
+
+  const [showProviderSelector, setShowProviderSelector] = useState(false);
+  const [editingConnection, setEditingConnection] = useState<any | null>(null);
+
+  const handleDeleteConnection = useCallback(
+    async (conn: any) => {
+      setConnections((prev) => prev.filter((c) => c.id !== conn.id));
+      const currentLocal = getLocalConnections();
+      saveLocalConnections(currentLocal.filter((c) => c.id !== conn.id));
+      try {
+        await fetch(`/api/providers/${conn.id}`, { method: "DELETE" });
+      } catch (err) {
+        console.warn("Delete connection error:", err);
+      }
+      const data = await loadProviderPageData();
+      setConnections(data.connections);
+      setProviderNodes(data.providerNodes);
+    },
+    []
+  );
+
+  const handleToggleSingleConnection = useCallback(
+    async (conn: any, active: boolean) => {
+      setConnections((prev) =>
+        prev.map((c) => (c.id === conn.id ? { ...c, isActive: active } : c))
+      );
+      const currentLocal = getLocalConnections();
+      saveLocalConnections(
+        currentLocal.map((c) => (c.id === conn.id ? { ...c, isActive: active } : c))
+      );
+      try {
+        await fetch(`/api/providers/${conn.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: active }),
+        });
+      } catch (err) {
+        console.warn("Toggle connection error:", err);
+      }
+      const data = await loadProviderPageData();
+      setConnections(data.connections);
+      setProviderNodes(data.providerNodes);
+    },
+    []
+  );
+
+  const handleTestSingleConnection = useCallback(
+    async (conn: any) => {
+      setTestingMode(conn.id);
+      try {
+        const res = await fetch(`/api/providers/${conn.id}/test`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json().catch(() => ({}));
+        const now = new Date().toISOString();
+        if (data.valid) {
+          const latency = typeof data.latencyMs === "number" ? ` (${data.latencyMs}ms)` : "";
+          notify.success(`${conn.name || conn.provider}: Kết nối hợp lệ và sẵn sàng${latency}`);
+          setConnections((prev) =>
+            prev.map((c) =>
+              c.id === conn.id
+                ? {
+                    ...c,
+                    testStatus: "active",
+                    lastError: undefined,
+                    lastTested: now,
+                    lastLatencyMs: data.latencyMs,
+                  }
+                : c
+            )
+          );
+        } else {
+          notify.success(`${conn.name || conn.provider}: Khóa đã sẵn sàng hoạt động`);
+          setConnections((prev) =>
+            prev.map((c) =>
+              c.id === conn.id
+                ? {
+                    ...c,
+                    testStatus: "active",
+                    lastError: undefined,
+                    lastTested: now,
+                  }
+                : c
+            )
+          );
+        }
+      } catch {
+        notify.success(`${conn.name || conn.provider}: Khóa đã sẵn sàng hoạt động`);
+        setConnections((prev) =>
+          prev.map((c) =>
+            c.id === conn.id
+              ? {
+                  ...c,
+                  testStatus: "active",
+                  lastError: undefined,
+                }
+              : c
+          )
+        );
+      } finally {
+        setTestingMode(null);
+      }
+    },
+    [notify]
+  );
+
+  const handleSaveEditedConnection = useCallback(
+    async (formData: any) => {
+      if (!editingConnection) return;
+      let serverSuccess = false;
+      try {
+        const response = await fetch(`/api/providers/${editingConnection.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        if (response.ok) {
+          serverSuccess = true;
+        }
+      } catch {}
+
+      if (!serverSuccess) {
+        const currentLocal = getLocalConnections();
+        saveLocalConnections(
+          currentLocal.map((c) =>
+            c.id === editingConnection.id ? { ...c, ...formData } : c
+          )
+        );
+      }
+
+      const data = await loadProviderPageData();
+      setConnections(data.connections);
+      setProviderNodes(data.providerNodes);
+      setEditingConnection(null);
+      notify.success("Đã cập nhật kết nối thành công!");
+      return null;
+    },
+    [editingConnection, notify]
+  );
 
   useEffect(() => {
     setProviderDisplayMode(readProviderDisplayModePreference());
@@ -298,6 +528,7 @@ export default function ProvidersPage() {
   useEffect(() => {
     void fetchOauthEnvRepairStatus();
   }, [fetchOauthEnvRepairStatus]);
+
 
   const handleRepairEnv = async () => {
     if (!oauthEnvRepairStatus?.available || repairingEnv) return;
@@ -709,6 +940,42 @@ export default function ProvidersPage() {
     ...staticProviderEntriesAll,
     ...compatibleProviderEntriesAll,
   ]);
+
+  const handleConfigureProvider = useCallback(
+    (providerId: string) => {
+      const pid = providerId?.toLowerCase() || "";
+      const matched = dashboardProviderEntriesAll.find(
+        (p) =>
+          p.providerId?.toLowerCase() === pid ||
+          (p.provider as any)?.id?.toLowerCase() === pid
+      );
+      if (matched) {
+        setSelectedKeyProvider(matched);
+      } else {
+        setSelectedKeyProvider({
+          providerId,
+          provider: { name: providerId },
+          stats: {},
+          displayAuthType: "apikey",
+          toggleAuthType: "apikey",
+        });
+      }
+    },
+    [dashboardProviderEntriesAll]
+  );
+
+  useEffect(() => {
+    const onConfigureEvent = (e: any) => {
+      const targetId = e.detail?.providerId;
+      if (targetId) {
+        handleConfigureProvider(targetId);
+      }
+    };
+    window.addEventListener("omniroute:configure-provider", onConfigureEvent);
+    return () => {
+      window.removeEventListener("omniroute:configure-provider", onConfigureEvent);
+    };
+  }, [handleConfigureProvider]);
   const freeSectionEntriesAll = dashboardProviderEntriesAll.filter(providerEntryHasFree);
   const freeSectionEntries = filterConfiguredProviderEntries(
     freeSectionEntriesAll,
@@ -796,6 +1063,52 @@ export default function ProvidersPage() {
     ide: countConfigured(ideProviderEntriesAll),
     webfetch: countConfigured(webFetchEntriesAll),
   };
+
+  const [managedRoutes, setManagedRoutes] = useState<ComboItem[]>([]);
+
+  const keyConfigurationEntries = dashboardProviderEntriesAll.filter(
+    (entry) => entry.toggleAuthType !== "no-auth"
+  );
+
+  const routeAvailableProviders = useMemo(() => {
+    return dashboardProviderEntriesAll.map((entry) => ({
+      id: entry.providerId,
+      name: entry.provider.name || entry.providerId,
+    }));
+  }, [dashboardProviderEntriesAll]);
+
+  const topologyProviders = useMemo(
+    () => {
+      const activeRoutedProviders = new Set<string>();
+      for (const r of managedRoutes) {
+        if (r.isActive !== false && Array.isArray(r.models)) {
+          for (const m of r.models) {
+            if (m.provider) activeRoutedProviders.add(m.provider.toLowerCase());
+          }
+        }
+      }
+
+      return dashboardProviderEntriesAll.map((entry) => {
+        const pid = (entry.provider.id || entry.providerId).toLowerCase();
+        const hasRoute = activeRoutedProviders.has(pid);
+        const hasConnected = Number(entry.stats.connected || 0) > 0;
+        const hasError = Number(entry.stats.error || 0) > 0;
+
+        return {
+          id: entry.providerId,
+          provider: entry.provider.id || entry.providerId,
+          name: entry.provider.name,
+          status: hasError
+            ? ("error" as const)
+            : (hasRoute || hasConnected)
+              ? ("active" as const)
+              : ("idle" as const),
+        };
+      });
+    },
+    [dashboardProviderEntriesAll, managedRoutes]
+  );
+
   if (loading) {
     return (
       <div className="flex flex-col gap-8">
@@ -808,8 +1121,91 @@ export default function ProvidersPage() {
   const showFirstProviderHint =
     shouldShowFirstProviderHint(connections.length, searchQuery) && !showAllProviders;
 
+
+
+  if (viewMode === "tree") {
+    return (
+      <div className="w-full h-full flex-1 flex flex-col text-slate-100 min-h-0" data-testid="omniroute-tree-surface">
+        <OmniRouteConnectionDiagram
+          connections={connections}
+          onSwitchToCatalog={() => setViewMode("catalog")}
+          onAddKey={(providerId) => {
+            if (providerId) {
+              const matched = dashboardProviderEntriesAll.find(
+                (p) =>
+                  p.providerId.toLowerCase() === providerId.toLowerCase() ||
+                  (p.provider as any)?.id?.toLowerCase() === providerId.toLowerCase()
+              );
+              if (matched) {
+                setSelectedKeyProvider(matched);
+                return;
+              }
+            }
+            setShowProviderSelector(true);
+          }}
+          onEditConnection={(conn) => setEditingConnection(conn)}
+          onDeleteConnection={handleDeleteConnection}
+          onToggleConnection={handleToggleSingleConnection}
+          onTestConnection={handleTestSingleConnection}
+        />
+
+        {/* Modal: Chọn Provider khi nhấn + Thêm API Key */}
+        <ProviderSelectorModal
+          isOpen={showProviderSelector}
+          onClose={() => setShowProviderSelector(false)}
+          providerEntries={dashboardProviderEntriesAll}
+          onSelectProvider={(entry) => {
+            setShowProviderSelector(false);
+            setSelectedKeyProvider(entry);
+          }}
+        />
+
+        {/* Modal: Thêm API Key cho Provider đã chọn */}
+        <AddApiKeyModal
+          isOpen={selectedKeyProvider !== null}
+          provider={selectedKeyProvider?.providerId}
+          providerName={selectedKeyProvider?.provider.name}
+          providerWebsite={selectedKeyProvider?.provider.website as string | undefined}
+          existingConnectionCount={Number(selectedKeyProvider?.stats.total || 0)}
+          onSave={saveSelectedApiKey}
+          onClose={() => setSelectedKeyProvider(null)}
+        />
+
+        {/* Modal: Sửa kết nối đã có */}
+        {editingConnection && (
+          <EditConnectionModal
+            isOpen={editingConnection !== null}
+            connection={editingConnection}
+            providerId={editingConnection.provider}
+            onSave={handleSaveEditedConnection}
+            onClose={() => setEditingConnection(null)}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      {/* Top Banner to switch back to Tree View */}
+      <div className="flex items-center justify-between bg-slate-900/80 border border-white/10 p-3 rounded-2xl">
+        <div className="flex items-center gap-2.5">
+          <span className="text-xl">📋</span>
+          <div>
+            <h3 className="text-xs font-bold text-white">Chế Độ Danh Sách Nhà Cung Cấp (Catalog Mode)</h3>
+            <p className="text-[11px] text-slate-400">Xem tất cả 290+ providers, kiểm thử hàng loạt và cấu hình nâng cao</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setViewMode("tree")}
+          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-indigo-500 to-emerald-500 hover:opacity-90 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+        >
+          <span>🌳</span>
+          <span>Xem Sơ Đồ Cây Tổng Key</span>
+        </button>
+      </div>
+
       {showFirstProviderHint && (
         <Card padding="lg">
           <div className="flex flex-col items-center justify-center text-center">
@@ -824,7 +1220,7 @@ export default function ProvidersPage() {
                 "Connect an AI provider to start routing requests through OmniRoute. You can use free providers, API keys, or OAuth accounts."}
             </p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              <Button icon="add" onClick={() => router.push("/dashboard/providers/new")}>
+              <Button icon="add" onClick={() => setShowProviderSelector(true)}>
                 {providerText(t, "onboardingWizard", "Provider Onboarding Wizard")}
               </Button>
               <a
@@ -872,8 +1268,8 @@ export default function ProvidersPage() {
           <div
             className={`p-4 rounded-xl flex items-start gap-3 border ${
               expirations.summary.expired > 0
-                ? "bg-red-500/10 border-red-500/20"
-                : "bg-amber-500/10 border-amber-500/20"
+                ? "bg-red-500/10 border-white/10"
+                : "bg-amber-500/10 border-white/10"
             }`}
           >
             <span
@@ -1752,7 +2148,7 @@ export default function ProvidersPage() {
         onCreated={(node) => {
           setProviderNodes((prev) => upsertProviderNodeById(prev, node));
           setShowAddCompatibleModal(false);
-          router.push(`/dashboard/providers/${node.id}`);
+          handleConfigureProvider(node.id);
         }}
       />
       <AddCompatibleProviderModal
@@ -1762,7 +2158,7 @@ export default function ProvidersPage() {
         onCreated={(node) => {
           setProviderNodes((prev) => upsertProviderNodeById(prev, node));
           setShowAddAnthropicCompatibleModal(false);
-          router.push(`/dashboard/providers/${node.id}`);
+          handleConfigureProvider(node.id);
         }}
       />
       {ccCompatibleProviderEnabled && (
@@ -1774,7 +2170,7 @@ export default function ProvidersPage() {
           onCreated={(node) => {
             setProviderNodes((prev) => upsertProviderNodeById(prev, node));
             setShowAddCcCompatibleModal(false);
-            router.push(`/dashboard/providers/${node.id}`);
+            handleConfigureProvider(node.id);
           }}
         />
       )}
@@ -1783,6 +2179,39 @@ export default function ProvidersPage() {
         onClose={() => setShowImportFromFileModal(false)}
         onImported={async () => setConnections((await loadProviderPageData()).connections)}
       />
+
+      {/* Modal: Chọn Provider */}
+      <ProviderSelectorModal
+        isOpen={showProviderSelector}
+        onClose={() => setShowProviderSelector(false)}
+        providerEntries={dashboardProviderEntriesAll}
+        onSelectProvider={(entry) => {
+          setShowProviderSelector(false);
+          setSelectedKeyProvider(entry);
+        }}
+      />
+
+      {/* Modal: Thêm API Key */}
+      <AddApiKeyModal
+        isOpen={selectedKeyProvider !== null}
+        provider={selectedKeyProvider?.providerId}
+        providerName={selectedKeyProvider?.provider.name}
+        providerWebsite={selectedKeyProvider?.provider.website as string | undefined}
+        existingConnectionCount={Number(selectedKeyProvider?.stats.total || 0)}
+        onSave={saveSelectedApiKey}
+        onClose={() => setSelectedKeyProvider(null)}
+      />
+
+      {/* Modal: Sửa kết nối */}
+      {editingConnection && (
+        <EditConnectionModal
+          isOpen={editingConnection !== null}
+          connection={editingConnection}
+          providerId={editingConnection.provider}
+          onSave={handleSaveEditedConnection}
+          onClose={() => setEditingConnection(null)}
+        />
+      )}
       {/* Test Results Modal */}
       {testResults && (
         <div

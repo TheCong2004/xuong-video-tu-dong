@@ -165,7 +165,7 @@ export default function ProviderUsdCostModal({
               {t("loadingUsdCosts")}
             </div>
           ) : error ? (
-            <div className="flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-500">
+            <div className="flex items-start gap-2 rounded-md border border-white/10 bg-red-500/10 px-3 py-2 text-sm text-red-500">
               <span className="material-symbols-outlined text-[16px]">error</span>
               {error}
             </div>

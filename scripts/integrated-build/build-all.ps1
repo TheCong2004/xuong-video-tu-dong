@@ -5,7 +5,7 @@ param(
   [switch]$SkipDonut,
   [switch]$SkipFloword,
   [switch]$Clean,
-  [double]$MinDiskSpaceGB = 15.0
+  [double]$MinDiskSpaceGB = 8.0
 )
 
 $ErrorActionPreference = "Stop"

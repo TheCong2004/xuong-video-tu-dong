@@ -54,6 +54,12 @@ members = [
   "be-youwee",
   "crates/desktop/artcraft",
 
+  # CapCut engine vendored for the Artcraft production workshop
+  "crates/vendor/capcut/core",
+  "crates/vendor/capcut/capcut",
+  "crates/vendor/capcut/ffmpeg",
+  "crates/vendor/capcut/validate",
+
   # Shared libraries
   "crates/lib/actix_artcraft",
   "crates/lib/actix_cors_configs",
@@ -401,4 +407,3 @@ lto = true
 opt-level = 3
 panic = "abort"
 strip = true
-

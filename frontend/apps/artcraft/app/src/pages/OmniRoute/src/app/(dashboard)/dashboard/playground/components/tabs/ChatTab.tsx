@@ -383,7 +383,7 @@ export default function ChatTab({ configState, onMetricsUpdate }: ChatTabProps) 
         )}
 
         {error && (
-          <div className="text-center p-2 text-sm text-red-500 bg-red-500/10 rounded border border-red-500/20">
+          <div className="text-center p-2 text-sm text-red-500 bg-red-500/10 rounded border border-white/10">
             {error}
           </div>
         )}

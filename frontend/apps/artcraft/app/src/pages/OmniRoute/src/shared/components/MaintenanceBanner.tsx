@@ -65,7 +65,7 @@ export default function MaintenanceBanner() {
   if (!show) return null;
 
   return (
-    <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 flex items-center justify-between gap-3 animate-in slide-in-from-top">
+    <div className="bg-amber-500/10 border-b border-white/10 px-4 py-2.5 flex items-center justify-between gap-3 animate-in slide-in-from-top">
       <div className="flex items-center gap-2.5">
         <span className="material-symbols-outlined text-amber-500 text-[18px] animate-pulse">
           warning

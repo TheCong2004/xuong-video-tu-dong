@@ -162,7 +162,7 @@ export default function ProviderStatsPage() {
   if (error && !data) {
     return (
       <div>
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
+        <div className="bg-red-500/10 border border-white/10 rounded-xl p-6 text-center">
           <span className="material-symbols-outlined text-red-500 text-[32px] mb-2">error</span>
           <p className="text-red-400">{t("loadFailed", { error })}</p>
           <button

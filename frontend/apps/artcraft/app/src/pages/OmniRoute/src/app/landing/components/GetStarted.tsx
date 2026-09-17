@@ -66,7 +66,7 @@ export default function GetStarted() {
           <div className="flex-1 w-full">
             <div className="rounded-xl overflow-hidden bg-[#161B22] border border-[#2D333B] shadow-2xl">
               {/* Terminal header */}
-              <div className="flex items-center gap-2 px-4 py-3 bg-[#111520] border-b border-gray-700">
+              <div className="flex items-center gap-2 px-4 py-3 bg-[#111520] border-b border-white/10">
                 <div className="w-3 h-3 rounded-full bg-red-500"></div>
                 <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                 <div className="w-3 h-3 rounded-full bg-green-500"></div>
@@ -98,7 +98,7 @@ export default function GetStarted() {
                   <span className="text-green-400">&gt;</span> {t("readyToRoute")}
                 </div>
 
-                <div className="text-xs text-gray-500 mb-2 border-t border-gray-700 pt-4">
+                <div className="text-xs text-gray-500 mb-2 border-t border-white/10 pt-4">
                   {t("configureProvidersNote")}
                 </div>
 

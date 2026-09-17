@@ -67,14 +67,14 @@ export default function MarkdownMessage({ content, className }: MarkdownMessageP
     },
     th({ children }) {
       return (
-        <th className="border border-neutral-300 dark:border-neutral-600 px-3 py-1.5 text-left font-semibold">
+        <th className="border border-white/10 dark:border-white/10 px-3 py-1.5 text-left font-semibold">
           {children}
         </th>
       );
     },
     td({ children }) {
       return (
-        <td className="border border-neutral-300 dark:border-neutral-600 px-3 py-1.5">
+        <td className="border border-white/10 dark:border-white/10 px-3 py-1.5">
           {children}
         </td>
       );
@@ -127,7 +127,7 @@ export default function MarkdownMessage({ content, className }: MarkdownMessageP
     // Blockquotes
     blockquote({ children }) {
       return (
-        <blockquote className="border-l-4 border-neutral-400 pl-3 italic text-neutral-600 dark:text-neutral-400 my-2">
+        <blockquote className="border-l-4 border-white/10 pl-3 italic text-neutral-600 dark:text-neutral-400 my-2">
           {children}
         </blockquote>
       );
@@ -135,7 +135,7 @@ export default function MarkdownMessage({ content, className }: MarkdownMessageP
 
     // Horizontal rule
     hr() {
-      return <hr className="my-3 border-neutral-300 dark:border-neutral-600" />;
+      return <hr className="my-3 border-white/10 dark:border-white/10" />;
     },
 
     // Strong / emphasis

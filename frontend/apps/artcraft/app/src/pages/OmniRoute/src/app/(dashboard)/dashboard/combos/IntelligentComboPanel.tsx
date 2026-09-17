@@ -242,7 +242,7 @@ export default function IntelligentComboPanel({
                   return (
                     <div
                       key={entry.provider}
-                      className="rounded-lg border border-black/8 dark:border-white/8 bg-white/60 dark:bg-white/[0.03] p-3"
+                      className="rounded-lg border border-black/8 dark:border-white/10 bg-white/60 dark:bg-white/[0.03] p-3"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div>
@@ -298,7 +298,7 @@ export default function IntelligentComboPanel({
             </div>
 
             <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="rounded-lg border border-black/8 bg-white/60 p-3 dark:border-white/8 dark:bg-white/[0.03]">
+              <div className="rounded-lg border border-black/8 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]">
                 <p className="text-[11px] uppercase tracking-wide text-text-muted">
                   {t("modePack")}
                 </p>
@@ -306,7 +306,7 @@ export default function IntelligentComboPanel({
                   {normalizedConfig.modePack}
                 </p>
               </div>
-              <div className="rounded-lg border border-black/8 bg-white/60 p-3 dark:border-white/8 dark:bg-white/[0.03]">
+              <div className="rounded-lg border border-black/8 bg-white/60 p-3 dark:border-white/10 dark:bg-white/[0.03]">
                 <p className="text-[11px] uppercase tracking-wide text-text-muted">
                   Exploration Rate
                 </p>

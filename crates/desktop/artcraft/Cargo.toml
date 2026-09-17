@@ -97,6 +97,13 @@ tauri-plugin-opener = "2"
 vynaro = { package = "vynaro", path = "../../../vynaro/src-tauri" }
 vynaro-detect = { path = "../../../vynaro/crates/vynaro-detect" }
 
+# CapCut draft assembly engine, vendored inside this repository so Artcraft is
+# fully independent from the standalone capcut-cli checkout.
+capcut-core = { path = "../../vendor/capcut/core" }
+capcut-capcut = { path = "../../vendor/capcut/capcut" }
+capcut-ffmpeg = { path = "../../vendor/capcut/ffmpeg" }
+capcut-validate = { path = "../../vendor/capcut/validate" }
+
 # # Transparent title bar on MacOS
 # # NB: See the notes here:
 # # https://v2.tauri.app/learn/window-customization/

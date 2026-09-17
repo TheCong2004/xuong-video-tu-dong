@@ -103,7 +103,7 @@ function MetricBlock({
   subValue?: string;
 }) {
   return (
-    <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2">
+    <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2">
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
         <span className="material-symbols-outlined text-[16px]">{icon}</span>
         {label}
@@ -118,7 +118,7 @@ function DistributionBar({ label, value, meta }: { label: string; value: number;
   const width = `${Math.max(value * 100, value > 0 ? 6 : 0)}%`;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-black/5 bg-black/2 p-3 dark:border-white/5 dark:bg-white/2">
+    <div className="flex flex-col gap-2 rounded-lg border border-black/5 bg-black/2 p-3 dark:border-white/10 dark:bg-white/2">
       <div className="flex items-center justify-between gap-3 text-sm">
         <span className="truncate font-medium text-text-main">{label}</span>
         <span className="shrink-0 text-xs text-text-muted">{meta}</span>
@@ -142,7 +142,7 @@ function ComboForecastPanel({ forecast }: { forecast: ComboForecastMetrics }) {
   );
 
   return (
-    <div className="border-t border-black/5 px-6 py-5 dark:border-white/5">
+    <div className="border-t border-black/5 px-6 py-5 dark:border-white/10">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="text-sm font-semibold text-text-main">
@@ -203,7 +203,7 @@ function ComboForecastPanel({ forecast }: { forecast: ComboForecastMetrics }) {
           {topTargets.map((target) => (
             <div
               key={target.executionKey}
-              className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2"
+              className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -247,7 +247,7 @@ function ComboForecastPanel({ forecast }: { forecast: ComboForecastMetrics }) {
       ) : null}
 
       {forecast.dataQuality.notes.length > 0 ? (
-        <div className="mt-4 rounded-lg border border-black/5 bg-black/2 p-3 text-xs text-text-muted dark:border-white/5 dark:bg-white/2">
+        <div className="mt-4 rounded-lg border border-black/5 bg-black/2 p-3 text-xs text-text-muted dark:border-white/10 dark:bg-white/2">
           {forecast.dataQuality.notes.slice(0, 2).join(" · ")}
         </div>
       ) : null}
@@ -265,7 +265,7 @@ function ComboAutopilotPanel({ report }: { report: ComboAutopilotReport }) {
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="flex flex-col gap-4 border-b border-black/5 px-6 py-5 dark:border-white/5 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-4 border-b border-black/5 px-6 py-5 dark:border-white/10 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-base font-semibold text-text-main">
@@ -317,7 +317,7 @@ function ComboAutopilotPanel({ report }: { report: ComboAutopilotReport }) {
             {topIssues.map(({ combo, issue }) => (
               <div
                 key={issue.id}
-                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2"
+                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -340,7 +340,7 @@ function ComboAutopilotPanel({ report }: { report: ComboAutopilotReport }) {
                         <Link
                           key={`${issue.id}-${action.type}`}
                           href={action.href}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-black/5 px-3 py-1.5 text-xs font-medium text-text-main transition-colors hover:bg-black/5 dark:border-white/5 dark:hover:bg-white/5"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-black/5 px-3 py-1.5 text-xs font-medium text-text-main transition-colors hover:bg-black/5 dark:border-white/10 dark:hover:bg-white/5"
                         >
                           <span className="material-symbols-outlined text-[14px]">
                             arrow_forward
@@ -370,7 +370,7 @@ function ComboScoringInspectorPanel({ inspector }: { inspector: ComboScoringInsp
   const topTargets = inspector.targets.slice(0, 3);
 
   return (
-    <div className="border-t border-black/5 px-6 py-5 dark:border-white/5">
+    <div className="border-t border-black/5 px-6 py-5 dark:border-white/10">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -396,7 +396,7 @@ function ComboScoringInspectorPanel({ inspector }: { inspector: ComboScoringInsp
       </div>
 
       {inspector.warnings.length > 0 ? (
-        <div className="mt-4 rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-3 text-xs text-yellow-700 dark:text-yellow-300">
+        <div className="mt-4 rounded-lg border border-white/10 bg-yellow-500/5 p-3 text-xs text-yellow-700 dark:text-yellow-300">
           {inspector.warnings.slice(0, 2).join(" · ")}
         </div>
       ) : null}
@@ -408,7 +408,7 @@ function ComboScoringInspectorPanel({ inspector }: { inspector: ComboScoringInsp
             return (
               <div
                 key={target.executionKey}
-                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2"
+                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -466,7 +466,7 @@ function ComboScoringInspectorPanel({ inspector }: { inspector: ComboScoringInsp
           })}
         </div>
       ) : (
-        <div className="mt-4 rounded-lg border border-black/5 bg-black/2 p-4 text-sm text-text-muted dark:border-white/5 dark:bg-white/2">
+        <div className="mt-4 rounded-lg border border-black/5 bg-black/2 p-4 text-sm text-text-muted dark:border-white/10 dark:bg-white/2">
           {t("comboHealthNoInspectableTargets")}
         </div>
       )}
@@ -499,7 +499,7 @@ function ComboHealthCard({
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="border-b border-black/5 px-6 py-5 dark:border-white/5">
+      <div className="border-b border-black/5 px-6 py-5 dark:border-white/10">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -563,7 +563,7 @@ function ComboHealthCard({
               return (
                 <div
                   key={provider.provider}
-                  className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2"
+                  className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
@@ -611,7 +611,7 @@ function ComboHealthCard({
             {sortedDistribution.map((entry) => (
               <div
                 key={entry.model}
-                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2"
+                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -674,7 +674,7 @@ function ComboHealthCard({
       </div>
 
       {targetHealth.length > 0 ? (
-        <div className="border-t border-black/5 px-6 py-5 dark:border-white/5">
+        <div className="border-t border-black/5 px-6 py-5 dark:border-white/10">
           <div>
             <div className="text-sm font-semibold text-text-main">
               {t("comboHealthExecutionTargets")}
@@ -688,7 +688,7 @@ function ComboHealthCard({
             {targetHealth.map((target) => (
               <div
                 key={target.executionKey}
-                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2"
+                className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -875,14 +875,14 @@ export default function ComboHealthTab() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-xl border border-black/5 bg-surface p-5 shadow-sm dark:border-white/5 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-4 rounded-xl border border-black/5 bg-surface p-5 shadow-sm dark:border-white/10 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-text-main">{t("comboHealthTitle")}</h2>
           <p className="mt-1 text-sm text-text-muted">{t("comboHealthIntro")}</p>
         </div>
         <div className="flex flex-col gap-3 sm:items-end">
           <TimeRangeSelector value={range} onChange={setRange} />
-          <div className="flex items-center gap-1 rounded-lg border border-black/5 bg-black/2 p-1 dark:border-white/5 dark:bg-white/2">
+          <div className="flex items-center gap-1 rounded-lg border border-black/5 bg-black/2 p-1 dark:border-white/10 dark:bg-white/2">
             {(["24h", "7d", "30d"] as ComboForecastHorizon[]).map((value) => (
               <button
                 key={value}
@@ -903,7 +903,7 @@ export default function ComboHealthTab() {
       </div>
 
       {!loading && forecastError ? (
-        <Card className="border-yellow-500/20 bg-yellow-500/5 p-4">
+        <Card className="border-white/10 bg-yellow-500/5 p-4">
           <div className="flex items-center gap-2 text-sm text-yellow-700 dark:text-yellow-300">
             <span className="material-symbols-outlined text-[18px]">warning</span>
             {forecastError}
@@ -912,7 +912,7 @@ export default function ComboHealthTab() {
       ) : null}
 
       {!loading && autopilotError ? (
-        <Card className="border-yellow-500/20 bg-yellow-500/5 p-4">
+        <Card className="border-white/10 bg-yellow-500/5 p-4">
           <div className="flex items-center gap-2 text-sm text-yellow-700 dark:text-yellow-300">
             <span className="material-symbols-outlined text-[18px]">warning</span>
             {autopilotError}
@@ -921,7 +921,7 @@ export default function ComboHealthTab() {
       ) : null}
 
       {!loading && scoringError ? (
-        <Card className="border-yellow-500/20 bg-yellow-500/5 p-4">
+        <Card className="border-white/10 bg-yellow-500/5 p-4">
           <div className="flex items-center gap-2 text-sm text-yellow-700 dark:text-yellow-300">
             <span className="material-symbols-outlined text-[18px]">warning</span>
             {scoringError}
@@ -973,7 +973,7 @@ export default function ComboHealthTab() {
             <div className="max-w-md text-sm text-text-muted">
               {t("comboHealthNoDataDescription")}
             </div>
-            <div className="rounded-lg border border-black/5 bg-black/[0.02] p-4 dark:border-white/5 dark:bg-white/[0.02]">
+            <div className="rounded-lg border border-black/5 bg-black/[0.02] p-4 dark:border-white/10 dark:bg-white/[0.02]">
               <p className="text-xs font-medium text-text-main">{t("comboHealthGettingStarted")}</p>
               <ul className="mt-2 text-left text-xs text-text-muted">
                 <li className="flex items-start gap-2">

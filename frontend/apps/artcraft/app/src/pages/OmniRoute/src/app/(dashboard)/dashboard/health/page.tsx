@@ -217,7 +217,7 @@ export default function HealthPage() {
   if (error && !data) {
     return (
       <div>
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6 text-center">
+        <div className="bg-red-500/10 border border-white/10 rounded-xl p-6 text-center">
           <span className="material-symbols-outlined text-red-500 text-[32px] mb-2">error</span>
           <p className="text-red-400">{t("failedToLoad", { error })}</p>
           <button
@@ -272,7 +272,7 @@ export default function HealthPage() {
         className={`rounded-xl p-4 flex items-center gap-3 ${
           data.status === "healthy"
             ? "bg-green-500/10 border border-green-500/20"
-            : "bg-red-500/10 border border-red-500/20"
+            : "bg-red-500/10 border border-white/10"
         }`}
       >
         <span
@@ -355,7 +355,7 @@ export default function HealthPage() {
             {dbHealth.issues.map((issue, index) => (
               <div
                 key={`${issue.table}-${issue.type}-${index}`}
-                className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2"
+                className="rounded-xl border border-white/10 bg-amber-500/5 px-3 py-2"
               >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm text-text-main">{issue.description}</p>
@@ -620,10 +620,10 @@ export default function HealthPage() {
                 feat.level === "full"
                   ? "bg-green-500/5 border-green-500/10"
                   : feat.level === "reduced"
-                    ? "bg-amber-500/5 border-amber-500/20"
+                    ? "bg-amber-500/5 border-white/10"
                     : feat.level === "minimal"
                       ? "bg-orange-500/5 border-orange-500/20"
-                      : "bg-red-500/5 border-red-500/20";
+                      : "bg-red-500/5 border-white/10";
               const dot =
                 feat.level === "full"
                   ? "bg-green-500"
@@ -761,7 +761,7 @@ export default function HealthPage() {
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   resetting
                     ? "bg-surface/50 text-text-muted cursor-wait"
-                    : "bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-red-500/20"
+                    : "bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 border border-white/10"
                 }`}
                 title={t("resetAllTitle")}
               >
@@ -819,7 +819,7 @@ export default function HealthPage() {
                       return (
                         <div
                           key={provider}
-                          className={`rounded-lg p-3 ${style.bg} border border-white/5 flex items-center gap-3`}
+                          className={`rounded-lg p-3 ${style.bg} border border-white/10 flex items-center gap-3`}
                         >
                           <div
                             className="size-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold"
@@ -882,7 +882,7 @@ export default function HealthPage() {
                         return (
                           <div
                             key={provider}
-                            className="rounded-lg p-2.5 bg-green-500/5 border border-white/5 flex items-center gap-2"
+                            className="rounded-lg p-2.5 bg-green-500/5 border border-white/10 flex items-center gap-2"
                           >
                             <span className="size-2 rounded-full bg-green-500 shrink-0" />
                             <span
@@ -983,12 +983,12 @@ export default function HealthPage() {
                         key={key}
                         className={`rounded-lg p-3 border transition-colors ${
                           exhausted
-                            ? "bg-red-500/5 border-red-500/20"
+                            ? "bg-red-500/5 border-white/10"
                             : isQueued || lowRemaining
-                              ? "bg-amber-500/5 border-amber-500/20"
+                              ? "bg-amber-500/5 border-white/10"
                               : isActive
-                                ? "bg-blue-500/5 border-blue-500/15"
-                                : "bg-surface/30 border-white/5"
+                                ? "bg-blue-500/5 border-white/10"
+                                : "bg-surface/30 border-white/10"
                         }`}
                         title={key}
                       >
@@ -1109,7 +1109,7 @@ export default function HealthPage() {
               onClick={handleUnblockAll}
               disabled={unblocking}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg
-                bg-amber-500/10 border border-amber-500/30 text-amber-600
+                bg-amber-500/10 border border-white/10 text-amber-600
                 hover:bg-amber-500/15 hover:border-amber-500/50
                 dark:text-amber-400 transition-all duration-200
                 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1126,7 +1126,7 @@ export default function HealthPage() {
               return (
                 <div
                   key={key}
-                  className="rounded-lg p-3 bg-red-500/5 border border-red-500/10 flex items-center justify-between"
+                  className="rounded-lg p-3 bg-red-500/5 border border-white/10 flex items-center justify-between"
                 >
                   <div className="min-w-0">
                     <span className="text-sm font-medium text-text-main">
@@ -1145,7 +1145,7 @@ export default function HealthPage() {
                     onClick={() => handleUnblockOne(lockProvider, lockModel)}
                     disabled={unblockingKey === lockKey}
                     className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg
-                      bg-amber-500/10 border border-amber-500/20 text-amber-600
+                      bg-amber-500/10 border border-white/10 text-amber-600
                       hover:bg-amber-500/15 hover:border-amber-500/40
                       dark:text-amber-400 transition-all duration-200
                       disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"

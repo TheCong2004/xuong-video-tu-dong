@@ -70,7 +70,7 @@ export const ServicesView: React.FC<ServicesViewProps> = ({ onOpenCapCutAutomati
       </span>
 
       {error && (
-        <div role="alert" className="rounded-[14px] border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+        <div role="alert" className="rounded-[14px] border border-white/10 bg-red-500/10 p-4 text-sm text-red-300">
           {error}
         </div>
       )}

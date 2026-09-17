@@ -35,7 +35,7 @@ export function RequestStreamingList({
     return (
       <div className="h-full flex flex-col">
         {sameContextKey && (
-          <div className="shrink-0 flex items-center gap-2 px-2 py-1 bg-blue-900/30 border-b border-blue-500/40 text-xs text-blue-300 font-mono">
+          <div className="shrink-0 flex items-center gap-2 px-2 py-1 bg-blue-900/30 border-b border-white/10 text-xs text-blue-300 font-mono">
             <span>{t("filteringContext", { context: sameContextKey.slice(0, 6) })}</span>
             <button
               type="button"
@@ -68,7 +68,7 @@ export function RequestStreamingList({
   return (
     <div className="h-full flex flex-col">
       {sameContextKey && (
-        <div className="shrink-0 flex items-center gap-2 px-2 py-1 bg-blue-900/30 border-b border-blue-500/40 text-xs text-blue-300 font-mono">
+        <div className="shrink-0 flex items-center gap-2 px-2 py-1 bg-blue-900/30 border-b border-white/10 text-xs text-blue-300 font-mono">
           <span>{t("filteringContext", { context: sameContextKey.slice(0, 6) })}</span>
           <button
             type="button"

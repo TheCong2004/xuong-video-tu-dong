@@ -343,7 +343,7 @@ export default function ComboDefaultsTab() {
           </span>
         )}
       </div>
-      <div className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+      <div className="mb-4 rounded-lg border border-white/10 bg-blue-500/5 p-3">
         <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
           {translateOrFallback(t, "routingAdvancedGuideTitle", "Advanced routing guidance")}
         </p>
@@ -362,7 +362,7 @@ export default function ComboDefaultsTab() {
           )}
         </p>
       </div>
-      <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+      <div className="mb-4 rounded-lg border border-white/10 bg-amber-500/5 p-3">
         <p className="text-xs font-medium text-amber-700 dark:text-amber-300">
           {t("comboDefaultsGuideTitle")}
         </p>
@@ -647,7 +647,7 @@ export default function ComboDefaultsTab() {
               }
               className="text-sm"
             />
-            <div className="md:col-span-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+            <div className="md:col-span-3 rounded-lg border border-white/10 bg-blue-500/5 p-3">
               <p className="text-xs text-blue-700 dark:text-blue-300">
                 {translateOrFallback(
                   t,

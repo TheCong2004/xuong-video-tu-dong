@@ -325,7 +325,9 @@ const ProviderIcon = memo(function ProviderIcon({
   fallbackColor,
 }: ProviderIconProps) {
   const { isDark } = useTheme();
-  const normalizedId = PROVIDER_ICON_ALIASES[providerId.toLowerCase()] || providerId.toLowerCase();
+  const rawId = providerId || (arguments[0] as any)?.provider || "";
+  const safeId = typeof rawId === "string" ? rawId.toLowerCase() : "";
+  const normalizedId = PROVIDER_ICON_ALIASES[safeId] || safeId;
   const localSvgId = LOCAL_SVG_ALIASES[normalizedId] || normalizedId;
   const lobeIcon = getLobeProviderIcon(normalizedId, type);
   const themedSvg = THEMED_SVGS[normalizedId];

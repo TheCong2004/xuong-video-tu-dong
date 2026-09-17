@@ -66,7 +66,7 @@ export default function JsonlValidationStep({
     <div className="flex flex-col gap-5">
       {/* OK / Error banner — spec §5 "campos OK" appended on success (A-7) */}
       {result.ok ? (
-        <div className="flex items-center gap-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3">
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-emerald-500/10 px-4 py-3">
           <span className="material-symbols-outlined text-emerald-400">check_circle</span>
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-medium text-emerald-400">{t("wizardValidationOk")}</span>
@@ -80,7 +80,7 @@ export default function JsonlValidationStep({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-3 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3">
+        <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-red-500/10 px-4 py-3">
           <span className="material-symbols-outlined text-red-400">error</span>
           <div className="flex flex-col gap-0.5">
             <span className="text-sm font-medium text-red-400">{t("wizardValidationErrors")}</span>
@@ -93,14 +93,14 @@ export default function JsonlValidationStep({
 
       {/* Sampling note */}
       {result.sampledLines < result.totalLines && (
-        <div className="rounded-lg border border-yellow-500/25 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
+        <div className="rounded-lg border border-white/10 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
           {t("wizardValidationSamplingNote")}
         </div>
       )}
 
       {/* Duplicate IDs */}
       {result.duplicateCustomIds.length > 0 && (
-        <div className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 flex flex-col gap-1">
+        <div className="rounded-lg border border-white/10 bg-red-500/10 px-3 py-2 flex flex-col gap-1">
           <span className="text-xs font-medium text-red-400">
             {t("wizardValidationDuplicateIds")}
           </span>

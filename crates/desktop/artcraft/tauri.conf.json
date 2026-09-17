@@ -1,13 +1,13 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0.0-rc",
-  "productName": "ArtCraft",
+  "productName": "Xưởng Sản Xuất Video",
   "version": "0.36.0",
   "identifier": "ai.artcraft.app",
   "build": {
     "frontendDist": "../../../frontend/apps/artcraft/dist",
     "devUrl": "http://127.0.0.1:5174",
-    "beforeDevCommand": "pnpm --dir d:/capcutpolot/artcraft/frontend --filter artcraft dev",
-    "beforeBuildCommand": "pnpm --dir d:/capcutpolot/artcraft/frontend --filter artcraft build"
+    "beforeDevCommand": "pnpm --dir ../../../frontend --filter artcraft dev",
+    "beforeBuildCommand": ""
   },
   "app": {
     "withGlobalTauri": true,
@@ -135,7 +135,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/vanloctech/youwee/releases/latest/download/latest.json"
+        "https://github.com/TheCong2004/xuong-video-tu-dong/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk0MzYxNjBFRDQwMzlEM0MKUldROG5RUFVEaFkybE5laTlyUVJXczNRdmFQS1dtc3hpalA3NWw1R2VmUlBDRC9FZCtoR2dlVWcK"
     }
@@ -154,10 +154,7 @@
       "icons/icon.ico"
     ],
     "resources": [
-      "resources/capcut-mate",
       "resources/capcut-mate-server.exe",
-      "resources/media-crawler",
-      "resources/openmontage",
       "resources/ffmpeg",
       "resources/OmniRoute",
       "resources/artcraft-browser-runtime",

@@ -232,7 +232,7 @@ export function HistoryTagsCollectionsDialog({
                       className={cn(
                         'inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-xs transition-colors',
                         active
-                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                          ? 'border-white/10 bg-amber-500/10 text-amber-600 dark:text-amber-400'
                           : 'border-border/60 bg-background/70 text-muted-foreground hover:text-foreground',
                       )}
                     >

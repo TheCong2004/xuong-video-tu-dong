@@ -49,7 +49,7 @@ export function LutLibrary({
         />
       </div>
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto border-t border-white/6">
+      <div className="relative min-h-0 flex-1 overflow-y-auto border-t border-white/10">
         {empty ? (
           <div className="flex h-full min-h-[320px] flex-col items-center justify-center px-8 text-center">
             <p className="text-[15px] font-semibold text-white/85">
@@ -71,7 +71,7 @@ export function LutLibrary({
               <button
                 type="button"
                 onClick={onImport}
-                className="flex items-center gap-2 rounded-lg border border-white/12 bg-[#252830] px-4 py-2.5 text-[13px] font-medium text-white/75 hover:bg-[#2a2d35] hover:text-white"
+                className="flex items-center gap-2 rounded-lg border border-white/10 bg-[#252830] px-4 py-2.5 text-[13px] font-medium text-white/75 hover:bg-[#2a2d35] hover:text-white"
               >
                 <FontAwesomeIcon icon={faArrowUpFromBracket} />
                 Import LUT...
@@ -87,7 +87,7 @@ export function LutLibrary({
             return (
               <div
                 key={item.id}
-                className="flex items-center gap-3 border-b border-white/6 px-4 py-2.5 hover:bg-white/[0.04]"
+                className="flex items-center gap-3 border-b border-white/10 px-4 py-2.5 hover:bg-white/[0.04]"
               >
                 <div
                   className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-white/10"
@@ -117,7 +117,7 @@ export function LutLibrary({
 
       {/* Always-available import strip when library has items */}
       {!empty && (
-        <div className="flex items-center gap-2 border-t border-white/8 px-4 py-2.5">
+        <div className="flex items-center gap-2 border-t border-white/10 px-4 py-2.5">
           <button
             type="button"
             onClick={onDownloadLibrary}

@@ -48,16 +48,17 @@ if ($env:CAPCUT_BUILD_SIDECAR -eq "0" -and (Test-Path -LiteralPath $StagedBacken
 Write-Host "Building and staging OmniRoute..." -ForegroundColor Cyan
 try {
   Push-Location -Path ".\frontend\apps\artcraft\app\src\pages\OmniRoute"
-  $OmniRouteStandalone = ".\.build\next\standalone"
-  $CanReuseOmniRouteBuild = (
-    $env:OMNIROUTE_REUSE_BUILD -eq "1" -and
+  $StageOmniRoute = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\OmniRoute"
+  $HasStagedOmniRoute = (Test-Path -LiteralPath (Join-Path $StageOmniRoute "server.js")) -and (Test-Path -LiteralPath (Join-Path $StageOmniRoute "node.exe"))
+  $CanReuseOmniRouteBuild = $HasStagedOmniRoute -or (
+    $env:OMNIROUTE_REBUILD -ne "1" -and
     (Test-Path -LiteralPath (Join-Path $OmniRouteStandalone "server.js")) -and
     (Test-Path -LiteralPath ".\.build\next\BUILD_ID")
   )
-  if ($CanReuseOmniRouteBuild) {
-    Write-Host "Reusing compiled OmniRoute output; standalone assembly and smoke tests still run." -ForegroundColor Yellow
-    node --input-type=module -e "import('./scripts/build/assembleStandalone.mjs').then(({assembleStandalone}) => assembleStandalone({distDir: '.build/next', outDir: '.build/next/standalone', projectRoot: process.cwd(), copyNatives: true, materializeSymlinks: true}))"
-    if ($LASTEXITCODE -ne 0) { throw "OmniRoute standalone reassembly failed" }
+  if ($HasStagedOmniRoute) {
+    Write-Host "Reusing completed staged OmniRoute bundle in resources; skipping rebuild." -ForegroundColor Green
+  } elseif ($CanReuseOmniRouteBuild) {
+    Write-Host "Reusing compiled embedded OmniRoute output; packaged smoke tests still run." -ForegroundColor Yellow
   } else {
     $PreviousCI = $env:CI
     try {
@@ -75,59 +76,58 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "OmniRoute build failed" }
   }
 
-  $StageOmniRoute = Join-Path $ArtcraftRoot "crates\desktop\artcraft\resources\OmniRoute"
-  if (Test-Path $StageOmniRoute) { Remove-Item -Recurse -Force $StageOmniRoute }
+  if (-not $HasStagedOmniRoute) {
+    node .\scripts\build-embedded.mjs --prepare-existing
+    if ($LASTEXITCODE -ne 0) { throw "OmniRoute standalone preparation failed" }
 
-  robocopy $OmniRouteStandalone $StageOmniRoute /E /NFL /NDL /NJH /NJS /nc /ns /np
-  if ($LASTEXITCODE -ge 8) { throw "Failed to copy OmniRoute standalone" }
+    if (Test-Path $StageOmniRoute) { Remove-Item -Recurse -Force $StageOmniRoute }
 
-  # A portable/installed build must not depend on Node from PATH on the target
-  # machine. Ship the same Node runtime used to build the standalone server.
-  $NodeCommand = Get-Command node.exe -CommandType Application -ErrorAction Stop
-  $NodeSignature = Get-AuthenticodeSignature -LiteralPath $NodeCommand.Source
-  if ($NodeSignature.Status -ne "Valid" -or $NodeSignature.SignerCertificate.Subject -notmatch "O=OpenJS Foundation") {
-    throw "Refusing to bundle untrusted Node runtime: $($NodeCommand.Source) (signature=$($NodeSignature.Status))"
-  }
-  $NodeVersion = (& $NodeCommand.Source --version).Trim()
-  if ($NodeVersion -notmatch '^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
-    throw "Cannot determine Node runtime version: $NodeVersion"
-  }
-  $NodeMajor = [int]$Matches.major
-  $NodeMinor = [int]$Matches.minor
-  $NodePatch = [int]$Matches.patch
-  $SupportedNode = (($NodeMajor -eq 22 -and (($NodeMinor -gt 22) -or ($NodeMinor -eq 22 -and $NodePatch -ge 2))) -or ($NodeMajor -ge 24 -and $NodeMajor -lt 27))
-  if (-not $SupportedNode) {
-    throw "Node $NodeVersion does not satisfy OmniRoute engines (>=22.22.2 <23 or >=24 <27)"
-  }
-  $BundledNode = Join-Path $StageOmniRoute "node.exe"
-  Copy-Item -LiteralPath $NodeCommand.Source -Destination $BundledNode -Force
-  $NodeHash = (Get-FileHash -LiteralPath $BundledNode -Algorithm SHA256).Hash
-  Write-Host "Bundled signed Node runtime $NodeVersion (sha256=$NodeHash): $($NodeCommand.Source) -> $BundledNode"
+    robocopy $OmniRouteStandalone $StageOmniRoute /E /NFL /NDL /NJH /NJS /nc /ns /np
+    if ($LASTEXITCODE -ge 8) { throw "Failed to copy OmniRoute standalone" }
 
-  # Copy static assets (Next.js standalone needs these)
-  if (Test-Path ".\public") {
-    robocopy ".\public" (Join-Path $StageOmniRoute "public") /E /NFL /NDL /NJH /NJS /nc /ns /np
-    if ($LASTEXITCODE -ge 8) { throw "Failed to copy OmniRoute public" }
-  }
-  $NextStatic = Join-Path $StageOmniRoute ".build\next\static"
-  if (Test-Path ".\.build\next\static") {
-    robocopy ".\.build\next\static" $NextStatic /E /NFL /NDL /NJH /NJS /nc /ns /np
-    if ($LASTEXITCODE -ge 8) { throw "Failed to copy OmniRoute static" }
+    # A portable/installed build must not depend on Node from PATH on the target
+    # machine. Ship the same Node runtime used to build the standalone server.
+    $NodeCommand = Get-Command node.exe -CommandType Application -ErrorAction Stop
+    $NodeSignature = Get-AuthenticodeSignature -LiteralPath $NodeCommand.Source
+    if ($NodeSignature.Status -ne "Valid" -or $NodeSignature.SignerCertificate.Subject -notmatch "O=OpenJS Foundation") {
+      throw "Refusing to bundle untrusted Node runtime: $($NodeCommand.Source) (signature=$($NodeSignature.Status))"
+    }
+    $NodeVersion = (& $NodeCommand.Source --version).Trim()
+    if ($NodeVersion -notmatch '^v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$') {
+      throw "Cannot determine Node runtime version: $NodeVersion"
+    }
+    $NodeMajor = [int]$Matches.major
+    $NodeMinor = [int]$Matches.minor
+    $NodePatch = [int]$Matches.patch
+    $SupportedNode = (($NodeMajor -eq 22 -and (($NodeMinor -gt 22) -or ($NodeMinor -eq 22 -and $NodePatch -ge 2))) -or ($NodeMajor -ge 24 -and $NodeMajor -lt 27))
+    if (-not $SupportedNode) {
+      throw "Node $NodeVersion does not satisfy OmniRoute engines (>=22.22.2 <23 or >=24 <27)"
+    }
+    $BundledNode = Join-Path $StageOmniRoute "node.exe"
+    Copy-Item -LiteralPath $NodeCommand.Source -Destination $BundledNode -Force
+    $NodeHash = (Get-FileHash -LiteralPath $BundledNode -Algorithm SHA256).Hash
+    Write-Host "Bundled signed Node runtime $NodeVersion (sha256=$NodeHash): $($NodeCommand.Source) -> $BundledNode"
+
+    # Copy static assets (Next.js standalone needs these)
+    if (Test-Path ".\public") {
+      robocopy ".\public" (Join-Path $StageOmniRoute "public") /E /NFL /NDL /NJH /NJS /nc /ns /np
+      if ($LASTEXITCODE -ge 8) { throw "Failed to copy OmniRoute public" }
+    }
+    $NextStatic = Join-Path $StageOmniRoute ".build\next\static"
+    if (Test-Path ".\.build\next\static") {
+      robocopy ".\.build\next\static" $NextStatic /E /NFL /NDL /NJH /NJS /nc /ns /np
+      if ($LASTEXITCODE -ge 8) { throw "Failed to copy OmniRoute static" }
+    }
+  } else {
+    $BundledNode = Join-Path $StageOmniRoute "node.exe"
   }
 
 
   $RequiredOmniRouteFiles = @(
     "server.js",
     "node.exe",
-    "node_modules\@next\env\package.json",
-    "node_modules\pino-std-serializers\package.json",
-    "node_modules\bindings\package.json",
-    "node_modules\file-uri-to-path\package.json",
-    "node_modules\react\package.json",
-    "node_modules\react-dom\package.json",
-    "node_modules\scheduler\package.json",
-    "node_modules\tough-cookie\package.json",
-    "node_modules\tldts\package.json",
+    "node_modules\next\package.json",
+    "node_modules\better-sqlite3\package.json",
     ".build\next\BUILD_ID"
   )
   foreach ($RelativePath in $RequiredOmniRouteFiles) {
@@ -223,6 +223,10 @@ try {
     $env:CI = $PreviousCI
   }
   if ($PnpmInstallExitCode -ne 0) { throw "pnpm install failed (exit $PnpmInstallExitCode)" }
+
+  Write-Host "Building frontend (artcraft)..." -ForegroundColor Cyan
+  pnpm --filter artcraft build
+  if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
 }
 finally {
   Pop-Location
@@ -230,6 +234,14 @@ finally {
 
 $env:VITE_ENVIRONMENT_TYPE = "production"
 $env:SQLX_OFFLINE = "true"
+
+# Refresh the exact browser/Playwright payload and its SHA manifest immediately
+# before packaging. Installed builds reject missing or stale runtime manifests.
+Write-Host "Staging verified integrated runtime..." -ForegroundColor Cyan
+& (Join-Path $ArtcraftRoot "scripts\integrated-build\stage-runtime.ps1") -Release
+if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
+  throw "Integrated runtime staging failed (exit $LASTEXITCODE)"
+}
 
 if (-not $env:LIBCLANG_PATH) {
   $defaultLibclang = "C:\Program Files\LLVM\bin"
@@ -241,8 +253,8 @@ if (-not $env:LIBCLANG_PATH) {
   }
 }
 
-$env:TAURI_FRONTEND_PATH = ".\frontend"
-$env:TAURI_APP_PATH = ".\crates\desktop\artcraft"
+$env:TAURI_FRONTEND_PATH = ((Resolve-Path -LiteralPath ".\frontend").Path -replace "\\", "/")
+$env:TAURI_APP_PATH = ((Resolve-Path -LiteralPath ".\crates\desktop\artcraft").Path -replace "\\", "/")
 
 $configPath = ".\crates\desktop\artcraft\tauri.artcraft_3d.no_dev.conf.json"
 if (-not (Test-Path $configPath)) {
@@ -295,7 +307,9 @@ Write-Host "  (Unified, OmniRoute, MediaCrawler and OpenMontage backends auto-st
 Write-Host ""
 if (Test-Path $nsisDir) {
   Write-Host "Installer: $nsisDir\ArtCraft_*-setup.exe"
-  Start-Process "explorer.exe" -ArgumentList $nsisDir
+  if ($env:ARTCRAFT_NO_OPEN_OUTPUT -ne "1") {
+    Start-Process "explorer.exe" -ArgumentList $nsisDir
+  }
 } else {
   Write-Host "NSIS folder not found: $nsisDir" -ForegroundColor Yellow
 }

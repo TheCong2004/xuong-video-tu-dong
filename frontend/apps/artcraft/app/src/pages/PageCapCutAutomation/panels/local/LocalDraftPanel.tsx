@@ -92,40 +92,39 @@ export function LocalDraftPanel() {
   ];
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#1a1b1f]">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#0d1017]">
       <PanelGuide
         what="Trỏ tới project CapCut trên ổ đĩa để các mục Sync / Transition / Keyframe… sửa file thật."
         how="① Dán path folder draft (có draft_content.json) · ② Lưu path · ③ Tải info · ④ tab Sửa / SRT / Công cụ."
         need="Folder CapCut User Data → Projects → … (không phải draft mate trên server)."
         tone={project ? "default" : "warn"}
       />
-      <div className="border-b border-white/8 px-5 py-3">
-        <h2 className="flex items-center gap-2 text-[15px] font-semibold text-white/90">
+      <div className="border-b border-white/10 px-6 py-4">
+        <h2 className="flex items-center gap-2.5 text-sm font-bold text-white tracking-wide">
           <FontAwesomeIcon icon={faHardDrive} className="text-emerald-400" />
-          Draft local (pure Python)
+          Draft Local (Pure Python)
         </h2>
-        <p className="mt-0.5 text-[12px] text-white/40">
-          API <code className="text-white/55">/v1/local/*</code> — sửa file
-          draft CapCut trên máy
+        <p className="mt-0.5 text-xs text-zinc-400">
+          API <code className="text-zinc-300">/v1/local/*</code> — sửa trực tiếp draft CapCut trên máy
         </p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-2 border-b border-white/6 px-4 py-3">
+      <div className="flex flex-wrap items-end gap-2.5 border-b border-white/10 px-6 py-3.5 bg-[#10141e]/50">
         <div className="min-w-[280px] flex-1">
-          <label className="mb-1 block text-[11px] text-white/45">
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">
             Path folder draft (hoặc draft_content.json)
           </label>
           <input
             value={pathInput}
             onChange={(e) => setPathInput(e.target.value)}
             placeholder="C:\Users\…\CapCut\User Data\Projects\…\draft_xxx"
-            className="w-full rounded-lg border border-white/10 bg-[#252830] px-3 py-2 font-mono text-[12px] text-white outline-none focus:border-emerald-400/40"
+            className="w-full rounded-lg border border-white/10 bg-[#0b0f17] px-3 py-2 font-mono text-xs text-zinc-200 outline-none focus:border-emerald-400/50"
           />
         </div>
         <button
           type="button"
           onClick={savePath}
-          className="rounded-lg border border-white/12 bg-[#252830] px-3 py-2 text-[12px] text-white/80 hover:bg-[#2a2d35]"
+          className="rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/[0.08]"
         >
           <FontAwesomeIcon icon={faFolderOpen} className="mr-1.5" />
           Lưu path
@@ -134,24 +133,24 @@ export function LocalDraftPanel() {
           type="button"
           disabled={busy}
           onClick={() => void loadInfo()}
-          className="rounded-lg bg-emerald-500/90 px-3 py-2 text-[12px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+          className="rounded-lg border border-emerald-500/30 bg-emerald-500/20 px-3.5 py-2 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/30 disabled:opacity-50"
         >
           <FontAwesomeIcon icon={faRotate} className="mr-1.5" />
           Tải info
         </button>
       </div>
 
-      <div className="flex gap-1 border-b border-white/6 px-3 py-2">
+      <div className="flex gap-1.5 border-b border-white/10 px-6 py-2.5 bg-[#10141e]/30">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
             className={twMerge(
-              "rounded-full px-3 py-1.5 text-[12px]",
+              "rounded-xl px-3.5 py-1.5 text-xs font-semibold transition",
               tab === t.id
-                ? "bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/30"
-                : "text-white/50 hover:bg-white/5",
+                ? "border border-white/10 bg-rose-500/10 text-white shadow-md shadow-rose-500/5"
+                : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-100",
             )}
           >
             {t.label}
@@ -168,7 +167,7 @@ export function LocalDraftPanel() {
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {tab === "inspect" && (
           <div className="space-y-3">
-            <pre className="max-h-80 overflow-auto rounded-lg border border-white/8 bg-[#121318] p-3 font-mono text-[11px] text-white/70">
+            <pre className="max-h-80 overflow-auto rounded-lg border border-white/10 bg-[#121318] p-3 font-mono text-[11px] text-white/70">
               {infoJson || "Bấm «Tải info» để xem JSON draft…"}
             </pre>
             {segments.length > 0 && (
@@ -189,8 +188,8 @@ export function LocalDraftPanel() {
                       className={twMerge(
                         "flex w-full items-center justify-between rounded-md border px-2 py-1.5 text-left font-mono text-[11px]",
                         selectedSeg === s.id
-                          ? "border-emerald-400/40 bg-emerald-500/10 text-emerald-100"
-                          : "border-white/8 bg-[#16171b] text-white/60 hover:border-white/15",
+                          ? "border-white/10 bg-emerald-500/10 text-emerald-100"
+                          : "border-white/10 bg-[#16171b] text-white/60 hover:border-white/15",
                       )}
                     >
                       <span className="truncate">{s.id}</span>
@@ -268,7 +267,7 @@ export function LocalDraftPanel() {
                     "Đã đặt volume",
                   )
                 }
-                className="rounded-lg border border-white/12 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
+                className="rounded-lg border border-white/10 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
               >
                 Áp dụng volume
               </button>
@@ -288,7 +287,7 @@ export function LocalDraftPanel() {
                     "Đã thêm keyframe PositionX",
                   )
                 }
-                className="rounded-lg border border-white/12 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
+                className="rounded-lg border border-white/10 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
               >
                 + Keyframe X
               </button>
@@ -304,7 +303,7 @@ export function LocalDraftPanel() {
                     "Đã gắn mask tròn",
                   )
                 }
-                className="rounded-lg border border-white/12 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
+                className="rounded-lg border border-white/10 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
               >
                 Mask tròn
               </button>
@@ -345,7 +344,7 @@ export function LocalDraftPanel() {
                     return r;
                   }, "Đã export SRT")
                 }
-                className="rounded-lg border border-white/12 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
+                className="rounded-lg border border-white/10 bg-[#252830] px-3 py-2 text-[12px] text-white/85 disabled:opacity-50"
               >
                 Export SRT
               </button>
@@ -361,7 +360,7 @@ export function LocalDraftPanel() {
               onClick={() =>
                 void run(() => local.localDoctor(), "Doctor xong")
               }
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/12 bg-[#252830] py-2.5 text-[13px] text-white/85 hover:bg-[#2a2d35] disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-[#252830] py-2.5 text-[13px] text-white/85 hover:bg-[#2a2d35] disabled:opacity-50"
             >
               <FontAwesomeIcon icon={faStethoscope} />
               Doctor (BE local)
@@ -372,7 +371,7 @@ export function LocalDraftPanel() {
               onClick={() =>
                 void run(() => local.localLint(project), "Lint xong")
               }
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/12 bg-[#252830] py-2.5 text-[13px] text-white/85 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-[#252830] py-2.5 text-[13px] text-white/85 disabled:opacity-50"
             >
               Lint draft
             </button>
@@ -385,7 +384,7 @@ export function LocalDraftPanel() {
                   "Đã list projects",
                 )
               }
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/12 bg-[#252830] py-2.5 text-[13px] text-white/85 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 bg-[#252830] py-2.5 text-[13px] text-white/85 disabled:opacity-50"
             >
               List projects local
             </button>
@@ -404,7 +403,7 @@ export function LocalDraftPanel() {
         )}
 
         {log && (
-          <pre className="mt-4 max-h-48 overflow-auto rounded-lg border border-white/8 bg-[#0e0f12] p-3 font-mono text-[10px] text-white/50">
+          <pre className="mt-4 max-h-48 overflow-auto rounded-lg border border-white/10 bg-[#0e0f12] p-3 font-mono text-[10px] text-white/50">
             {log}
           </pre>
         )}

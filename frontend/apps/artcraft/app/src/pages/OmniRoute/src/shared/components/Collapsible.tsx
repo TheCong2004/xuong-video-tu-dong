@@ -42,8 +42,8 @@ export default function Collapsible({
 
   const wrapperClasses = cn(
     variant === "default"
-      ? "rounded-lg border border-black/5 dark:border-white/5 bg-surface"
-      : "rounded-md border border-black/5 dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02]",
+      ? "rounded-lg border border-black/5 dark:border-white/10 bg-surface"
+      : "rounded-md border border-black/5 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02]",
     className
   );
 
@@ -51,7 +51,7 @@ export default function Collapsible({
     "flex items-center gap-3",
     variant === "default" ? "p-4" : "p-3",
     "hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors",
-    open && "border-b border-black/5 dark:border-white/5"
+    open && "border-b border-black/5 dark:border-white/10"
   );
 
   // The chevron + title region is the click target. Trailing interactive

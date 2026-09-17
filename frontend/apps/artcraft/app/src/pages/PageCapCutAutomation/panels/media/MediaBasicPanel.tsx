@@ -81,12 +81,12 @@ export function MediaBasicPanel({ state, onChange }: MediaBasicPanelProps) {
         onSelectChange={(v) => onChange({ frameRate: v })}
       />
 
-      <label className="flex cursor-pointer items-center gap-2.5 border-b border-white/6 py-3.5 select-none">
+      <label className="flex cursor-pointer items-center gap-2.5 border-b border-white/10 py-3.5 select-none">
         <input
           type="checkbox"
           checked={state.eyeContact}
           onChange={(e) => onChange({ eyeContact: e.target.checked })}
-          className="h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+          className="h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
         />
         <span className="text-[13px] text-white/85">Eye contact</span>
       </label>
@@ -112,13 +112,13 @@ function FeatureRow({
   onSelectChange: (v: string) => void;
 }) {
   return (
-    <div className="border-b border-white/6 py-3.5">
+    <div className="border-b border-white/10 py-3.5">
       <label className="flex cursor-pointer items-center gap-2.5 select-none">
         <input
           type="checkbox"
           checked={checked}
           onChange={(e) => onCheckedChange(e.target.checked)}
-          className="h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+          className="h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
         />
         <span className="text-[13px] text-white/85">{label}</span>
       </label>

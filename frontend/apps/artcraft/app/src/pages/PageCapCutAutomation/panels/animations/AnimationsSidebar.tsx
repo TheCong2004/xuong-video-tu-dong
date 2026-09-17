@@ -59,7 +59,7 @@ export function AnimationsSidebar({
   const unitSuffix = durationUnit === "seconds" ? "s" : "%";
 
   return (
-    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/8 bg-[#16171b]">
+    <aside className="flex h-full min-h-0 w-full min-w-0 flex-col border-l border-white/10 bg-[#16171b]">
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <h2 className="text-[14px] font-semibold text-white/90">
           Selected Animations
@@ -146,7 +146,7 @@ export function AnimationsSidebar({
         )}
       </div>
 
-      <div className="mt-auto space-y-4 border-t border-white/8 px-4 py-4">
+      <div className="mt-auto space-y-4 border-t border-white/10 px-4 py-4">
         {/* Timing & Duration */}
         <div>
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -237,7 +237,7 @@ export function AnimationsSidebar({
             type="checkbox"
             checked={replaceExisting}
             onChange={(e) => onReplaceExistingChange(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-white/20 bg-[#1e2026] accent-sky-500"
+            className="h-3.5 w-3.5 rounded border-white/10 bg-[#1e2026] accent-sky-500"
           />
           Replace existing animations (same type)
         </label>

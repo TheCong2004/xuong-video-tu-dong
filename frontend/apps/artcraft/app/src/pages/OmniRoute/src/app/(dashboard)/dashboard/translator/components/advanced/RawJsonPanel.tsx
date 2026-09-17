@@ -246,7 +246,7 @@ export default function RawJsonPanel({
       )}
       icon="code"
       defaultOpen={defaultOpen || forceOpen}
-      className="border-black/5 dark:border-white/5"
+      className="border-black/5 dark:border-white/10"
     >
       {/* Internal open-state control — Collapsible owns its own open state,
           but we mirror it here for the lazy-render guard and onOpenChange. */}
@@ -269,7 +269,7 @@ export default function RawJsonPanel({
           <>
             {/* Error banner */}
             {errorMessage && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-500">
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-white/10 text-sm text-red-500">
                 <span
                   className="material-symbols-outlined text-[16px] mt-0.5 shrink-0"
                   aria-hidden="true"

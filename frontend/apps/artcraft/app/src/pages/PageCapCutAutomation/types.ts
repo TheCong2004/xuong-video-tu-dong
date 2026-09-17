@@ -19,11 +19,7 @@ export type SideNavId =
   | "extension";
 
 export type SyncTabId =
-  | "footage-audio"
-  | "footage-subs"
-  | "audio-subs"
-  | "subs-audio"
-  | "scene-list";
+  "footage-audio" | "footage-subs" | "audio-subs" | "subs-audio" | "scene-list";
 
 export type SyncMode = "one-to-one" | "equal-divide" | "fixed-duration";
 
@@ -116,9 +112,7 @@ export interface AnimationItem {
 export type SoundsCategoryId = "music" | "sound-effects" | "my-audio";
 
 export type SoundsPlacementRule =
-  | "start-of-each-clip"
-  | "end-of-each-clip"
-  | "entire-timeline";
+  "start-of-each-clip" | "end-of-each-clip" | "entire-timeline";
 
 export interface SoundItem {
   id: string;

@@ -133,12 +133,12 @@ export function FiltersPanel() {
         tone={mate.draftUrl ? "default" : "warn"}
       />
       {loadingLib && (
-        <div className="border-b border-white/6 px-3 py-1 text-[11px] text-white/40">
+        <div className="border-b border-white/10 px-3 py-1 text-[11px] text-white/40">
           Đang tải get_filters…
         </div>
       )}
       {loadError && !loadingLib && (
-        <div className="border-b border-rose-500/20 bg-rose-500/5 px-3 py-1 text-[11px] text-rose-200/80">
+        <div className="border-b border-white/10 bg-rose-500/5 px-3 py-1 text-[11px] text-rose-200/80">
           {loadError}
         </div>
       )}

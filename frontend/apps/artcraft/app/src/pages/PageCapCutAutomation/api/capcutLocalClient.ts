@@ -106,11 +106,24 @@ async function postLocal<T = Record<string, unknown>>(
       body: JSON.stringify(body),
     });
   } catch (e) {
-    throw new CapCutMateError(
-      e instanceof Error
-        ? `Không kết nối BE local (pure Python) tại ${getCapCutBeBaseUrl()}: ${e.message}`
-        : "Không kết nối BE local",
-    );
+    // Fallback to same-origin Vite proxy when direct port 30000 access is blocked
+    const fallbackUrl = `/openapi/capcut-mate/v1/local${path}`;
+    try {
+      res = await fetch(fallbackUrl, {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+    } catch {
+      throw new CapCutMateError(
+        e instanceof Error
+          ? `Không kết nối BE local (pure Python): ${e.message}`
+          : "Không kết nối BE local",
+      );
+    }
   }
 
   let data: Record<string, unknown>;

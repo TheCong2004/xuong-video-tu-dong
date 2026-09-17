@@ -934,7 +934,7 @@ export default function ApiManagerPageClient() {
     <div className="flex flex-col gap-8">
       {/* Error Banner */}
       {pageError && (
-        <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+        <div className="flex items-center gap-3 p-4 bg-red-500/10 border border-white/10 rounded-lg">
           <span className="material-symbols-outlined text-red-500">error</span>
           <p className="text-sm text-red-700 dark:text-red-300 flex-1">{pageError}</p>
           <button
@@ -1062,7 +1062,7 @@ export default function ApiManagerPageClient() {
               return (
                 <div
                   key={key.id}
-                  className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-black/[0.03] dark:border-white/[0.03] last:border-b-0 hover:bg-surface/30 transition-colors group min-w-[760px]"
+                  className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-black/[0.03] dark:border-white/10 last:border-b-0 hover:bg-surface/30 transition-colors group min-w-[760px]"
                 >
                   <div className="col-span-2 flex items-center gap-2">
                     <span
@@ -1433,7 +1433,7 @@ export default function ApiManagerPageClient() {
               onClick={() => setNewKeyManageEnabled((prev) => !prev)}
               className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors shrink-0 ${
                 newKeyManageEnabled
-                  ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                  ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-white/10"
                   : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
               }`}
             >
@@ -1463,7 +1463,7 @@ export default function ApiManagerPageClient() {
                 }
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors shrink-0 ${
                   newKeySelfUsageEnabled
-                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-white/10"
                     : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
                 }`}
               >
@@ -1484,7 +1484,7 @@ export default function ApiManagerPageClient() {
                 onClick={() => setNewKeyAccountQuotaEnabled((prev) => !prev)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors shrink-0 ${
                   newKeyAccountQuotaEnabled
-                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-white/10"
                     : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
                 } ${!newKeySelfUsageEnabled ? "opacity-50 cursor-not-allowed" : ""}`}
               >
@@ -1504,7 +1504,7 @@ export default function ApiManagerPageClient() {
                 onClick={() => setNewKeyAllowUsageCommand((prev) => !prev)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors shrink-0 ${
                   newKeyAllowUsageCommand
-                    ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30"
+                    ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-white/10"
                     : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
                 }`}
               >
@@ -1514,7 +1514,7 @@ export default function ApiManagerPageClient() {
             </div>
           </div>
           {createError && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-white/10">
               <span className="material-symbols-outlined text-red-500 text-sm">error</span>
               <p className="text-sm text-red-700 dark:text-red-300 flex-1">{createError}</p>
             </div>
@@ -2038,7 +2038,7 @@ const PermissionsModal = memo(function PermissionsModal({
 
         {/* Inline save error */}
         {saveError && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-white/10">
             <span className="material-symbols-outlined text-red-500 text-sm">error</span>
             <p className="text-sm text-red-700 dark:text-red-300 flex-1">{saveError}</p>
           </div>
@@ -2077,7 +2077,7 @@ const PermissionsModal = memo(function PermissionsModal({
           className={`flex items-start gap-2 p-3 rounded-lg ${
             allowAll
               ? "bg-green-500/10 border border-green-500/30"
-              : "bg-amber-500/10 border border-amber-500/30"
+              : "bg-amber-500/10 border border-white/10"
           }`}
         >
           <span
@@ -2115,8 +2115,8 @@ const PermissionsModal = memo(function PermissionsModal({
             onClick={() => setKeyIsActive((prev) => !prev)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
               keyIsActive
-                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
-                : "bg-red-500/15 text-red-700 dark:text-red-300 border border-red-500/30"
+                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-white/10"
+                : "bg-red-500/15 text-red-700 dark:text-red-300 border border-white/10"
             }`}
           >
             <span className="material-symbols-outlined text-[14px]">
@@ -2376,7 +2376,7 @@ const PermissionsModal = memo(function PermissionsModal({
             onClick={() => setAutoResolveEnabled((prev) => !prev)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
               autoResolveEnabled
-                ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30"
+                ? "bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-white/10"
                 : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
             }`}
           >
@@ -2422,7 +2422,7 @@ const PermissionsModal = memo(function PermissionsModal({
         </div>
 
         {/* Ban Toggle (SECURITY) */}
-        <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+        <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-white/10 bg-red-500/5">
           <div className="flex flex-col gap-1">
             <p className="text-sm font-bold text-red-700 dark:text-red-400">{t("bannedStatus")}</p>
             <p className="text-xs text-red-600 dark:text-red-300">
@@ -2493,7 +2493,7 @@ const PermissionsModal = memo(function PermissionsModal({
             onClick={() => setManageEnabled((prev) => !prev)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
               manageEnabled
-                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-white/10"
                 : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
             }`}
           >
@@ -2519,7 +2519,7 @@ const PermissionsModal = memo(function PermissionsModal({
             }
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
               selfUsageEnabled
-                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-white/10"
                 : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
             }`}
           >
@@ -2535,7 +2535,7 @@ const PermissionsModal = memo(function PermissionsModal({
             onClick={() => setSelfAccountQuotaEnabled((prev) => !prev)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
               selfAccountQuotaEnabled
-                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-white/10"
                 : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
             } ${!selfUsageEnabled ? "opacity-50 cursor-not-allowed" : ""}`}
           >
@@ -2551,7 +2551,7 @@ const PermissionsModal = memo(function PermissionsModal({
             onClick={() => setUsageCommandEnabled((prev) => !prev)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
               usageCommandEnabled
-                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-sky-500/30"
+                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300 border border-white/10"
                 : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
             }`}
           >
@@ -2596,7 +2596,7 @@ const PermissionsModal = memo(function PermissionsModal({
             onClick={() => setDisableNonPublicModels((prev) => !prev)}
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-semibold transition-colors ${
               disableNonPublicModels
-                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-white/10"
                 : "bg-black/5 dark:bg-white/5 text-text-muted border border-border"
             }`}
           >

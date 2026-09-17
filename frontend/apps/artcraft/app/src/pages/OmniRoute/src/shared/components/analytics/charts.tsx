@@ -87,7 +87,7 @@ export function CompactStatGrid({ sections }: { sections: CompactStatSection[] }
         {sections.map((section, si) => (
           <div key={si}>
             {si > 0 && (
-              <div className="border-t border-black/[0.06] dark:border-white/[0.06] mb-3" />
+              <div className="border-t border-black/[0.06] dark:border-white/10 mb-3" />
             )}
             <div className="text-[10px] uppercase font-semibold tracking-widest text-text-muted/50 mb-2">
               {section.title}

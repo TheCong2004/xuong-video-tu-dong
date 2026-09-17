@@ -122,7 +122,7 @@ export function CaptureModesToolbar({ customHostCount }: CaptureModesToolbarProp
                 "focus-ring disabled:cursor-default",
                 active
                   ? warn
-                    ? "border-amber-500/50 bg-amber-900/30 text-amber-300"
+                    ? "border-white/10 bg-amber-900/30 text-amber-300"
                     : "border-green-500/50 bg-green-900/30 text-green-300"
                   : "border-border text-text-muted hover:text-text-main hover:bg-surface"
               )}
@@ -148,7 +148,7 @@ export function CaptureModesToolbar({ customHostCount }: CaptureModesToolbarProp
             "inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium transition-colors",
             "focus-ring disabled:cursor-not-allowed disabled:opacity-50",
             tproxy.running
-              ? "border-amber-500/50 bg-amber-900/30 text-amber-300"
+              ? "border-white/10 bg-amber-900/30 text-amber-300"
               : "border-border text-text-muted hover:text-text-main hover:bg-surface"
           )}
         >

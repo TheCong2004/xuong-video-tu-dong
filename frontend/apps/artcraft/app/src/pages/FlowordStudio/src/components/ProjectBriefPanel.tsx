@@ -68,7 +68,7 @@ export const ProjectBriefPanel: React.FC<ProjectBriefPanelProps> = ({
 
   return (
     <section className="floword-card p-5 md:p-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.08] pb-4">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-4">
         <div>
           <h2 className="text-base font-semibold text-white">Project Brief</h2>
           <p className="mt-1 text-xs leading-5 text-zinc-500">Source and production settings for the next workflow run.</p>
@@ -127,7 +127,7 @@ export const ProjectBriefPanel: React.FC<ProjectBriefPanelProps> = ({
 
           {/* Conditional Source Controls */}
           {contentSource === 'trend_research' && (
-            <div className="rounded-lg border border-white/[0.08] bg-black/20 p-4 space-y-4">
+            <div className="rounded-lg border border-white/10 bg-black/20 p-4 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className={fieldLabel} htmlFor="floword-research-platform">Research Platform</label>
@@ -313,7 +313,7 @@ export const ProjectBriefPanel: React.FC<ProjectBriefPanelProps> = ({
             </select>
           </div>
 
-          <div className="sm:col-span-2 rounded-lg border border-indigo-500/20 bg-indigo-950/20 p-3.5">
+          <div className="sm:col-span-2 rounded-lg border border-white/10 bg-indigo-950/20 p-3.5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-300">
                 <Folder className="h-3.5 w-3.5" />
@@ -331,7 +331,7 @@ export const ProjectBriefPanel: React.FC<ProjectBriefPanelProps> = ({
             </div>
             {activePage ? (
               <div className="mt-2 space-y-1">
-                <div className="rounded bg-black/40 px-2.5 py-1.5 font-mono text-[11px] text-indigo-200 truncate select-all border border-indigo-500/10">
+                <div className="rounded bg-black/40 px-2.5 py-1.5 font-mono text-[11px] text-indigo-200 truncate select-all border border-white/10">
                   {activePage.output_root.replace(/[\\/]+$/, '')}\{activePage.name}\&lt;DD-MM-YYYY&gt;\
                 </div>
                 <p className="text-[11px] text-zinc-400">
@@ -346,7 +346,7 @@ export const ProjectBriefPanel: React.FC<ProjectBriefPanelProps> = ({
           </div>
 
           {contentSource === 'auto' && (
-            <div className="sm:col-span-2 rounded-lg border border-white/[0.08] bg-black/20 p-4">
+            <div className="sm:col-span-2 rounded-lg border border-white/10 bg-black/20 p-4">
               <label className="flex items-center justify-between gap-3 text-sm font-medium text-zinc-200" htmlFor="floword-research-enabled">
                 <span>Research</span>
                 <input id="floword-research-enabled" type="checkbox" checked={input.researchEnabled} onChange={(event) => change('researchEnabled', event.target.checked)} />

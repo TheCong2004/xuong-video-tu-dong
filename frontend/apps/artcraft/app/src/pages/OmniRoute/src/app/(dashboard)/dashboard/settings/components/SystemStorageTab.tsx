@@ -696,8 +696,8 @@ export default function SystemStorageTab() {
       (isSuccess
         ? "bg-green-500/10 text-green-500 border border-green-500/20"
         : isInfo
-          ? "bg-blue-500/10 text-blue-500 border border-blue-500/20"
-          : "bg-red-500/10 text-red-500 border border-red-500/20");
+          ? "bg-blue-500/10 text-blue-500 border border-white/10"
+          : "bg-red-500/10 text-red-500 border border-white/10");
 
     return (
       <div key={index} className={className} role="alert">
@@ -1352,7 +1352,7 @@ export default function SystemStorageTab() {
         </div>
 
         {confirmImport && pendingImportFile && (
-          <div className="p-4 rounded-lg mt-3 bg-amber-500/10 border border-amber-500/30">
+          <div className="p-4 rounded-lg mt-3 bg-amber-500/10 border border-white/10">
             <div className="flex items-start gap-3">
               <span
                 className="material-symbols-outlined text-[20px] text-amber-500 mt-0.5"

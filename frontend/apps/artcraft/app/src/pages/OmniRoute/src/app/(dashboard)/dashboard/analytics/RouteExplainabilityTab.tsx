@@ -203,7 +203,7 @@ function getStatusVariant(status: number) {
 
 function RouteMetric({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2">
+    <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2">
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-text-muted">
         <span className="material-symbols-outlined text-[16px]">{icon}</span>
         {label}
@@ -228,7 +228,7 @@ function FactorCard({ factor }: { factor: ExplanationFactor }) {
   const weightPct = Math.round(factor.weight * 100);
 
   return (
-    <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2">
+    <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-semibold text-text-main">{factor.name}</div>
@@ -264,7 +264,7 @@ function TargetTimeline({ targets }: { targets: ExplainTarget[] }) {
             "rounded-lg border p-4",
             target.outcome === "selected"
               ? "border-primary/30 bg-primary/5"
-              : "border-black/5 bg-black/2 dark:border-white/5 dark:bg-white/2"
+              : "border-black/5 bg-black/2 dark:border-white/10 dark:bg-white/2"
           )}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -351,7 +351,7 @@ function WhyThisTargetCard({ replay }: { replay: DecisionReplay | undefined }) {
         </div>
 
         {recompute ? (
-          <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/5 dark:bg-white/2">
+          <div className="rounded-lg border border-black/5 bg-black/2 p-4 dark:border-white/10 dark:bg-white/2">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-text-main">
@@ -403,7 +403,7 @@ function WhyThisTargetCard({ replay }: { replay: DecisionReplay | undefined }) {
                   "rounded-lg border p-3",
                   candidate.isRuntimeSelected
                     ? "border-primary/30 bg-primary/5"
-                    : "border-black/5 bg-bg dark:border-white/5"
+                    : "border-black/5 bg-bg dark:border-white/10"
                 )}
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -553,7 +553,7 @@ export default function RouteExplainabilityTab({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-4 rounded-xl border border-black/5 bg-surface p-5 shadow-sm dark:border-white/5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 rounded-xl border border-black/5 bg-surface p-5 shadow-sm dark:border-white/10 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-text-main">
             {analyticsText(t, "routeTraceTitle", "Route Trace View")}
@@ -695,7 +695,7 @@ export default function RouteExplainabilityTab({
                 ].map(([label, value]) => (
                   <div
                     key={label}
-                    className="flex items-start justify-between gap-4 border-b border-black/5 pb-2 last:border-b-0 last:pb-0 dark:border-white/5"
+                    className="flex items-start justify-between gap-4 border-b border-black/5 pb-2 last:border-b-0 last:pb-0 dark:border-white/10"
                   >
                     <span className="text-text-muted">{label}</span>
                     <span className="max-w-[65%] truncate text-right font-medium text-text-main">

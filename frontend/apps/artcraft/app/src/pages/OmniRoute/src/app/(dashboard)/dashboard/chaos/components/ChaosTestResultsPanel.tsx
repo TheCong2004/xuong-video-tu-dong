@@ -40,7 +40,7 @@ export function ChaosTestResultsPanel({ result }: { result: ChaosTestResult }) {
           className={`p-2 rounded-md text-xs ${
             model.status === "success"
               ? "bg-green-500/5 border border-green-500/20"
-              : "bg-red-500/5 border border-red-500/20"
+              : "bg-red-500/5 border border-white/10"
           }`}
         >
           <div className="font-medium text-text-main">

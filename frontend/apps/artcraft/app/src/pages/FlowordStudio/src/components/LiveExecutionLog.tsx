@@ -27,7 +27,7 @@ export const LiveExecutionLog: React.FC<LiveExecutionLogProps> = ({
   return (
     <div className="floword-card flex h-full w-full flex-col overflow-hidden">
       {/* Terminal Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2 text-xs text-white">
           <Terminal className="h-4 w-4 text-zinc-500" />
           <span className="text-sm font-semibold">Output Logs</span>
@@ -51,7 +51,7 @@ export const LiveExecutionLog: React.FC<LiveExecutionLogProps> = ({
       </div>
 
       {/* Progress Bar (if running) */}
-      <div className="border-b border-white/[0.08] bg-white/[0.015] px-4 py-2.5">
+      <div className="border-b border-white/10 bg-white/[0.015] px-4 py-2.5">
         <div className="flex justify-between items-center text-xs font-mono mb-1">
           <span className="font-medium text-zinc-400">Pipeline progress</span>
           <span className="font-semibold text-zinc-300">{progress}%</span>

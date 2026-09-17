@@ -73,11 +73,23 @@ async function request<T extends Json>(
   }
 
   let res: Response;
-  // Retry chỉ khi fetch NÉM (BE chưa lên / mất kết nối). Response thật
-  // (kể cả HTTP lỗi hay code !== 0) KHÔNG retry — đó là câu trả lời hợp lệ.
-  for (let attempt = 0; ; attempt++) {
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body:
+        method === "POST" && options.body !== undefined
+          ? JSON.stringify(options.body)
+          : undefined,
+    });
+  } catch (e) {
+    // Fallback to same-origin Vite proxy when direct port 30000 access is blocked
+    const fallbackUrl = `/openapi/capcut-mate/v1${path}${options.query ? '?' + new URLSearchParams(options.query).toString() : ''}`;
     try {
-      res = await fetch(url, {
+      res = await fetch(fallbackUrl, {
         method,
         headers: {
           Accept: "application/json",
@@ -88,15 +100,10 @@ async function request<T extends Json>(
             ? JSON.stringify(options.body)
             : undefined,
       });
-      break;
-    } catch (e) {
-      if (attempt < RETRY_DELAYS_MS.length) {
-        await sleep(RETRY_DELAYS_MS[attempt]);
-        continue;
-      }
+    } catch {
       throw new CapCutMateError(
         e instanceof Error
-          ? `Không kết nối được capcut-mate tại ${getCapCutMateBaseUrl()}: ${e.message}`
+          ? `Không kết nối được capcut-mate: ${e.message}`
           : "Không kết nối được capcut-mate",
       );
     }
@@ -130,7 +137,6 @@ async function request<T extends Json>(
 
 async function probeBaseUrl(base: string): Promise<boolean> {
   try {
-    // Prefer /health (unified BE smoke)
     const health = await fetch(`${base}/health`, {
       method: "GET",
       headers: { Accept: "application/json" },
@@ -140,10 +146,18 @@ async function probeBaseUrl(base: string): Promise<boolean> {
       method: "GET",
       headers: { Accept: "application/json" },
     });
-    return res.ok;
+    if (res.ok) return true;
   } catch {
-    return false;
+    // Fallback to proxy
+    try {
+      const health = await fetch(`/health`, {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+      if (health.ok) return true;
+    } catch {}
   }
+  return false;
 }
 
 async function probeBackendOnce(): Promise<boolean> {

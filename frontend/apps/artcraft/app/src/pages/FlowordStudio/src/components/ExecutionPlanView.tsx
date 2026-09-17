@@ -108,7 +108,7 @@ export const ExecutionPlanView: React.FC<ExecutionPlanViewProps> = ({
         />
 
         <aside className="floword-card overflow-hidden xl:sticky xl:top-0" aria-labelledby="pipeline-progress-title">
-          <div className="border-b border-white/[0.08] p-5">
+          <div className="border-b border-white/10 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 id="pipeline-progress-title" className="text-base font-semibold text-white">Pipeline Progress</h2>
@@ -145,7 +145,7 @@ export const ExecutionPlanView: React.FC<ExecutionPlanViewProps> = ({
             ))}
           </div>
 
-          <div className="border-t border-white/[0.08] p-4">
+          <div className="border-t border-white/10 p-4">
             {running ? (
               <button type="button" onClick={onCancelWorkflow} className="floword-button w-full bg-red-500 text-white hover:bg-red-600">
                 <Square className="h-4 w-4 fill-white" /> Cancel Run
@@ -171,12 +171,12 @@ export const ExecutionPlanView: React.FC<ExecutionPlanViewProps> = ({
       )}
 
       <section className="floword-card overflow-hidden" aria-labelledby="run-console-title">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] px-5 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
           <div>
             <h2 id="run-console-title" className="text-base font-semibold text-white">Run Console</h2>
             <p className="mt-1 text-xs text-zinc-500">Current workflow job, artifacts, logs, and history.</p>
           </div>
-          <div className="inline-flex rounded-[9px] border border-white/[0.08] bg-[#111520] p-1 text-xs" role="tablist" aria-label="Run Console">
+          <div className="inline-flex rounded-[9px] border border-white/10 bg-[#111520] p-1 text-xs" role="tablist" aria-label="Run Console">
             {(Object.keys(tabLabels) as ConsoleTab[]).map((tab) => (
               <button
                 key={tab}

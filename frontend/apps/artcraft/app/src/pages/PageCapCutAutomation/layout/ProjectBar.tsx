@@ -1,118 +1,134 @@
-import { useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import React, { useState } from "react";
 import {
-  faCircle,
-  faFloppyDisk,
-  faGear,
-  faPlus,
-  faRotate,
-} from "@fortawesome/pro-solid-svg-icons";
-import { twMerge } from "tailwind-merge";
+  Save,
+  Plus,
+  Settings2,
+  RefreshCw,
+  FolderOpen,
+  CheckCircle2,
+  AlertCircle,
+  Copy,
+  Ratio,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { useCapCutMate } from "../api/CapCutMateContext";
 
 const PRESETS: { label: string; w: number; h: number }[] = [
-  { label: "9:16 1080 (dọc)", w: 1080, h: 1920 },
-  { label: "16:9 1080 (ngang)", w: 1920, h: 1080 },
-  { label: "1:1 1080 (vuông)", w: 1080, h: 1080 },
-  { label: "16:9 720", w: 1280, h: 720 },
+  { label: "9:16 (1080p Dọc)", w: 1080, h: 1920 },
+  { label: "16:9 (1080p Ngang)", w: 1920, h: 1080 },
+  { label: "1:1 (1080p Vuông)", w: 1080, h: 1080 },
+  { label: "16:9 (720p)", w: 1280, h: 720 },
 ];
 
-/** Thanh draft + kết nối BE capcut-mate */
 export function ProjectBar() {
   const mate = useCapCutMate();
   const [showSettings, setShowSettings] = useState(false);
   const [urlEdit, setUrlEdit] = useState(mate.baseUrl);
 
-  const statusColor =
-    mate.online === null
-      ? "text-white/35"
-      : mate.online
-        ? "text-emerald-400"
-        : "text-rose-400";
-
   const draftId =
     mate.draftUrl?.match(/draft_id=([^&]+)/)?.[1] ??
     (mate.draftUrl ? "draft" : null);
 
+  const draftName = mate.localProject
+    ? mate.localProject.split(/[/\\]/).filter(Boolean).pop()
+    : draftId;
+
   return (
-    <div className="flex shrink-0 flex-col border-b border-white/8 bg-[#121318]">
-      <div className="flex items-center gap-2 px-3 py-2">
+    <header className="flex h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 md:px-6">
+      {/* Left controls: BE status, Canvas ratio, Active draft pill */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* Backend Status indicator */}
         <button
           type="button"
-          title="Làm mới trạng thái backend"
           onClick={() => void mate.refreshOnline()}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-white/60 hover:bg-white/5"
+          title="Kiểm tra trạng thái kết nối backend"
+          className="flex items-center gap-2 rounded-lg border border-white/10 bg-transparent px-2.5 py-1.5 text-xs transition hover:bg-white/[0.04]"
         >
-          <FontAwesomeIcon
-            icon={faCircle}
-            className={twMerge("text-[8px]", statusColor)}
-          />
-          <span>
-            {mate.checking
-              ? "Đang kiểm tra…"
-              : mate.online
-              ? "BE đang hoạt động"
+          <span
+            className={`h-2 w-2 rounded-full ${
+              mate.online
+                ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
                 : mate.online === false
-                  ? "BE ngoại tuyến"
-                  : "BE chưa rõ"}
+                ? "bg-rose-400"
+                : "bg-amber-400"
+            }`}
+          />
+          <span className="font-medium text-zinc-300">
+            {mate.checking
+              ? "Đang dò BE…"
+              : mate.online
+              ? "BE Hoạt động"
+              : "BE Ngoại tuyến"}
           </span>
-          <FontAwesomeIcon icon={faRotate} className="text-[10px] opacity-50" />
+          <RefreshCw
+            className={`h-3 w-3 text-zinc-500 ${
+              mate.checking ? "animate-spin" : ""
+            }`}
+          />
         </button>
 
-        <div className="h-4 w-px bg-white/10" />
+        {/* Canvas Ratio Preset */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-transparent px-2.5 py-1.5 text-xs text-zinc-300">
+          <Ratio className="h-3.5 w-3.5 text-indigo-400" />
+          <select
+            value={`${mate.width}x${mate.height}`}
+            onChange={(e) => {
+              const p = PRESETS.find((x) => `${x.w}x${x.h}` === e.target.value);
+              if (p) mate.setCanvasSize(p.w, p.h);
+            }}
+            className="cursor-pointer bg-transparent font-medium text-zinc-300 outline-none"
+            title="Kích thước khung hình canvas"
+          >
+            {PRESETS.map((p) => (
+              <option
+                key={p.label}
+                value={`${p.w}x${p.h}`}
+                className="bg-[#12161f] text-white"
+              >
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-        <select
-          value={`${mate.width}x${mate.height}`}
-          onChange={(e) => {
-            const p = PRESETS.find((x) => `${x.w}x${x.h}` === e.target.value);
-            if (p) mate.setCanvasSize(p.w, p.h);
-          }}
-          className="rounded-md border border-white/10 bg-[#1e2026] px-2 py-1 text-[11px] text-white/80 outline-none"
-          title="Kích thước canvas khi tạo draft mới"
-        >
-          {PRESETS.map((p) => (
-            <option key={p.label} value={`${p.w}x${p.h}`}>
-              {p.label}
-            </option>
-          ))}
-        </select>
+        <span className="font-light text-zinc-600">/</span>
 
+        {/* Current Draft info */}
+        <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-transparent px-2.5 py-1.5 text-xs">
+          <FolderOpen className="h-3.5 w-3.5 text-rose-400" />
+          <span className="font-medium text-zinc-400">Draft:</span>
+          {draftName ? (
+            <span
+              className="max-w-xs truncate font-mono text-xs font-semibold text-rose-300"
+              title={mate.localProject || mate.draftUrl || undefined}
+            >
+              {draftName}
+            </span>
+          ) : (
+            <span className="text-xs text-amber-400/90">Chưa chọn draft</span>
+          )}
+        </div>
+      </div>
+
+      {/* Right actions: Tạo draft, Lưu, Settings */}
+      <div className="flex items-center gap-2">
         <button
           type="button"
           disabled={mate.busy}
           onClick={() => void mate.createProject()}
-          className="flex items-center gap-1.5 rounded-md bg-sky-500/90 px-2.5 py-1 text-[12px] font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+          className="flex items-center gap-1.5 rounded-lg bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/30 disabled:opacity-50"
         >
-          <FontAwesomeIcon icon={faPlus} className="text-[10px]" />
-          Tạo draft
+          <Plus className="h-3.5 w-3.5" /> Tạo draft
         </button>
 
         <button
           type="button"
-          disabled={mate.busy || !mate.draftUrl}
+          disabled={mate.busy || (!mate.draftUrl && !mate.localProject)}
           onClick={() => void mate.saveProject()}
-          className="flex items-center gap-1.5 rounded-md border border-white/12 bg-[#252830] px-2.5 py-1 text-[12px] text-white/80 hover:bg-[#2a2d35] disabled:opacity-40"
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-zinc-200 transition hover:bg-white/[0.08] disabled:opacity-40"
         >
-          <FontAwesomeIcon icon={faFloppyDisk} className="text-[10px]" />
-          Lưu
+          <Save className="h-3.5 w-3.5" /> Lưu
         </button>
-
-        <div className="min-w-0 flex-1 truncate px-2 font-mono text-[11px] text-white/45">
-          {draftId ? (
-            <span title={mate.draftUrl ?? undefined}>
-              draft_id=<span className="text-sky-300/90">{draftId}</span>
-            </span>
-          ) : mate.localProject ? (
-            <span title={mate.localProject}>
-              Draft local đang dùng: <span className="text-emerald-300/90">{mate.localProject.split(/[/\\]/).filter(Boolean).pop()}</span>
-            </span>
-          ) : (
-            <span className="text-amber-400/80">
-              Chưa chọn draft — chọn 1 dự án bên phải hoặc bấm «Tạo draft»
-            </span>
-          )}
-        </div>
 
         <button
           type="button"
@@ -120,32 +136,35 @@ export function ProjectBar() {
             setUrlEdit(mate.baseUrl);
             setShowSettings((v) => !v);
           }}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-white/50 hover:bg-white/5 hover:text-white/80"
-          title="Cài đặt backend"
+          className={`flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold transition ${
+            showSettings
+              ? "bg-white/10 text-white"
+              : "bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08]"
+          }`}
+          title="Cài đặt kết nối backend"
         >
-          <FontAwesomeIcon icon={faGear} className="text-[12px]" />
+          <Settings2 className="h-3.5 w-3.5" /> Cấu hình
         </button>
       </div>
 
+      {/* Collapsible Backend Settings */}
       {showSettings && (
-        <div className="flex items-center gap-2 border-t border-white/6 px-3 py-2">
-          <span className="shrink-0 text-[11px] text-white/45">
-            Địa chỉ CapCut Mate
-          </span>
+        <div className="flex w-full items-center gap-2.5 rounded-xl border border-white/10 bg-[#141a24] p-3 text-xs">
+          <span className="shrink-0 text-zinc-400">Địa chỉ Backend :30000</span>
           <input
             value={urlEdit}
             onChange={(e) => setUrlEdit(e.target.value)}
-            className="min-w-0 flex-1 rounded-md border border-white/10 bg-[#1e2026] px-2 py-1 font-mono text-[11px] text-white/85 outline-none focus:border-sky-400/40"
-            placeholder="http://localhost:30000"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0d1017] px-3 py-1.5 font-mono text-xs text-white outline-none focus:border-indigo-400/50"
+            placeholder="http://127.0.0.1:30000"
           />
           <button
             type="button"
             onClick={() => {
-              mate.setBaseUrl(urlEdit.trim() || "http://localhost:30000");
+              mate.setBaseUrl(urlEdit.trim() || "http://127.0.0.1:30000");
               toast.success("Đã lưu URL backend");
               void mate.refreshOnline();
             }}
-            className="rounded-md bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/85 hover:bg-white/15"
+            className="rounded-lg bg-indigo-500/20 px-3 py-1.5 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/30"
           >
             Áp dụng
           </button>
@@ -156,13 +175,13 @@ export function ProjectBar() {
                 void navigator.clipboard.writeText(mate.draftUrl!);
                 toast.success("Đã copy draft_url");
               }}
-              className="rounded-md border border-white/10 px-2 py-1 text-[11px] text-white/60 hover:bg-white/5"
+              className="flex items-center gap-1 rounded-lg border border-white/10 bg-transparent px-2.5 py-1.5 text-xs text-zinc-400 transition hover:bg-white/5 hover:text-white"
             >
-              Sao chép draft_url
+              <Copy className="h-3 w-3" /> Copy URL
             </button>
           )}
         </div>
       )}
-    </div>
+    </header>
   );
 }

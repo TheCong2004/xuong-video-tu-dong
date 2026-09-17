@@ -130,7 +130,7 @@ export function SkillPreviewPane({
           </div>
         ) : (
           <div
-            className="flex items-center gap-2 rounded-lg border border-red-300 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-700 dark:text-red-400"
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-700 dark:text-red-400"
             data-testid="skill-preview-error"
           >
             <span className="material-symbols-outlined text-[16px]">error</span>

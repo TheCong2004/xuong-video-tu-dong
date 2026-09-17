@@ -309,7 +309,7 @@ export default function AntigravityToolCard({
               <button
                 onClick={handleStop}
                 disabled={loading}
-                className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 font-medium text-sm flex items-center gap-2 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                className="px-4 py-2 rounded-lg bg-red-500/10 border border-white/10 text-red-500 font-medium text-sm flex items-center gap-2 hover:bg-red-500/20 transition-colors disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-[18px]">stop_circle</span>
                 {t("stopMitm")}
@@ -471,7 +471,7 @@ export default function AntigravityToolCard({
         size="sm"
       >
         <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+          <div className="flex items-start gap-3 p-3 bg-yellow-500/10 border border-white/10 rounded-lg">
             <span className="material-symbols-outlined text-yellow-500 text-[20px]">warning</span>
             <p className="text-xs text-text-muted">{t("sudoPasswordHint")}</p>
           </div>

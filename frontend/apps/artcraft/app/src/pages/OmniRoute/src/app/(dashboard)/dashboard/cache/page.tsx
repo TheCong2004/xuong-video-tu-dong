@@ -124,7 +124,7 @@ function SectionBadge({
     tone === "green"
       ? "border-green-500/20 bg-green-500/10 text-green-300"
       : tone === "amber"
-        ? "border-amber-400/20 bg-amber-400/10 text-amber-300"
+        ? "border-white/10 bg-amber-400/10 text-amber-300"
         : "border-border/40 bg-surface/50 text-text-muted";
 
   return (
@@ -707,7 +707,7 @@ export default function CachePage() {
             </div>
 
             {!semanticCacheEnabled && (
-              <div className="rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+              <div className="rounded-2xl border border-white/10 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
                 {t("semanticCacheDisabledDesc")}
               </div>
             )}

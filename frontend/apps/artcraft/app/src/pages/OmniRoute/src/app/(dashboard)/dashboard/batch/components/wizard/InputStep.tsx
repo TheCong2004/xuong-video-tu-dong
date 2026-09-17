@@ -182,7 +182,7 @@ export default function InputStep({ input, onChange, destination }: InputStepPro
 
       {/* Large file warning */}
       {isLargeFile && (
-        <div className="rounded-lg border border-yellow-500/25 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
+        <div className="rounded-lg border border-white/10 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
           {t("wizardInputLargeFileWarning")}
         </div>
       )}

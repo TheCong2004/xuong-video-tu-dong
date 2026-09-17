@@ -63,7 +63,7 @@ export default function FreeProxyRow({
       </td>
       <td className="px-3 py-2">
         {proxy.inPool ? (
-          <span className="px-2 py-0.5 rounded text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+          <span className="px-2 py-0.5 rounded text-xs bg-emerald-500/15 text-emerald-400 border border-white/10">
             in pool
           </span>
         ) : (

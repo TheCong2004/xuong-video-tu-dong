@@ -124,7 +124,7 @@ export default function CostEstimateStep({
           {estimate.warnings.map((w) => (
             <div
               key={w}
-              className="rounded-lg border border-yellow-500/25 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400"
+              className="rounded-lg border border-white/10 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400"
             >
               {w}
             </div>
@@ -136,7 +136,7 @@ export default function CostEstimateStep({
       {error && (
         <div
           role="alert"
-          className="rounded-lg border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-400"
+          className="rounded-lg border border-white/10 bg-red-500/10 px-3 py-2 text-sm text-red-400"
         >
           {error}
         </div>

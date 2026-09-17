@@ -39,7 +39,7 @@ export function TierTour() {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <TierCard
           number={1}
-          colorClass="border-amber-500/60 bg-amber-500/[0.06]"
+          colorClass="border-white/10 bg-amber-500/[0.06]"
           label={t("tier1.label")}
           description={t("tier1.description")}
           examples={["Claude Code", "Codex", "Copilot", "Cursor"]}
@@ -53,7 +53,7 @@ export function TierTour() {
         />
         <TierCard
           number={3}
-          colorClass="border-indigo-500/60 bg-indigo-500/[0.06]"
+          colorClass="border-white/10 bg-indigo-500/[0.06]"
           label={t("tier3.label")}
           description={t("tier3.description")}
           examples={["Kiro", "OpenCode", "Antigravity CLI", "Vertex"]}

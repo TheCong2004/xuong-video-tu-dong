@@ -101,7 +101,7 @@ export default function QuotaTable({ quotas = [] }) {
             return (
               <tr
                 key={index}
-                className="border-b border-black/5 dark:border-white/5 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
+                className="border-b border-black/5 dark:border-white/10 hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
               >
                 {/* Model Name with Status Emoji */}
                 <td className="py-2 px-3">

@@ -37,11 +37,10 @@ if (-not $foundExe) {
   exit 1
 }
 
-# 2. Locate Donut Runtime resources
-$runtimeResources = Join-Path $artcraftRoot "resources\donut-runtime"
-if (-not (Test-Path (Join-Path $runtimeResources "floword-donut-runtime.exe"))) {
-  Write-Error "DONUT_RUNTIME_NOT_FOUND: floword-donut-runtime.exe missing in $runtimeResources. Run stage-runtime.ps1 first."
-  exit 1
+# 2. Locate Resources root
+$resourcesSource = Join-Path $artcraftRoot "crates\desktop\artcraft\resources"
+if (-not (Test-Path $resourcesSource)) {
+  $resourcesSource = Join-Path $artcraftRoot "resources"
 }
 
 # 3. Assemble dist/Floword folder
@@ -50,13 +49,42 @@ if (Test-Path $flowordAppDir) {
   Remove-Item -Recurse -Force $flowordAppDir
 }
 New-Item -ItemType Directory -Force -Path $flowordAppDir | Out-Null
-New-Item -ItemType Directory -Force -Path (Join-Path $flowordAppDir "resources\donut-runtime") | Out-Null
+$targetResourcesDir = Join-Path $flowordAppDir "resources"
+New-Item -ItemType Directory -Force -Path $targetResourcesDir | Out-Null
 
+# Copy main executables
 Copy-Item $foundExe (Join-Path $flowordAppDir "Floword.exe") -Force
 Copy-Item $foundExe (Join-Path $flowordAppDir "artcraft.exe") -Force
-Copy-Item (Join-Path $runtimeResources "*") (Join-Path $flowordAppDir "resources\donut-runtime") -Recurse -Force
 
-Write-Host "Application directory staged successfully."
+# Copy all staged resources (OmniRoute, node, playwright, sidecar, ffmpeg, capcut-mate-server, etc.)
+Write-Host "Copying core application resources from $resourcesSource..."
+Copy-Item (Join-Path $resourcesSource "*") $targetResourcesDir -Recurse -Force
+
+# Copy speech-runtime if present
+$speechRuntime = Join-Path $artcraftRoot "tools\speech-runtime"
+if (Test-Path $speechRuntime) {
+  Write-Host "Copying speech runtime..."
+  $targetSpeech = Join-Path $flowordAppDir "tools\speech-runtime"
+  New-Item -ItemType Directory -Force -Path (Split-Path $targetSpeech -Parent) | Out-Null
+  Copy-Item $speechRuntime $targetSpeech -Recurse -Force
+}
+
+# Optionally include Nexora (DonutBrowser) binary if compiled
+$nexoraExe = @(
+  (Join-Path $artcraftRoot "..\donutbrowser\src-tauri\target\release\Nexora.exe"),
+  (Join-Path $artcraftRoot "..\donutbrowser\target\release\Nexora.exe"),
+  (Join-Path $artcraftRoot "..\donutbrowser\src-tauri\target\release\donutbrowser.exe"),
+  (Join-Path $artcraftRoot "..\donutbrowser\src-tauri\target\debug\Nexora.exe"),
+  (Join-Path $artcraftRoot "..\donutbrowser\src-tauri\target\debug\donutbrowser.exe")
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if ($nexoraExe) {
+  Write-Host "Bundling Nexora Browser executable: $nexoraExe..."
+  Copy-Item $nexoraExe (Join-Path $flowordAppDir "Nexora.exe") -Force
+  Copy-Item $nexoraExe (Join-Path $targetResourcesDir "Nexora.exe") -Force
+}
+
+Write-Host "Application directory staged successfully with all runtime dependencies."
 
 # 4. Create payload zip
 $payloadZip = Join-Path $distDir "floword-payload.zip"

@@ -229,7 +229,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
   return (
     <div className="flex flex-col h-full max-w-7xl mx-auto p-6 space-y-4 overflow-hidden">
       {/* Studio Header */}
-      <div className="flex items-center justify-between p-4 rounded-2xl bg-[#121622] border border-white/[0.08]">
+      <div className="flex items-center justify-between p-4 rounded-2xl bg-[#121622] border border-white/10">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-[#e54d5e] to-[#a855f7] flex items-center justify-center text-white shadow-md shadow-rose-500/20">
             <Wand2 className="h-5 w-5" />
@@ -241,7 +241,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 {selectedPage?.name || 'Sản Xuất Chung'}
               </span>
               {selectedPage?.browser_profile_id && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-white/10">
                   Hồ Sơ: {selectedPage.browser_profile_id}
                 </span>
               )}
@@ -254,7 +254,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
 
         {/* Mode switch & Action */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center p-1 rounded-xl bg-white/[0.04] border border-white/[0.08] text-xs">
+          <div className="flex items-center p-1 rounded-xl bg-white/[0.04] border border-white/10 text-xs">
             <button
               type="button"
               onClick={() => setMode('simple')}
@@ -279,7 +279,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
             <button
               type="button"
               onClick={onCancelWorkflow}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 text-xs font-semibold border border-rose-500/30 transition"
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-rose-400 text-xs font-semibold border border-white/10 transition"
             >
               <RotateCcw className="h-3.5 w-3.5 animate-spin" />
               Dừng Chạy
@@ -300,7 +300,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
       {/* 4-Pane Grid Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden">
         {/* PANE 1: Pipeline Stage Rail (3 cols) */}
-        <div className="lg:col-span-3 rounded-2xl bg-[#121622] border border-white/[0.08] p-4 flex flex-col justify-between overflow-y-auto">
+        <div className="lg:col-span-3 rounded-2xl bg-[#121622] border border-white/10 p-4 flex flex-col justify-between overflow-y-auto">
           <div>
             <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
               <Layers className="h-4 w-4 text-rose-400" />
@@ -318,10 +318,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
                     key={st.key}
                     className={`p-3 rounded-xl border transition ${
                       isCurrent
-                        ? 'bg-blue-500/10 border-blue-500/30 shadow-md'
+                        ? 'bg-blue-500/10 border-white/10 shadow-md'
                         : isDone
-                        ? 'bg-emerald-500/[0.04] border-emerald-500/20'
-                        : 'bg-white/[0.02] border-white/[0.04]'
+                        ? 'bg-emerald-500/[0.04] border-white/10'
+                        : 'bg-white/[0.02] border-white/10'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -337,7 +337,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
             </div>
           </div>
 
-          <div className="mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/[0.05] text-[11px] text-zinc-400 space-y-1">
+          <div className="mt-4 p-3 rounded-xl bg-white/[0.02] border border-white/10 text-[11px] text-zinc-400 space-y-1">
             <div className="flex items-center justify-between">
               <span>Hồ Sơ Trình Duyệt:</span>
               <span className="text-blue-400 font-mono font-medium">{selectedPage?.browser_profile_id || 'Chưa gán hồ sơ'}</span>
@@ -350,7 +350,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
         </div>
 
         {/* PANE 2: Content & Prompt Editor (5 cols) */}
-        <div className="lg:col-span-5 rounded-2xl bg-[#121622] border border-white/[0.08] p-4 overflow-y-auto space-y-4 text-xs">
+        <div className="lg:col-span-5 rounded-2xl bg-[#121622] border border-white/10 p-4 overflow-y-auto space-y-4 text-xs">
           <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
             <FileText className="h-4 w-4 text-rose-400" />
             Cấu Hình Nội Dung & Prompt
@@ -361,7 +361,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
             <select
               value={pipelineType}
               onChange={(e) => setPipelineType(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 font-semibold"
+              className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/10 text-white focus:outline-none focus:border-rose-500 font-semibold"
             >
               <option value="grok_content_pipeline">Grok Tự Động Toàn Diện (Sửa Ảnh &rarr; 9:16 &rarr; Tạo Video &rarr; Lưu File)</option>
               <option value="grok_image_edit">Chỉ Chỉnh Sửa Ảnh Bằng Grok</option>
@@ -373,7 +373,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
             <select
               value={activePageId || ''}
               onChange={(e) => onSelectPage(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/[0.1] text-white focus:outline-none"
+              className="w-full px-3 py-2 rounded-xl bg-[#171b26] border border-white/10 text-white focus:outline-none"
             >
               {pages.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -408,10 +408,10 @@ export const StudioView: React.FC<StudioViewProps> = ({
               onClick={() => fileInputRef.current?.click()}
               className={`border-2 border-dashed rounded-2xl p-4 flex flex-col items-center justify-center cursor-pointer transition ${
                 isDragging
-                  ? 'border-rose-500 bg-rose-500/10'
+                  ? 'border-white/10 bg-rose-500/10'
                   : sourceImagePreviewUrl
-                  ? 'border-emerald-500/40 bg-emerald-500/[0.02]'
-                  : 'border-white/[0.12] hover:border-white/[0.25] bg-white/[0.02]'
+                  ? 'border-white/10 bg-emerald-500/[0.02]'
+                  : 'border-white/10 hover:border-white/[0.25] bg-white/[0.02]'
               }`}
             >
               {sourceImagePreviewUrl ? (
@@ -419,7 +419,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                   <img
                     src={sourceImagePreviewUrl}
                     alt="Source Preview"
-                    className="h-16 w-16 object-cover rounded-xl border border-white/[0.1]"
+                    className="h-16 w-16 object-cover rounded-xl border border-white/10"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
@@ -467,7 +467,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               type="text"
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500"
+              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white focus:outline-none focus:border-rose-500"
             />
           </div>
 
@@ -483,7 +483,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
               placeholder={selectedPage?.default_image_prompt || 'Nhập mô tả / prompt để Grok chỉnh sửa ảnh...'}
-              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
+              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
             />
           </div>
 
@@ -500,7 +500,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 value={expand916Prompt}
                 onChange={(e) => setExpand916Prompt(e.target.value)}
                 placeholder={selectedPage?.default_expand_9_16_prompt || 'Nhập prompt mở rộng khung hình dọc 9:16...'}
-                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
+                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
               />
             </div>
           )}
@@ -518,7 +518,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 value={videoPrompt}
                 onChange={(e) => setVideoPrompt(e.target.value)}
                 placeholder={selectedPage?.default_video_prompt || 'Nhập prompt mô tả chuyển động camera/nhân vật...'}
-                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
+                className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white focus:outline-none focus:border-rose-500 resize-none font-mono text-[11px]"
               />
             </div>
           )}
@@ -531,7 +531,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={topic || 'Tiêu đề video xuất bản...'}
-                className="w-full px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500"
+                className="w-full px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-rose-500"
               />
             </div>
             <div>
@@ -541,7 +541,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
                 value={hashtags}
                 onChange={(e) => setHashtags(e.target.value)}
                 placeholder="review, phim, viral, giaitri..."
-                className="w-full px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500"
+                className="w-full px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-rose-500"
               />
             </div>
           </div>
@@ -552,7 +552,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               rows={2}
               value={caption}
               onChange={(e) => setCaption(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500 resize-none"
+              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-rose-500 resize-none"
             />
           </div>
 
@@ -563,7 +563,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Mô tả chi tiết video khi đăng lên YouTube/Facebook..."
-              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-rose-500 resize-none"
+              className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-white text-xs focus:outline-none focus:border-rose-500 resize-none"
             />
           </div>
         </div>
@@ -571,13 +571,13 @@ export const StudioView: React.FC<StudioViewProps> = ({
         {/* PANE 3 & 4: Live Preview & Activity Log (4 cols) */}
         <div className="lg:col-span-4 flex flex-col gap-4 overflow-hidden">
           {/* Live Asset Preview */}
-          <div className="flex-1 rounded-2xl bg-[#121622] border border-white/[0.08] p-4 flex flex-col overflow-hidden">
+          <div className="flex-1 rounded-2xl bg-[#121622] border border-white/10 p-4 flex flex-col overflow-hidden">
             <div className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-2">
               <Eye className="h-4 w-4 text-rose-400" />
               Xem Trước Trực Tiếp
             </div>
 
-            <div className="flex-1 rounded-xl bg-black/40 border border-white/[0.05] flex flex-col items-center justify-center p-3 text-center overflow-hidden">
+            <div className="flex-1 rounded-xl bg-black/40 border border-white/10 flex flex-col items-center justify-center p-3 text-center overflow-hidden">
               {latestVideoArtifact ? (
                 <div className="w-full h-full flex flex-col items-center justify-center">
                   <div className="text-[11px] font-semibold text-emerald-400 mb-1 flex items-center gap-1">
@@ -611,7 +611,7 @@ export const StudioView: React.FC<StudioViewProps> = ({
           </div>
 
           {/* Activity / Diagnostic Logs */}
-          <div className="h-48 rounded-2xl bg-[#0d1017] border border-white/[0.08] p-3 flex flex-col font-mono text-[11px] overflow-hidden">
+          <div className="h-48 rounded-2xl bg-[#0d1017] border border-white/10 p-3 flex flex-col font-mono text-[11px] overflow-hidden">
             <div className="text-zinc-500 text-[10px] font-bold uppercase tracking-wider mb-1 flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Terminal className="h-3.5 w-3.5 text-zinc-400" />

@@ -103,39 +103,23 @@ export function CapCutMateProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Poll trạng thái BE: lúc offline retry NHANH với backoff (tới khi online)
-  // để bắt được thời điểm BE vừa lên; khi đã online thì giãn ra 30s.
+  // Poll trạng thái BE: 30s khi online, 5s khi offline; không spam state checking để tránh lag UI
   useEffect(() => {
     let cancelled = false;
     let timer: number | undefined;
 
-    const FAST_BACKOFF_MS = [300, 900, 2000, 5000];
-    const ONLINE_POLL_MS = 30_000;
-    let offlineAttempt = 0;
-
     const tick = async () => {
       if (cancelled) return;
-      setChecking(true);
       let ok = false;
       try {
         ok = await api.pingBackend({ retries: 0 });
       } catch {
         ok = false;
-      } finally {
-        if (!cancelled) setChecking(false);
       }
       if (cancelled) return;
       setOnline(ok);
 
-      let delay: number;
-      if (ok) {
-        offlineAttempt = 0;
-        delay = ONLINE_POLL_MS;
-      } else {
-        delay =
-          FAST_BACKOFF_MS[Math.min(offlineAttempt, FAST_BACKOFF_MS.length - 1)];
-        offlineAttempt += 1;
-      }
+      const delay = ok ? 30_000 : 5_000;
       timer = window.setTimeout(() => void tick(), delay);
     };
 

@@ -295,7 +295,7 @@ function FreeTypeBadge({ freeType, label }: { freeType: string; label: string })
       data-testid="free-type-badge"
       className={`inline-flex items-center gap-0.5 rounded-full border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${
         isKeyless
-          ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+          ? "border-white/10 bg-emerald-500/10 text-emerald-500"
           : "border-border bg-black/[0.02] dark:bg-white/[0.03] text-text-muted"
       }`}
     >
@@ -418,7 +418,7 @@ export function FreeBudgetView({
       {keylessProviders.length > 0 && (
         <div
           data-testid="keyless-section"
-          className="mx-3 mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-3 py-2"
+          className="mx-3 mt-2 rounded-md border border-white/10 bg-emerald-500/5 px-3 py-2"
         >
           <div className="flex items-center gap-1.5">
             <span className="material-symbols-outlined text-[14px] text-emerald-500">lock_open</span>
@@ -444,7 +444,7 @@ export function FreeBudgetView({
 
       {/* Boost + uncapped callouts */}
       {boostMonthlyTokens > 0 && (
-        <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5">
+        <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-emerald-500/10 px-3 py-1.5">
           <span className="material-symbols-outlined text-[14px] text-emerald-500">bolt</span>
           <span className="text-[11px] text-emerald-500">
             {labels.boost(fmt(boostMonthlyTokens))}
@@ -470,7 +470,7 @@ export function FreeBudgetView({
 
       {/* ToS-restricted callout */}
       {avoidModels.length > 0 && (
-        <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-1.5">
+        <div className="mx-3 mt-2 flex items-center gap-2 rounded-md border border-white/10 bg-amber-500/10 px-3 py-1.5">
           <span className="material-symbols-outlined text-[14px] text-text-muted">warning</span>
           <span className="text-[11px] text-amber-400">
             {labels.tosRestricted(avoidModels.length)}
