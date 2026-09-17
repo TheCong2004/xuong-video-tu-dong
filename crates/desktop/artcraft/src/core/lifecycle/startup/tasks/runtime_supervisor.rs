@@ -620,6 +620,9 @@ fn resolve_runtime_resource_root(app: &AppHandle) -> Option<PathBuf> {
       candidates.push(dir.to_path_buf());
     }
   }
+  if let Ok(local_data) = app.path().app_local_data_dir() {
+    candidates.push(local_data.join("runtime"));
+  }
   candidates.into_iter().find(|root| root.join("runtime-manifest.sha256.json").is_file())
 }
 

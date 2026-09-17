@@ -1,17 +1,15 @@
 import type { Config } from "tailwindcss";
 import colors from "tailwindcss/colors";
-import mediaCrawlerTailwindConfig from "./app/src/pages/PageMediaCrawler/tailwind.config";
+import cyberPreset from "./app/src/styles/cyber-preset";
 
 export default {
-  presets: [mediaCrawlerTailwindConfig],
+  presets: [cyberPreset],
   content: [
     "./app/index.html",
     "./app/src/pages/freellmapi/client/**/*.{js,jsx,ts,tsx}",
     "./app/src/pages/PageCapCutAutomation/**/*.{js,jsx,ts,tsx}",
     "./app/src/pages/FlowordStudio/**/*.{js,jsx,ts,tsx}",
     "./app/src/pages/OmniRoute/src/**/*.{js,jsx,ts,tsx}",
-    "./app/src/pages/PageMediaCrawler/**/*.{js,jsx,ts,tsx}",
-    "./app/src/pages/PageYouwee/**/*.{js,jsx,ts,tsx}",
     "./app/src/components/**/*.{js,jsx,ts,tsx}",
     "./app/src/config/**/*.{js,jsx,ts,tsx}",
     "./app/src/*.{js,jsx,ts,tsx}",

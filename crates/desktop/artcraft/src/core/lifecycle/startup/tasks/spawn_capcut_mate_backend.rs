@@ -197,6 +197,10 @@ fn resolve_sidecar(app: &AppHandle) -> Option<PathBuf> {
     push_if(&mut candidates, res.join("resources").join(SIDECAR_NAME));
     push_if(&mut candidates, res.join(MATE_DIR_NAME).join(SIDECAR_NAME));
   }
+  if let Ok(local_data) = app.path().app_local_data_dir() {
+    push_if(&mut candidates, local_data.join("runtime").join(SIDECAR_NAME));
+    push_if(&mut candidates, local_data.join("runtime").join(MATE_DIR_NAME).join(SIDECAR_NAME));
+  }
 
   for c in candidates {
     if c.is_file() {
@@ -228,6 +232,10 @@ fn resolve_mate_dir(app: &AppHandle) -> Option<PathBuf> {
   if let Some(res) = resource_dir(app) {
     push_if(&mut candidates, res.join(MATE_DIR_NAME));
     push_if(&mut candidates, res.clone());
+  }
+  if let Ok(local_data) = app.path().app_local_data_dir() {
+    push_if(&mut candidates, local_data.join("runtime").join(MATE_DIR_NAME));
+    push_if(&mut candidates, local_data.join("runtime").join("capcut-mate"));
   }
 
   // Repo / compile-time layout (dev + build machine)

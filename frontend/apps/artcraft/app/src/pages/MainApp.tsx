@@ -12,26 +12,16 @@ import { useActiveJobs } from "~/hooks/useActiveJobs";
 import { useBackgroundLoadingMedia } from "~/hooks/useBackgroundLoadingMedia";
 import { useTabStore } from "./Stores/TabState";
 
-import { AppsIndexPage } from "./PageApps/AppsIndexPage";
 const CapCutAutomation = React.lazy(() =>
   import("./PageCapCutAutomation").then((m) => ({
     default: m.CapCutAutomation,
   })),
-);
-const Youwee = React.lazy(() =>
-  import("./PageYouwee").then((m) => ({ default: m.Youwee })),
-);
-const PageMediaCrawler = React.lazy(() =>
-  import("./PageMediaCrawler").then((m) => ({ default: m.PageMediaCrawler })),
 );
 const PageOmniRoute = React.lazy(() =>
   import("./OmniRoute/index").then((m) => ({ default: m.PageOmniRoute })),
 );
 const PageFlowordStudio = React.lazy(() =>
   import("./FlowordStudio").then((m) => ({ default: m.PageFlowordStudio })),
-);
-const PageInkOS = React.lazy(() =>
-  import("./PageInkOS").then((m) => ({ default: m.PageInkOS })),
 );
 
 interface Props {
@@ -149,8 +139,6 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
     if (tabId === "FLOWORD_STUDIO") setFlowordMounted(true);
   }, [tabId]);
 
-  const isOtherTab = ["APPS", "YOUWEE", "MEDIA_CRAWLER", "INKOS"].includes(tabId);
-
   return (
     <>
       <div
@@ -173,7 +161,7 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
       <div
         data-testid="floword-persistent-container"
         className={
-          tabId === "FLOWORD_STUDIO" || (!isOtherTab && tabId !== "OMNI_ROUTE" && tabId !== "CAPCUT_AUTOMATION")
+          tabId === "FLOWORD_STUDIO" || (tabId !== "OMNI_ROUTE" && tabId !== "CAPCUT_AUTOMATION")
             ? "h-[calc(100vh-56px)] w-full overflow-hidden block"
             : "hidden"
         }
@@ -203,35 +191,6 @@ const TabBody = ({ sceneToken }: { sceneToken?: string }) => {
           </TabErrorBoundary>
         )}
       </div>
-
-      {isOtherTab && (
-        <TabErrorBoundary tabName={tabId} key={tabId}>
-          <React.Suspense fallback={<TabFallback />}>
-            {(() => {
-              switch (tabId) {
-                case "APPS":
-                  return <AppsIndexPage />;
-                case "YOUWEE":
-                  return <Youwee />;
-                case "MEDIA_CRAWLER":
-                  return (
-                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                      <PageMediaCrawler />
-                    </div>
-                  );
-                case "INKOS":
-                  return (
-                    <div className="h-[calc(100vh-56px)] w-full overflow-hidden">
-                      <PageInkOS />
-                    </div>
-                  );
-                default:
-                  return null;
-              }
-            })()}
-          </React.Suspense>
-        </TabErrorBoundary>
-      )}
     </>
   );
 };

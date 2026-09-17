@@ -175,6 +175,12 @@ fn resolve_omniroute_dir(app: &AppHandle) -> Option<PathBuf> {
     push_if(&mut candidates, res.join("pages").join("OmniRoute"));
   }
 
+  // On-demand downloaded runtime in %LOCALAPPDATA%/ArtCraft/runtime
+  if let Ok(local_data) = app.path().app_local_data_dir() {
+    push_if(&mut candidates, local_data.join("runtime").join("OmniRoute"));
+    push_if(&mut candidates, local_data.join("runtime").join("omniroute"));
+  }
+
   // Repo / compile-time layout (dev + build machine)
   let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
   push_if(&mut candidates, manifest.join("../../../frontend/apps/artcraft/app/src/pages/OmniRoute"));

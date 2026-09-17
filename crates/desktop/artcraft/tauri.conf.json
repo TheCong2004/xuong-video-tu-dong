@@ -153,19 +153,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": [
-      "resources/capcut-mate-server.exe",
-      "resources/ffmpeg",
-      "resources/OmniRoute",
-      "resources/artcraft-browser-runtime",
-      "resources/node",
-      "resources/playwright",
-      "resources/playwright-sidecar",
-      "resources/chromex",
-      "resources/chromex-extension",
-      "resources/capcut-automation",
-      "../../../tools/speech-runtime",
-      "resources/runtime-manifest.sha256.json"
-    ]
+    "resources": []
   }
 }
