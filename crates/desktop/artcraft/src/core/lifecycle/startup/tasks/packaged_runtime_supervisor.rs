@@ -158,12 +158,12 @@ impl RuntimeBackend for RealRuntimeBackend {
   }
 
   fn inspect_process(&self, receipt: &RuntimeProcessReceipt) -> Result<bool, String> {
-    let output = Command::new("tasklist").args(["/FI", &format!("PID eq {}", receipt.pid), "/FO", "CSV", "/NH"]).output().map_err(|e| e.to_string())?;
+    let output = super::background_command::background_command(Command::new("tasklist")).args(["/FI", &format!("PID eq {}", receipt.pid), "/FO", "CSV", "/NH"]).output().map_err(|e| e.to_string())?;
     Ok(String::from_utf8_lossy(&output.stdout).contains(&receipt.pid.to_string()))
   }
 
   fn spawn(&self, spec: &RuntimeComponentSpec) -> Result<RuntimeProcessReceipt, String> {
-    let mut child = Command::new(&spec.executable_path);
+    let mut child = super::background_command::background_command(Command::new(&spec.executable_path));
     child.args(&spec.arguments).current_dir(&spec.working_directory);
     let process = child.spawn().map_err(|e| format!("RUNTIME_SPAWN_FAILED:{}", e.kind()))?;
     let pid = process.id();
@@ -183,7 +183,7 @@ impl RuntimeBackend for RealRuntimeBackend {
   }
 
   fn terminate(&self, receipt: &RuntimeProcessReceipt) -> Result<(), String> {
-    let status = Command::new("taskkill").args(["/PID", &receipt.pid.to_string(), "/T", "/F"]).status().map_err(|e| format!("RUNTIME_STOP_FAILED:{}", e.kind()))?;
+    let status = super::background_command::background_command(Command::new("taskkill")).args(["/PID", &receipt.pid.to_string(), "/T", "/F"]).status().map_err(|e| format!("RUNTIME_STOP_FAILED:{}", e.kind()))?;
     if status.success() {
       Ok(())
     } else {

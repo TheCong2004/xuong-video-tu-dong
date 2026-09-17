@@ -105,7 +105,7 @@ pub async fn preview_capcut_automation(app: AppHandle, root: State<'_, AppDataRo
       }
       let graph = crate::services::pipeline::capcut_automation::build_filter_graph(&preset, subtitle, hook_path.as_deref())?;
       let partial = output_for_worker.with_extension("mp4.partial");
-      let mut command = std::process::Command::new(ffmpeg);
+      let mut command = crate::core::lifecycle::startup::tasks::background_command::background_command(std::process::Command::new(ffmpeg));
       command.args(["-hide_banner", "-loglevel", "error", "-y", "-ss", &start_arg, "-t", &duration_arg, "-i"]).arg(&input_for_worker);
       let filter_script_path = if graph.starts_with("[0:v]") {
         let script = crate::services::pipeline::capcut_automation::configure_filter_complex(&mut command, &output_for_worker, &graph)?;

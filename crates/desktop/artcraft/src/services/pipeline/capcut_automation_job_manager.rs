@@ -690,7 +690,7 @@ fn stage_message(stage: &str) -> &'static str {
 }
 
 fn run_ffmpeg_extract(ffmpeg: &Path, input: &Path, output: &Path, args: &[&str]) -> Result<(), String> {
-  let mut command = std::process::Command::new(ffmpeg);
+  let mut command = crate::core::lifecycle::startup::tasks::background_command::background_command(std::process::Command::new(ffmpeg));
   command.args(["-hide_banner", "-loglevel", "error", "-y", "-i"]).arg(input).args(args).arg(output);
   let status = command.status().map_err(|e| format!("LOCAL_STAGE_PROCESS_START_FAILED: {e}"))?;
   if !status.success() {
@@ -723,7 +723,7 @@ where
   let scan_width = 960_u32;
   let scan_height = ((scan_width as f64 * dimensions.height as f64 / dimensions.width.max(1) as f64).round() as u32).max(2) & !1;
   let python_path = executable.parent().and_then(|parent| parent.parent()).and_then(|runtime| runtime.parent()).map(|root| root.join("python")).filter(|path| path.is_dir()).unwrap_or_else(|| manager.install_root().join("python"));
-  let mut command = std::process::Command::new(&executable);
+  let mut command = crate::core::lifecycle::startup::tasks::background_command::background_command(std::process::Command::new(&executable));
   command.args([worker.as_os_str(), std::ffi::OsStr::new("--video"), input.as_os_str(), std::ffi::OsStr::new("--ffmpeg"), ffmpeg.as_os_str(), std::ffi::OsStr::new("--width"), std::ffi::OsStr::new(&scan_width.to_string()), std::ffi::OsStr::new("--height"), std::ffi::OsStr::new(&scan_height.to_string()), std::ffi::OsStr::new("--fps"), std::ffi::OsStr::new("2"), std::ffi::OsStr::new("--min-ocr-interval-ms"), std::ffi::OsStr::new(&ocr_interval_ms.max(2_000).to_string())]).env("PYTHONPATH", python_path).stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped());
   let mut child = command.spawn().map_err(|e| format!("CAPCUT_OCR_PROCESS_START_FAILED: {e}"))?;
   let stdout = child.stdout.take().ok_or_else(|| "CAPCUT_OCR_OUTPUT_PIPE_MISSING".to_string())?;
@@ -817,7 +817,7 @@ where
 
 fn probe_media(ffmpeg: &Path, input: &Path) -> Result<(u64, Option<MediaDimensions>), String> {
   let probe = ffmpeg.parent().ok_or_else(|| "FFPROBE_NOT_FOUND".to_string())?.join(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" });
-  let output = std::process::Command::new(probe).args(["-v", "error", "-print_format", "json", "-show_streams", "-show_format"]).arg(input).output().map_err(|e| format!("MEDIA_PROBE_FAILED:{e}"))?;
+  let output = crate::core::lifecycle::startup::tasks::background_command::background_command(std::process::Command::new(probe)).args(["-v", "error", "-print_format", "json", "-show_streams", "-show_format"]).arg(input).output().map_err(|e| format!("MEDIA_PROBE_FAILED:{e}"))?;
   if !output.status.success() {
     return Err("MEDIA_PROBE_FAILED".to_string());
   }

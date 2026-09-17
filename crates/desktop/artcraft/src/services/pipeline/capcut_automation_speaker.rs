@@ -91,7 +91,7 @@ pub fn detect_speakers_local(manager: &CapcutAutomationEngineManager, request: L
   let model_root = resolved.resource_path.parent().and_then(|path| path.parent()).ok_or_else(|| "SPEAKER_MODEL_ROOT_INVALID".to_string())?;
   let resource_root = model_root.parent().and_then(|path| path.parent()).ok_or_else(|| "SPEAKER_RESOURCE_ROOT_INVALID".to_string())?;
   let python_root = resource_root.join("python");
-  let output = Command::new(executable).env("PYTHONPATH", python_root).arg(worker).arg("--audio").arg(&audio).arg("--model-root").arg(model_root).arg("--num-speakers").arg(request.num_speakers.to_string()).output().map_err(|error| format!("SPEAKER_WORKER_START_FAILED:{error}"))?;
+  let output = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new(executable)).env("PYTHONPATH", python_root).arg(worker).arg("--audio").arg(&audio).arg("--model-root").arg(model_root).arg("--num-speakers").arg(request.num_speakers.to_string()).output().map_err(|error| format!("SPEAKER_WORKER_START_FAILED:{error}"))?;
   if !output.status.success() {
     return Err(format!("SPEAKER_WORKER_FAILED:{}", String::from_utf8_lossy(&output.stderr).trim()));
   }

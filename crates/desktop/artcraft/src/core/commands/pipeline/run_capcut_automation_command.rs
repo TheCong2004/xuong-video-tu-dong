@@ -101,7 +101,7 @@ fn render_local_video(ffmpeg: &Path, ffprobe: Option<&Path>, input: &Path, rende
 
 fn ffprobe_output(ffprobe: Option<&Path>, path: &Path) -> Option<(u64, u32, u32, String, String)> {
   let ffprobe = ffprobe?;
-  let output = std::process::Command::new(ffprobe).args(["-v", "error", "-print_format", "json", "-show_streams", "-show_format"]).arg(path).output().ok()?;
+  let output = crate::core::lifecycle::startup::tasks::background_command::background_command(std::process::Command::new(ffprobe)).args(["-v", "error", "-print_format", "json", "-show_streams", "-show_format"]).arg(path).output().ok()?;
   if !output.status.success() {
     return None;
   }

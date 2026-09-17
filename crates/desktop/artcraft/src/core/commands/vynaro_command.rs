@@ -187,21 +187,21 @@ pub fn vynaro_start_command(manager: State<'_, VynaroProcessManager>) -> VynaroS
   let prod_binary_unix = vynaro_dir.join("src-tauri").join("target").join("release").join("vynaro");
 
   let (is_prod, child_res) = if prod_binary_win.exists() {
-    let mut cmd = Command::new(&prod_binary_win);
+    let mut cmd = background_command(Command::new(&prod_binary_win));
     clean_cargo_env(&mut cmd);
     (true, cmd.current_dir(&vynaro_dir).stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn())
   } else if prod_binary_win_alt.exists() {
-    let mut cmd = Command::new(&prod_binary_win_alt);
+    let mut cmd = background_command(Command::new(&prod_binary_win_alt));
     clean_cargo_env(&mut cmd);
     (true, cmd.current_dir(&vynaro_dir).stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn())
   } else if prod_binary_unix.exists() {
-    let mut cmd = Command::new(&prod_binary_unix);
+    let mut cmd = background_command(Command::new(&prod_binary_unix));
     clean_cargo_env(&mut cmd);
     (true, cmd.current_dir(&vynaro_dir).stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn())
   } else {
     #[cfg(target_os = "windows")]
     {
-      let mut cmd = Command::new("cmd");
+      let mut cmd = background_command(Command::new("cmd"));
       clean_cargo_env(&mut cmd);
       (false, cmd.args(["/C", "pnpm", "tauri:dev"]).current_dir(&vynaro_dir).stdout(Stdio::inherit()).stderr(Stdio::piped()).spawn())
     }

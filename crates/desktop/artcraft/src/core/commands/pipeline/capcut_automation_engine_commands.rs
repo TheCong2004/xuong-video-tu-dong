@@ -57,7 +57,7 @@ fn artcraft_speech_client() -> Result<VoiceStudioClient, String> {
 }
 
 fn require_python_311() -> Result<(), String> {
-  let status = Command::new("py").args(["-3.11", "--version"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().map_err(|_| "ARTCRAFT_SPEECH_PYTHON_311_REQUIRED".to_string())?;
+  let status = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new("py")).args(["-3.11", "--version"]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().map_err(|_| "ARTCRAFT_SPEECH_PYTHON_311_REQUIRED".to_string())?;
   if status.success() {
     Ok(())
   } else {
@@ -87,7 +87,7 @@ pub async fn ensure_artcraft_speech_runtime(app: AppHandle, request: Option<Ensu
   let data_dir = app.path().app_data_dir().unwrap_or_else(|_| std::env::temp_dir().join("ArtCraft")).join("speech");
   std::fs::create_dir_all(&data_dir).map_err(|_| "ARTCRAFT_SPEECH_DATA_DIRECTORY_UNAVAILABLE".to_string())?;
 
-  Command::new("py").args(["-3.11"]).arg(&entrypoint).env("ARTCRAFT_SPEECH_DATA_DIR", &data_dir).env("ARTCRAFT_SPEECH_PORT", "3900").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|_| "ARTCRAFT_SPEECH_RUNTIME_START_FAILED".to_string())?;
+  crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new("py")).args(["-3.11"]).arg(&entrypoint).env("ARTCRAFT_SPEECH_DATA_DIR", &data_dir).env("ARTCRAFT_SPEECH_PORT", "3900").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|_| "ARTCRAFT_SPEECH_RUNTIME_START_FAILED".to_string())?;
 
   for _ in 0..20 {
     tokio::time::sleep(Duration::from_millis(250)).await;

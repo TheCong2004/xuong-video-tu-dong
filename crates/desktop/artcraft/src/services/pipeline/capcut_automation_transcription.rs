@@ -160,7 +160,7 @@ pub fn transcribe_local(manager: &CapcutAutomationEngineManager, request: LocalT
   // Chinese speech into romanized English hallucinations, so auto detection
   // must be explicit at the process boundary.
   let mut arguments = whisper_arguments(&engine.resource_path, input, &output_prefix, whisper_language.as_deref());
-  let mut command = Command::new(&executable);
+  let mut command = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new(&executable));
   command.args(&arguments);
   command.stdout(Stdio::from(stdout_file)).stderr(Stdio::from(stderr_file));
   let mut child = command.spawn().map_err(|_| "CAPCUT_TRANSCRIPTION_PROCESS_START_FAILED".to_string())?;

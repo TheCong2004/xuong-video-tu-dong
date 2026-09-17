@@ -140,7 +140,7 @@ struct WorkerSegmentResult {
 
 fn invoke_translation_worker(manager: &CapcutAutomationEngineManager, executable: &std::path::Path, worker_script: &std::path::Path, model_path: &std::path::Path, route: &TranslationRoute, hop_index: usize, segments: &[TranslationSegment]) -> Result<(String, Vec<TranslationSegment>), String> {
   let payload = WorkerRequest { segments: segments.iter().map(|segment| WorkerSegment { id: &segment.id, text: &segment.text }).collect() };
-  let mut child = Command::new(executable);
+  let mut child = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new(executable));
   let packaged_python_path = executable.parent().and_then(|parent| parent.parent()).and_then(|runtime| runtime.parent()).map(|root| root.join("python")).filter(|path| path.is_dir());
   let python_path = packaged_python_path.unwrap_or_else(|| manager.install_root().join("python"));
   let worker_sha = route

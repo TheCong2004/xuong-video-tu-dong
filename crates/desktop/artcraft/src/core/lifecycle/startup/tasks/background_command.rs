@@ -16,3 +16,13 @@ pub fn background_command(mut command: Command) -> Command {
 
   command
 }
+
+pub fn background_tokio_command(mut command: tokio::process::Command) -> tokio::process::Command {
+  #[cfg(target_os = "windows")]
+  {
+    const CREATE_NO_WINDOW: u32 = 0x08000000;
+    command.creation_flags(CREATE_NO_WINDOW);
+  }
+
+  command
+}

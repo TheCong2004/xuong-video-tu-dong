@@ -914,7 +914,7 @@ pub fn media_duration_ms(ffmpeg: &Path, input: &Path) -> Option<f64> {
   if !probe.is_file() {
     return None;
   }
-  let result = Command::new(probe).args(["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"]).arg(input).output().ok()?;
+  let result = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new(probe)).args(["-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"]).arg(input).output().ok()?;
   if !result.status.success() {
     return None;
   }
@@ -971,7 +971,7 @@ where
   }
   let partial = output.with_extension(format!("{}.partial", output.extension().and_then(|e| e.to_str()).unwrap_or("mp4")));
   let graph = build_filter_graph(preset, subtitle_path, hook_ass_path)?;
-  let mut command = Command::new(ffmpeg);
+  let mut command = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new(ffmpeg));
   let mut filter_script_path: Option<PathBuf> = None;
   command.args(["-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1", "-y", "-i"]).arg(&input);
   if let Some(audio) = audio_override.filter(|path| path.is_file()) {

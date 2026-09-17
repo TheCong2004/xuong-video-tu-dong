@@ -89,7 +89,7 @@ pub fn recognize_local(manager: &CapcutAutomationEngineManager, request: LocalOc
   let executable = engine.executable_path.ok_or_else(|| "CAPCUT_OCR_EXECUTABLE_MISSING".to_string())?;
   let requested_language = request.language.clone().filter(|value| !value.trim().is_empty());
   let rapid_worker = engine.worker_script_path.as_ref().filter(|_| engine.spec.id == "rapidocr-onnx");
-  let mut command = Command::new(&executable);
+  let mut command = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new(&executable));
   if let Some(worker) = rapid_worker {
     let python_path = executable.parent().and_then(|parent| parent.parent()).and_then(|runtime| runtime.parent()).map(|root| root.join("python")).filter(|path| path.is_dir()).unwrap_or_else(|| manager.install_root().join("python"));
     command.arg(worker).arg("--image").arg(image).env("PYTHONPATH", python_path);

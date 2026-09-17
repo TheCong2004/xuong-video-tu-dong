@@ -115,7 +115,7 @@ impl DonutBridgeClient {
   }
 
   async fn run(&self, args: &[String]) -> Result<(), String> {
-    let mut command = Command::new(&self.executable);
+    let mut command = crate::core::lifecycle::startup::tasks::background_command::background_tokio_command(Command::new(&self.executable));
     command.arg("--state-root").arg(&self.state_root);
     command.args(args);
     let completed = timeout(self.timeout, command.output()).await.map_err(|_| "DONUT_BRIDGE_TIMEOUT".to_string())?.map_err(|_| "DONUT_BRIDGE_START_FAILED".to_string())?;

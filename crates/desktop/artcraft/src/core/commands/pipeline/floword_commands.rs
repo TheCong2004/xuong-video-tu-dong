@@ -1099,7 +1099,7 @@ pub async fn open_donut_browser_gui_command() -> ResponseOrError<OpenDonutBrowse
   // The manager may still be starting its API. Avoid opening a second desktop
   // instance while that process is alive.
   let task_filter = format!("IMAGENAME eq {donut_desktop_exe}");
-  if let Ok(output) = Command::new("tasklist").args(["/FI", task_filter.as_str(), "/FO", "CSV", "/NH"]).output() {
+  if let Ok(output) = crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new("tasklist")).args(["/FI", task_filter.as_str(), "/FO", "CSV", "/NH"]).output() {
     let listed = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
     if listed.contains(&donut_desktop_exe) {
       return Ok(OpenDonutBrowserGuiResponse { success: true }.into());
