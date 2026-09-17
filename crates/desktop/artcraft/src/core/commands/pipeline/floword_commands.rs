@@ -1127,7 +1127,7 @@ pub async fn open_donut_browser_gui_command() -> ResponseOrError<OpenDonutBrowse
     return Ok(OpenDonutBrowserGuiResponse { success: false }.into());
   };
 
-  match Command::new(&executable).spawn() {
+  match crate::core::lifecycle::startup::tasks::background_command::background_command(Command::new(&executable)).spawn() {
     Ok(_) => Ok(OpenDonutBrowserGuiResponse { success: true }.into()),
     Err(error) => {
       warn!("[Floword] failed to open Donut Desktop ({}): {error}", executable.display());

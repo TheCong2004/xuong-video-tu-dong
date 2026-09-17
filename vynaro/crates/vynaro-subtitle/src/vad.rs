@@ -29,7 +29,13 @@ pub struct SpeechSegment {
 /// 从音频路径检测语音端点（优先使用 FFmpeg silencedetect，降级为保底推算）
 pub async fn detect_segments(audio_path: &std::path::Path, config: &VadConfig) -> Result<Vec<SpeechSegment>, SubtitleError> {
   if audio_path.exists() {
-    if let Ok(output) = tokio::process::Command::new("ffmpeg").args(["-i", &audio_path.to_string_lossy(), "-af", &format!("silencedetect=noise={}dB:d=0.2", config.silence_threshold_db), "-f", "null", "-"]).output().await {
+    let mut cmd = tokio::process::Command::new("ffmpeg");
+    #[cfg(target_os = "windows")]
+    {
+      const CREATE_NO_WINDOW: u32 = 0x08000000;
+      cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    if let Ok(output) = cmd.args(["-i", &audio_path.to_string_lossy(), "-af", &format!("silencedetect=noise={}dB:d=0.2", config.silence_threshold_db), "-f", "null", "-"]).output().await {
       let stderr = String::from_utf8_lossy(&output.stderr);
       let mut segments = Vec::new();
       let mut current_speech_start = 0u64;

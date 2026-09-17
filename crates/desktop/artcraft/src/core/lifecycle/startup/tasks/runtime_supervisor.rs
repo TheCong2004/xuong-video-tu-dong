@@ -279,7 +279,7 @@ pub fn ensure_donut_desktop() -> bool {
     return true;
   }
   // Check if either donutbrowser.exe or Nexora.exe is running
-  if let Ok(output) = Command::new("tasklist").args(["/FO", "CSV", "/NH"]).output() {
+  if let Ok(output) = background_command(Command::new("tasklist")).args(["/FO", "CSV", "/NH"]).output() {
     let list = String::from_utf8_lossy(&output.stdout).to_ascii_lowercase();
     if list.contains("donutbrowser.exe") || list.contains("nexora.exe") {
       return true;
@@ -345,7 +345,7 @@ pub fn ensure_donut_desktop() -> bool {
     warn!("DONUT_LOCAL_MANAGER_NOT_READY: Donut/Nexora Desktop executable not found");
     return false;
   };
-  match Command::new(&executable).spawn() {
+  match background_command(Command::new(&executable)).spawn() {
     Ok(_) => {
       info!("Donut/Nexora Desktop manager started: {}", executable.display());
       true

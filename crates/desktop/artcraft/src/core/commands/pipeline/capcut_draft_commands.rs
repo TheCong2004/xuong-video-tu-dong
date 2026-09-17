@@ -90,7 +90,7 @@ pub fn open_floword_capcut_draft_command(app: AppHandle, request: OpenCapcutDraf
   }
 
   if let Some(executable) = find_capcut_executable() {
-    std::process::Command::new(executable).spawn().map_err(|error| format!("Không thể mở CapCut: {error}"))?;
+    crate::core::lifecycle::startup::tasks::background_command::background_command(std::process::Command::new(executable)).spawn().map_err(|error| format!("Không thể mở CapCut: {error}"))?;
   }
   app.opener().reveal_item_in_dir(path.clone()).map_err(|error| format!("Không thể mở thư mục project: {error}"))?;
   Ok(true)

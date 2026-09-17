@@ -207,7 +207,7 @@ pub fn inkos_start_command(manager: State<'_, InkosProcessManager>) -> InkosStat
   println!("[InkOS] cwd = {}", inkos_dir.display());
   println!("[InkOS] studio_entry.is_file() = {}", studio_entry.is_file());
 
-  let mut cmd = Command::new(&node_exe);
+  let mut cmd = background_command(Command::new(&node_exe));
   cmd.arg(&studio_entry).arg(&project_root).env("INKOS_STUDIO_PORT", "4567").env("INKOS_PROJECT_ROOT", &project_root).current_dir(&inkos_dir).stdout(Stdio::inherit()).stderr(Stdio::inherit());
 
   println!("[InkOS] program = {:?}", cmd.get_program());

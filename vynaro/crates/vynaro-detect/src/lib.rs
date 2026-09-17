@@ -173,6 +173,11 @@ impl Ffmpeg {
     use tokio::io::AsyncReadExt;
 
     let mut cmd = tokio::process::Command::new(bin);
+    #[cfg(target_os = "windows")]
+    {
+      const CREATE_NO_WINDOW: u32 = 0x08000000;
+      cmd.creation_flags(CREATE_NO_WINDOW);
+    }
     cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let mut child = cmd.spawn().map_err(|e| RawExecError { stderr_tail: format!("spawn failed: {e}") })?;

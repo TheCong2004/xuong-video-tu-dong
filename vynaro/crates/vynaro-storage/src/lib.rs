@@ -205,7 +205,13 @@ impl AssetService {
     let ff = Ffmpeg::discover().map_err(|_| AssetError::FfmpegUnavailable)?;
 
     // 跑 `ffprobe -v error -print_format json -show_format -show_streams <path>`
-    let output = tokio::process::Command::new(&ff.ffprobe_bin).arg("-v").arg("error").arg("-print_format").arg("json").arg("-show_format").arg("-show_streams").arg(p).output().await?;
+    let mut probe_cmd = tokio::process::Command::new(&ff.ffprobe_bin);
+    #[cfg(target_os = "windows")]
+    {
+      const CREATE_NO_WINDOW: u32 = 0x08000000;
+      probe_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let output = probe_cmd.arg("-v").arg("error").arg("-print_format").arg("json").arg("-show_format").arg("-show_streams").arg(p).output().await?;
 
     if !output.status.success() {
       let stderr = String::from_utf8_lossy(&output.stderr);
@@ -234,7 +240,13 @@ impl AssetService {
 
     // ffmpeg -ss 1 -i <path> -vframes 1 -vf scale=<w>:-1 -y <out>
     let w_str = width.to_string();
-    let status = tokio::process::Command::new(&ff.ffmpeg_bin).arg("-ss").arg("1").arg("-i").arg(p).arg("-vframes").arg("1").arg("-vf").arg(format!("scale={w_str}:-1")).arg("-y").arg(&out).output().await?;
+    let mut thumb_cmd = tokio::process::Command::new(&ff.ffmpeg_bin);
+    #[cfg(target_os = "windows")]
+    {
+      const CREATE_NO_WINDOW: u32 = 0x08000000;
+      thumb_cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    let status = thumb_cmd.arg("-ss").arg("1").arg("-i").arg(p).arg("-vframes").arg("1").arg("-vf").arg(format!("scale={w_str}:-1")).arg("-y").arg(&out).output().await?;
 
     if !status.status.success() {
       let stderr = String::from_utf8_lossy(&status.stderr);
